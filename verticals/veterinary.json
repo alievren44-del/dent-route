@@ -1,0 +1,73 @@
+{
+  "id": "veterinary",
+  "displayName": "Veteriner",
+  "description": "Veteriner klinikleri, pet shop'lar ve hayvan çiftliklerine veteriner ürünleri satışı",
+
+  "labels": {
+    "customer": { "singular": "Klinik", "plural": "Klinikler" },
+    "customer_type": "Klinik Tipi",
+    "discovery": "Çevremdeki Veteriner Noktaları",
+    "visit": "Ziyaret"
+  },
+
+  "customerTypes": [
+    { "key": "small_animal_clinic", "label": "Küçük Hayvan Kliniği" },
+    { "key": "large_animal_clinic", "label": "Büyük Hayvan Kliniği" },
+    { "key": "mixed_clinic", "label": "Karma Klinik" },
+    { "key": "pet_shop", "label": "Pet Shop" },
+    { "key": "farm", "label": "Çiftlik" },
+    { "key": "shelter", "label": "Barınak/Rehabilitasyon" },
+    { "key": "university", "label": "Veterinerlik Fakültesi" }
+  ],
+
+  "googlePlacesTypes": ["veterinary_care", "pet_store"],
+
+  "visitOutcomes": [
+    { "key": "met", "label": "Görüşüldü", "color": "blue" },
+    { "key": "order_taken", "label": "Sipariş Alındı", "color": "green", "requiresOrder": true },
+    { "key": "sample_left", "label": "Numune Bırakıldı", "color": "amber" },
+    { "key": "training_done", "label": "Ürün Eğitimi Verildi", "color": "indigo" },
+    { "key": "no_request", "label": "Talep Yok", "color": "gray" },
+    { "key": "closed", "label": "Kapalı", "color": "red" }
+  ],
+
+  "customFields": {
+    "account": [
+      {
+        "key": "vet_count",
+        "label": "Veteriner Sayısı",
+        "type": "number"
+      },
+      {
+        "key": "animal_focus",
+        "label": "Tedavi Edilen Hayvanlar",
+        "type": "multiselect",
+        "options": [
+          "Kedi",
+          "Köpek",
+          "Kuş",
+          "Egzotik (Sürüngen, Kemirgen)",
+          "Sığır",
+          "Koyun/Keçi",
+          "At",
+          "Kümes Hayvanları"
+        ]
+      },
+      {
+        "key": "has_surgery",
+        "label": "Cerrahi Hizmet Veriyor",
+        "type": "boolean"
+      },
+      {
+        "key": "has_lab",
+        "label": "Laboratuvar Var",
+        "type": "boolean"
+      }
+    ]
+  },
+
+  "iconSet": "medical",
+  "primaryColorSuggestion": "#0891B2",
+
+  "samplePolicy": { "enabled": false }
+}

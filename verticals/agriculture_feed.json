@@ -1,0 +1,83 @@
+{
+  "id": "agriculture_feed",
+  "displayName": "Tarım / Yem / Zirai",
+  "description": "Çiftçi, kooperatif ve yem bayilerine zirai ürün, gübre, tohum ve yem satışı",
+
+  "labels": {
+    "customer": { "singular": "Müşteri", "plural": "Müşteriler" },
+    "customer_type": "Müşteri Tipi",
+    "discovery": "Çevremdeki Tarım Noktaları",
+    "visit": "Ziyaret"
+  },
+
+  "customerTypes": [
+    { "key": "farmer", "label": "Çiftçi / Üretici" },
+    { "key": "cooperative", "label": "Kooperatif" },
+    { "key": "feed_dealer", "label": "Yem Bayisi" },
+    { "key": "agro_dealer", "label": "Zirai İlaç / Gübre Bayisi" },
+    { "key": "greenhouse", "label": "Sera İşletmesi" },
+    { "key": "dairy_farm", "label": "Süt Çiftliği" },
+    { "key": "poultry_farm", "label": "Tavuk / Kümes Çiftliği" },
+    { "key": "fish_farm", "label": "Balık Çiftliği" }
+  ],
+
+  "googlePlacesTypes": ["store", "establishment"],
+
+  "visitOutcomes": [
+    { "key": "met", "label": "Görüşüldü", "color": "blue" },
+    { "key": "order_taken", "label": "Sipariş Alındı", "color": "green", "requiresOrder": true },
+    { "key": "season_planning_done", "label": "Sezon Planlaması Yapıldı", "color": "indigo" },
+    { "key": "field_inspection", "label": "Tarla / Saha İncelemesi", "color": "cyan" },
+    { "key": "sample_left", "label": "Numune Bırakıldı", "color": "amber" },
+    { "key": "training_done", "label": "Eğitim Verildi", "color": "purple" },
+    { "key": "no_request", "label": "Talep Yok", "color": "gray" }
+  ],
+
+  "customFields": {
+    "account": [
+      {
+        "key": "land_size_decare",
+        "label": "Ekili Arazi (dönüm)",
+        "type": "number"
+      },
+      {
+        "key": "crop_types",
+        "label": "Yetiştirilen Ürünler",
+        "type": "multiselect",
+        "options": [
+          "Buğday / Arpa",
+          "Mısır",
+          "Ayçiçeği",
+          "Pamuk",
+          "Pancar",
+          "Sebze (örtü altı)",
+          "Sebze (açıkta)",
+          "Meyve / Bağ",
+          "Zeytin",
+          "Fındık"
+        ]
+      },
+      {
+        "key": "animal_count",
+        "label": "Hayvan Sayısı (hayvancılık ise)",
+        "type": "number"
+      },
+      {
+        "key": "irrigation_type",
+        "label": "Sulama Sistemi",
+        "type": "select",
+        "options": ["Yağmurlama", "Damla", "Salma", "Karışık", "Yok"]
+      },
+      {
+        "key": "organic_certified",
+        "label": "Organik Sertifikalı",
+        "type": "boolean"
+      }
+    ]
+  },
+
+  "iconSet": "agriculture",
+  "primaryColorSuggestion": "#65A30D",
+
+  "samplePolicy": { "enabled": false }
+}

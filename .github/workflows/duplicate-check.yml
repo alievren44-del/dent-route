@@ -1,0 +1,27 @@
+name: Duplicate File Check
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  duplicate-check:
+    name: Check duplicate filenames
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install (minimal — sadece tsx)
+        run: npm ci --omit=optional
+
+      - name: Run check
+        run: npm run check:duplicates

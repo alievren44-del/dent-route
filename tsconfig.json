@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": false,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "jsx": "react-jsx",
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": false,
+
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@core/*": ["src/core/*"],
+      "@features/*": ["src/features/*"],
+      "@components/*": ["src/components/*"],
+      "@lib/*": ["src/lib/*"],
+      "@config/*": ["src/config/*"],
+      "@verticals/*": ["verticals/*"]
+    },
+
+    "types": ["vite/client"],
+    "noEmit": true
+  },
+  "include": ["src", "tests", "verticals"],
+  "exclude": ["node_modules", "dist", "build", ".github"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}

@@ -1,0 +1,167 @@
+/**
+ * AuthClient — Supabase Auth wrapper.
+ *
+ * Parla'nın Supabase auth.users tablosu paylaşılır. Saha navigasyon kendi
+ * session storage anahtarını ('saha-app-auth') kullanır — Parla web/mobil ile
+ * cookie çakışması olmaz, ama aynı user ile aynı parola ile login olur.
+ *
+ * Login akışı:
+ *   1. signInWithEmail(email, pwd)
+ *   2. fetchProfile(uid) — profiles tablosundan role, kvkk_accepted_at çek
+ *   3. Saha-yetkili rol mü? (REP/ADMIN). Değilse logout + hata.
+ *   4. KVKK kabul edilmiş mi? Değilse /onboarding/kvkk yönlendir.
+ */
+
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { getSupabaseClient } from '@lib/supabase';
+import {
+  type AuthSession,
+  type ParlaUserRole,
+  type SahaProfile,
+  mapParlaToSahaRole,
+} from './types';
+
+/**
+ * Parla profiles tablosu Türkçe canonical kolonlar kullanır:
+ *   ad_soyad (full_name)
+ *   telefon (phone)
+ *   klinik_adi (clinic_name)
+ * Migration: parla `20260501000002_profile_tr_canonical.sql`.
+ */
+interface ProfileRow {
+  id: string;
+  email: string | null;
+  ad_soyad: string | null;
+  role: string | null;
+  region: string | null;
+  avg_fuel_consumption: number | string | null;
+  kvkk_accepted_at: string | null;
+  kvkk_version: string | null;
+  is_approved?: boolean | null | undefined;
+}
+
+export class AuthError extends Error {
+  constructor(
+    public code: 'INVALID_CREDENTIALS' | 'NOT_AUTHORIZED' | 'INACTIVE' | 'UNKNOWN',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'AuthError';
+  }
+}
+
+export class AuthClient {
+  private readonly supabase: SupabaseClient;
+
+  constructor(supabase: SupabaseClient = getSupabaseClient()) {
+    this.supabase = supabase;
+  }
+
+  async signInWithEmail(email: string, password: string): Promise<AuthSession> {
+    const { data, error } = await this.supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      if (error.message.toLowerCase().includes('invalid')) {
+        throw new AuthError('INVALID_CREDENTIALS', 'E-posta veya parola hatalı.');
+      }
+      throw new AuthError('UNKNOWN', error.message);
+    }
+    if (!data.session || !data.user) {
+      throw new AuthError('UNKNOWN', 'Oturum oluşturulamadı.');
+    }
+    return this.toAuthSession(data.session.access_token, data.user.id, data.user.email, data.session.expires_at);
+  }
+
+  async signOut(): Promise<void> {
+    await this.supabase.auth.signOut();
+  }
+
+  async getCurrentSession(): Promise<AuthSession | null> {
+    const { data } = await this.supabase.auth.getSession();
+    const s = data.session;
+    if (!s) return null;
+    return this.toAuthSession(s.access_token, s.user.id, s.user.email, s.expires_at);
+  }
+
+  async fetchProfile(userId: string): Promise<SahaProfile> {
+    const { data, error } = await this.supabase
+      .from('profiles')
+      .select('id, email, ad_soyad, role, region, avg_fuel_consumption, kvkk_accepted_at, kvkk_version, is_approved')
+      .eq('id', userId)
+      .single();
+
+    if (error) throw new AuthError('UNKNOWN', `Profil yüklenemedi: ${error.message}`);
+    if (!data) throw new AuthError('NOT_AUTHORIZED', 'Profil bulunamadı.');
+
+    const row = data as ProfileRow;
+
+    // Parla'da is_approved: yeni kullanıcı false default. Saha rep için onaylı olmalı.
+    if (row.is_approved === false) {
+      throw new AuthError('INACTIVE', 'Hesabınız henüz onaylanmadı. Yöneticinizle iletişime geçin.');
+    }
+
+    const role = (row.role ?? 'GUEST') as ParlaUserRole;
+    const sahaRole = mapParlaToSahaRole(role);
+    if (!sahaRole) {
+      throw new AuthError(
+        'NOT_AUTHORIZED',
+        `Bu hesap saha satış için yetkili değil (rol: ${role}). REP veya ADMIN rolü gerekli.`,
+      );
+    }
+
+    return {
+      id: row.id,
+      email: row.email ?? null,
+      fullName: row.ad_soyad ?? null,
+      role,
+      region: row.region ?? null,
+      avgFuelConsumption: Number(row.avg_fuel_consumption ?? 7.0),
+      kvkkAcceptedAt: row.kvkk_accepted_at ?? null,
+      kvkkVersion: row.kvkk_version ?? null,
+      isActive: true,
+    };
+  }
+
+  async acceptKvkk(userId: string, version: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('profiles')
+      .update({
+        kvkk_accepted_at: new Date().toISOString(),
+        kvkk_version: version,
+      })
+      .eq('id', userId);
+    if (error) throw new AuthError('UNKNOWN', `KVKK kaydedilemedi: ${error.message}`);
+  }
+
+  /**
+   * Auth state değişimlerini dinler (login/logout/token refresh).
+   * App startup'ta authStore tarafından bir kez çağrılır.
+   */
+  onAuthStateChange(
+    callback: (session: AuthSession | null) => void,
+  ): { unsubscribe: () => void } {
+    const { data } = this.supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        callback(null);
+        return;
+      }
+      callback(
+        this.toAuthSession(session.access_token, session.user.id, session.user.email, session.expires_at),
+      );
+    });
+    return { unsubscribe: () => data.subscription.unsubscribe() };
+  }
+
+  private toAuthSession(
+    accessToken: string,
+    userId: string,
+    email: string | undefined | null,
+    expiresAt: number | null | undefined,
+  ): AuthSession {
+    return {
+      userId,
+      email: email ?? null,
+      accessToken,
+      expiresAt: expiresAt ?? null,
+    };
+  }
+}

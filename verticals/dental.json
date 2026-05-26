@@ -1,0 +1,121 @@
+{
+  "id": "dental",
+  "displayName": "Diş Hekimliği",
+  "description": "Diş klinikleri, polikliniklere ve hastanelerin diş bölümlerine saha satış",
+
+  "labels": {
+    "customer": { "singular": "Klinik", "plural": "Klinikler" },
+    "customer_type": "Klinik Tipi",
+    "discovery": "Çevremdeki Klinikler",
+    "visit": "Ziyaret"
+  },
+
+  "customerTypes": [
+    { "key": "private_clinic", "label": "Özel Klinik" },
+    { "key": "public_hospital", "label": "Devlet Hastanesi" },
+    { "key": "polyclinic", "label": "Poliklinik" },
+    { "key": "private_hospital", "label": "Özel Hastane" },
+    { "key": "university_hospital", "label": "Üniversite Hastanesi" },
+    { "key": "dental_lab", "label": "Diş Laboratuvarı" }
+  ],
+
+  "googlePlacesTypes": ["dentist", "doctor"],
+
+  "visitOutcomes": [
+    { "key": "met", "label": "Görüşüldü", "color": "blue" },
+    { "key": "order_taken", "label": "Sipariş Alındı", "color": "green", "requiresOrder": true },
+    { "key": "appointment_scheduled", "label": "Randevu Verildi", "color": "purple" },
+    { "key": "sample_left", "label": "Numune Bırakıldı", "color": "amber" },
+    { "key": "no_request", "label": "Talep Yok", "color": "gray" },
+    { "key": "closed", "label": "Kapalı", "color": "red" },
+    { "key": "other", "label": "Diğer", "color": "gray" }
+  ],
+
+  "customFields": {
+    "account": [
+      {
+        "key": "doctor_count",
+        "label": "Hekim Sayısı",
+        "type": "number",
+        "placeholder": "Örn: 3"
+      },
+      {
+        "key": "branch",
+        "label": "Branş",
+        "type": "multiselect",
+        "options": [
+          "Genel Diş Hekimliği",
+          "Ortodonti",
+          "Endodonti",
+          "Cerrahi",
+          "Pedodonti",
+          "Periodontoloji",
+          "Restoratif Diş Tedavisi",
+          "Protez",
+          "İmplant"
+        ]
+      },
+      {
+        "key": "chair_count",
+        "label": "Ünit Sayısı",
+        "type": "number",
+        "helperText": "Klinikteki diş ünitesi sayısı"
+      }
+    ],
+    "visit": [
+      {
+        "key": "main_products_discussed",
+        "label": "Görüşülen Ana Ürünler",
+        "type": "text",
+        "placeholder": "Örn: kompozit, implant"
+      }
+    ]
+  },
+
+  "iconSet": "medical",
+  "primaryColorSuggestion": "#2563EB",
+
+  "samplePolicy": {
+    "enabled": true,
+    "defaultBudgetTl": 5000,
+    "conversionWindowDays": 90,
+    "categories": {
+      "composite_adhesive": {
+        "label": "Kompozit & Adeziv",
+        "maxPerAccountYearly": 2,
+        "cooldownDays": 180,
+        "minConversionPct": 30
+      },
+      "implant": {
+        "label": "İmplant",
+        "maxPerAccountYearly": 1,
+        "cooldownDays": 365,
+        "minConversionPct": 40
+      },
+      "orthodontic_bracket": {
+        "label": "Ortodontik Braket",
+        "maxPerAccountYearly": 3,
+        "cooldownDays": 90,
+        "minConversionPct": 20
+      },
+      "endodontic": {
+        "label": "Endodonti (Kanal Aletleri)",
+        "maxPerAccountYearly": 2,
+        "cooldownDays": 180,
+        "minConversionPct": 25
+      },
+      "consumables": {
+        "label": "Sarf Malzemesi",
+        "maxPerAccountYearly": 999,
+        "cooldownDays": 0,
+        "minConversionPct": 0
+      }
+    },
+    "hunterThresholds": {
+      "warningCount": 2,
+      "riskyCount": 3,
+      "blacklistCount": 4,
+      "lookbackMonths": 6
+    }
+  }
+}

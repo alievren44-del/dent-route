@@ -1,0 +1,80 @@
+{
+  "id": "construction_materials",
+  "displayName": "İnşaat Malzemeleri",
+  "description": "Yapı market, müteahhit ve şantiyelere inşaat malzemesi toptan satışı",
+
+  "labels": {
+    "customer": { "singular": "Müşteri", "plural": "Müşteriler" },
+    "customer_type": "Müşteri Tipi",
+    "discovery": "Çevremdeki Müşteriler",
+    "visit": "Ziyaret"
+  },
+
+  "customerTypes": [
+    { "key": "hardware_store", "label": "Yapı Market / Nalbur" },
+    { "key": "contractor", "label": "Müteahhit / Yüklenici" },
+    { "key": "construction_site", "label": "Şantiye" },
+    { "key": "architect_office", "label": "Mimar / Tasarım Ofisi" },
+    { "key": "interior_design", "label": "İç Mimar" },
+    { "key": "wholesaler", "label": "Toptancı / Dağıtıcı" },
+    { "key": "tile_dealer", "label": "Seramik / Fayans Bayisi" },
+    { "key": "paint_store", "label": "Boya Mağazası" }
+  ],
+
+  "googlePlacesTypes": ["hardware_store", "store"],
+
+  "visitOutcomes": [
+    { "key": "met", "label": "Görüşüldü", "color": "blue" },
+    { "key": "order_taken", "label": "Sipariş Alındı", "color": "green", "requiresOrder": true },
+    { "key": "quote_requested", "label": "Teklif İstendi", "color": "purple" },
+    { "key": "project_discussed", "label": "Proje Görüşüldü", "color": "indigo" },
+    { "key": "catalog_left", "label": "Katalog Bırakıldı", "color": "amber" },
+    { "key": "sample_left", "label": "Numune Bırakıldı", "color": "cyan" },
+    { "key": "no_request", "label": "Talep Yok", "color": "gray" }
+  ],
+
+  "customFields": {
+    "account": [
+      {
+        "key": "main_products",
+        "label": "Ana Ürün Grupları",
+        "type": "multiselect",
+        "options": [
+          "Çimento / Hazır Beton",
+          "Demir / Çelik",
+          "Tuğla / Briket",
+          "Seramik / Fayans",
+          "Boya",
+          "Yalıtım",
+          "Sıhhi Tesisat",
+          "Elektrik Malzemeleri",
+          "Doğramalar",
+          "El Aletleri",
+          "Bahçe / Peyzaj"
+        ]
+      },
+      {
+        "key": "project_count",
+        "label": "Aktif Proje Sayısı",
+        "type": "number",
+        "helperText": "Müteahhit/şantiye için"
+      },
+      {
+        "key": "project_size_band",
+        "label": "Proje Büyüklük Bandı",
+        "type": "select",
+        "options": ["Konut (1-2 daire)", "Site (10-50 daire)", "Büyük Site (50+)", "Ticari/AVM", "Endüstriyel"]
+      },
+      {
+        "key": "has_yard",
+        "label": "Stok Sahası / Açık Alan Var",
+        "type": "boolean"
+      }
+    ]
+  },
+
+  "iconSet": "construction",
+  "primaryColorSuggestion": "#B45309",
+
+  "samplePolicy": { "enabled": false }
+}

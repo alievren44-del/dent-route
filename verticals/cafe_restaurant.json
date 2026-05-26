@@ -1,0 +1,89 @@
+{
+  "id": "cafe_restaurant",
+  "displayName": "Cafe / Restoran (HORECA)",
+  "description": "Cafe, restoran, bar, otel ve catering işletmelerine yiyecek-içecek ve ekipman satışı",
+
+  "labels": {
+    "customer": { "singular": "İşletme", "plural": "İşletmeler" },
+    "customer_type": "İşletme Tipi",
+    "discovery": "Çevremdeki İşletmeler",
+    "visit": "Ziyaret"
+  },
+
+  "customerTypes": [
+    { "key": "cafe", "label": "Cafe" },
+    { "key": "restaurant", "label": "Restoran" },
+    { "key": "fast_food", "label": "Fast Food / Zincir" },
+    { "key": "fine_dining", "label": "Fine Dining" },
+    { "key": "bar_pub", "label": "Bar / Pub" },
+    { "key": "hotel", "label": "Otel (F&B)" },
+    { "key": "catering", "label": "Catering" },
+    { "key": "bakery", "label": "Pastane / Fırın" },
+    { "key": "food_truck", "label": "Food Truck / Stand" }
+  ],
+
+  "googlePlacesTypes": ["cafe", "restaurant", "bar", "bakery", "meal_takeaway", "lodging"],
+
+  "visitOutcomes": [
+    { "key": "met", "label": "Görüşüldü", "color": "blue" },
+    { "key": "order_taken", "label": "Sipariş Alındı", "color": "green", "requiresOrder": true },
+    { "key": "tasting_done", "label": "Degüstasyon Yapıldı", "color": "amber" },
+    { "key": "menu_addition", "label": "Menüye Ekleme Yapıldı", "color": "purple" },
+    { "key": "promotion_presented", "label": "Promosyon Anlatıldı", "color": "indigo" },
+    { "key": "no_request", "label": "Talep Yok", "color": "gray" },
+    { "key": "closed", "label": "Kapalı", "color": "red" }
+  ],
+
+  "customFields": {
+    "account": [
+      {
+        "key": "seat_capacity",
+        "label": "Oturma Kapasitesi",
+        "type": "number",
+        "placeholder": "Toplam koltuk sayısı"
+      },
+      {
+        "key": "has_terrace",
+        "label": "Teras / Bahçe Var",
+        "type": "boolean"
+      },
+      {
+        "key": "cuisine_type",
+        "label": "Mutfak Tarzı",
+        "type": "multiselect",
+        "options": [
+          "Türk",
+          "Dünya Mutfağı",
+          "İtalyan",
+          "Uzak Doğu",
+          "Vejetaryen/Vegan",
+          "Steakhouse",
+          "Deniz Ürünleri",
+          "Tatlı / Pasta"
+        ]
+      },
+      {
+        "key": "alcohol_license",
+        "label": "Alkol Ruhsatı Var",
+        "type": "boolean"
+      },
+      {
+        "key": "peak_hours",
+        "label": "Yoğun Saatler",
+        "type": "text",
+        "placeholder": "Örn: 12-14 ve 19-22"
+      },
+      {
+        "key": "weekly_volume",
+        "label": "Haftalık Sipariş Hacmi",
+        "type": "select",
+        "options": ["Düşük", "Orta", "Yüksek", "Çok Yüksek"]
+      }
+    ]
+  },
+
+  "iconSet": "food",
+  "primaryColorSuggestion": "#EA580C",
+
+  "samplePolicy": { "enabled": false }
+}

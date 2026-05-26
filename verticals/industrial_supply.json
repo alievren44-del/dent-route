@@ -1,0 +1,88 @@
+{
+  "id": "industrial_supply",
+  "displayName": "Sanayi Malzeme / MRO",
+  "description": "Fabrika, atölye ve OSB içi işletmelere sanayi ve bakım malzemeleri (MRO) toptan satışı",
+
+  "labels": {
+    "customer": { "singular": "Müşteri", "plural": "Müşteriler" },
+    "customer_type": "Müşteri Tipi",
+    "discovery": "Çevremdeki Sanayi Müşterileri",
+    "visit": "Ziyaret"
+  },
+
+  "customerTypes": [
+    { "key": "factory", "label": "Fabrika / Üretici" },
+    { "key": "workshop", "label": "Atölye / Sanayi Sitesi" },
+    { "key": "osb_company", "label": "OSB İçi Firma" },
+    { "key": "maintenance_company", "label": "Bakım / Onarım Firması" },
+    { "key": "distributor", "label": "Toptancı / Bayi" },
+    { "key": "engineering_office", "label": "Mühendislik Ofisi" }
+  ],
+
+  "googlePlacesTypes": ["store", "establishment"],
+
+  "visitOutcomes": [
+    { "key": "met", "label": "Görüşüldü", "color": "blue" },
+    { "key": "order_taken", "label": "Sipariş Alındı", "color": "green", "requiresOrder": true },
+    { "key": "quote_requested", "label": "Teklif İstendi", "color": "purple" },
+    { "key": "tender_discussed", "label": "İhale Görüşüldü", "color": "indigo" },
+    { "key": "sample_left", "label": "Numune Bırakıldı", "color": "amber" },
+    { "key": "audit_done", "label": "Stok / Kullanım Denetimi", "color": "cyan" },
+    { "key": "no_request", "label": "Talep Yok", "color": "gray" }
+  ],
+
+  "customFields": {
+    "account": [
+      {
+        "key": "sector",
+        "label": "Faaliyet Sektörü",
+        "type": "select",
+        "options": [
+          "Otomotiv",
+          "Tekstil",
+          "Gıda",
+          "Kimya / İlaç",
+          "Metal İşleme",
+          "Plastik / Kauçuk",
+          "Elektronik",
+          "Mobilya / Ahşap",
+          "Ambalaj",
+          "Diğer"
+        ]
+      },
+      {
+        "key": "employee_band",
+        "label": "Çalışan Sayısı Bandı",
+        "type": "select",
+        "options": ["1-10", "11-50", "51-250", "250+"]
+      },
+      {
+        "key": "product_groups",
+        "label": "Tedarik Edilen Ürün Grupları",
+        "type": "multiselect",
+        "options": [
+          "Rulman / Mil",
+          "Cıvata / Somun",
+          "Conta / Hortum",
+          "Pnömatik / Hidrolik",
+          "Kesici Takım",
+          "İSG Ekipmanı",
+          "Yağ / Kimyasal",
+          "Elektrik / Otomasyon",
+          "Kaynak Malzemeleri"
+        ]
+      },
+      {
+        "key": "buying_process",
+        "label": "Satın Alma Süreci",
+        "type": "select",
+        "options": ["Tek Karar Verici", "Komite Onayı", "İhale", "Çerçeve Anlaşma"]
+      }
+    ]
+  },
+
+  "iconSet": "industrial",
+  "primaryColorSuggestion": "#475569",
+
+  "samplePolicy": { "enabled": false }
+}

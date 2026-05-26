@@ -1,0 +1,83 @@
+{
+  "id": "pharmacy",
+  "displayName": "Eczane",
+  "description": "İlaç ve sağlık ürünleri toptan satışı yapan firmalar için eczane ziyaret modülü",
+
+  "labels": {
+    "customer": { "singular": "Eczane", "plural": "Eczaneler" },
+    "customer_type": "Eczane Tipi",
+    "discovery": "Çevremdeki Eczaneler",
+    "visit": "Ziyaret"
+  },
+
+  "customerTypes": [
+    { "key": "independent", "label": "Bağımsız Eczane" },
+    { "key": "chain", "label": "Zincir Eczane" },
+    { "key": "hospital_pharmacy", "label": "Hastane Eczanesi" },
+    { "key": "online_pharmacy", "label": "E-Eczane" }
+  ],
+
+  "googlePlacesTypes": ["pharmacy"],
+
+  "visitOutcomes": [
+    { "key": "met", "label": "Görüşüldü", "color": "blue" },
+    { "key": "order_taken", "label": "Sipariş Alındı", "color": "green", "requiresOrder": true },
+    { "key": "sample_left", "label": "Numune Bırakıldı", "color": "amber" },
+    { "key": "promotion_presented", "label": "Promosyon Anlatıldı", "color": "indigo" },
+    { "key": "stock_check_done", "label": "Stok Kontrolü Yapıldı", "color": "cyan" },
+    { "key": "no_request", "label": "Talep Yok", "color": "gray" },
+    { "key": "closed", "label": "Kapalı", "color": "red" }
+  ],
+
+  "customFields": {
+    "account": [
+      {
+        "key": "pharmacist_name",
+        "label": "Sorumlu Eczacı",
+        "type": "text"
+      },
+      {
+        "key": "is_24h",
+        "label": "24 Saat Açık",
+        "type": "boolean",
+        "defaultValue": false
+      },
+      {
+        "key": "is_on_duty_pharmacy",
+        "label": "Nöbetçi Eczane Listesinde",
+        "type": "boolean",
+        "defaultValue": true
+      },
+      {
+        "key": "chain_brand",
+        "label": "Zincir Markası",
+        "type": "text",
+        "helperText": "Zincire bağlıysa marka adı (örn: Watsons)"
+      },
+      {
+        "key": "monthly_revenue_band",
+        "label": "Aylık Ciro Bandı",
+        "type": "select",
+        "options": ["0-100k", "100k-500k", "500k-1M", "1M+"]
+      }
+    ],
+    "visit": [
+      {
+        "key": "shelf_audit_done",
+        "label": "Raf Denetimi Yapıldı",
+        "type": "boolean"
+      }
+    ]
+  },
+
+  "iconSet": "medical",
+  "primaryColorSuggestion": "#16A34A",
+
+  "features": {
+    "photoCompliance": {
+      "enabled": false
+    }
+  },
+
+  "samplePolicy": { "enabled": false }
+}

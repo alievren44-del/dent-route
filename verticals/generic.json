@@ -1,0 +1,42 @@
+{
+  "id": "generic",
+  "displayName": "Genel (Sektör Belirsiz)",
+  "description": "Belirli bir sektör şablonuna uymayan veya kullanıcının kendi alanlarını tanımlamak istediği durumlar için genel şablon",
+
+  "labels": {
+    "customer": { "singular": "Müşteri", "plural": "Müşteriler" },
+    "customer_type": "Müşteri Tipi",
+    "discovery": "Çevremdeki Müşteriler",
+    "visit": "Ziyaret"
+  },
+
+  "customerTypes": [
+    { "key": "prospect", "label": "Potansiyel" },
+    { "key": "active", "label": "Aktif Müşteri" },
+    { "key": "partner", "label": "İş Ortağı" },
+    { "key": "distributor", "label": "Dağıtıcı / Bayi" },
+    { "key": "vip", "label": "Anahtar Müşteri (VIP)" },
+    { "key": "other", "label": "Diğer" }
+  ],
+
+  "googlePlacesTypes": ["establishment", "store", "point_of_interest"],
+
+  "visitOutcomes": [
+    { "key": "met", "label": "Görüşüldü", "color": "blue" },
+    { "key": "order_taken", "label": "Sipariş Alındı", "color": "green", "requiresOrder": true },
+    { "key": "demo_done", "label": "Demo / Sunum Yapıldı", "color": "indigo" },
+    { "key": "follow_up", "label": "Takip Gerektiriyor", "color": "amber" },
+    { "key": "no_request", "label": "Talep Yok", "color": "gray" },
+    { "key": "closed", "label": "Kapalı / Erişilemedi", "color": "red" },
+    { "key": "other", "label": "Diğer", "color": "gray" }
+  ],
+
+  "customFields": {
+    "account": []
+  },
+
+  "iconSet": "business",
+  "primaryColorSuggestion": "#2563EB",
+
+  "samplePolicy": { "enabled": false }
+}

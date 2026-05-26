@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Validate vertical templates
+        run: npm run saha:validate-verticals
+
+      - name: Saha migration guard (paylaşımlı Parla DB politikası)
+        run: npm run saha:check-migrations
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        env:
+          # Build için minimum env'ler — CI'da dummy değerler
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: ci-dummy-key
+          VITE_MAPBOX_PUBLIC_TOKEN: pk.ci-dummy
+        run: npm run build

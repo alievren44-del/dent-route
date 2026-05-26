@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build
+dist/
+build/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Deployment config (tenant-specific)
+config/.saha-config.json
+
+# Testing
+coverage/
+playwright-report/
+test-results/
+
+# Supabase
+.supabase/
+supabase/.branches
+supabase/.temp
+
+# Lokal-only Parla baseline (kişisel makinede regen edilir, prod'a push edilmez)
+supabase/migrations/00000000000000_parla_baseline_local.sql
+supabase/local/parla-schema-baseline.sql
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Temporary
+tmp/
+temp/
+*.tmp
+
+# Lokal-only / dev artifacts
+.claude/settings.local.json
+saha-app.zip
+ekran görüntüsü navigasyon/

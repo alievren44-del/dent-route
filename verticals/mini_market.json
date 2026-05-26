@@ -1,0 +1,82 @@
+{
+  "id": "mini_market",
+  "displayName": "Market / Bakkal (FMCG)",
+  "description": "Bakkal, mini market ve süpermarketlere hızlı tüketim ürünleri (FMCG) toptan satışı",
+
+  "labels": {
+    "customer": { "singular": "Market", "plural": "Marketler" },
+    "customer_type": "Market Tipi",
+    "discovery": "Çevremdeki Marketler",
+    "visit": "Ziyaret"
+  },
+
+  "customerTypes": [
+    { "key": "bakkal", "label": "Bakkal" },
+    { "key": "mini_market", "label": "Mini Market" },
+    { "key": "supermarket", "label": "Süpermarket" },
+    { "key": "chain_branch", "label": "Zincir Mağaza Şubesi" },
+    { "key": "convenience_store", "label": "Konvenans Mağaza (24 saat)" },
+    { "key": "wholesale_dealer", "label": "Toptancı / Bayi" }
+  ],
+
+  "googlePlacesTypes": ["convenience_store", "supermarket", "grocery_or_supermarket", "store"],
+
+  "visitOutcomes": [
+    { "key": "met", "label": "Görüşüldü", "color": "blue" },
+    { "key": "order_taken", "label": "Sipariş Alındı", "color": "green", "requiresOrder": true },
+    { "key": "shelf_audit_done", "label": "Raf Denetimi Yapıldı", "color": "cyan" },
+    { "key": "promotion_setup", "label": "Promosyon Kurulumu", "color": "purple" },
+    { "key": "pos_material_left", "label": "POS Materyali Bırakıldı", "color": "amber" },
+    { "key": "no_request", "label": "Talep Yok", "color": "gray" },
+    { "key": "closed", "label": "Kapalı", "color": "red" }
+  ],
+
+  "customFields": {
+    "account": [
+      {
+        "key": "store_size_m2",
+        "label": "Mağaza Büyüklüğü (m²)",
+        "type": "number"
+      },
+      {
+        "key": "cash_register_count",
+        "label": "Kasa Sayısı",
+        "type": "number"
+      },
+      {
+        "key": "has_cold_chain",
+        "label": "Soğuk Zincir Var",
+        "type": "boolean",
+        "helperText": "Dondurma, et, süt ürünleri için"
+      },
+      {
+        "key": "chain_brand",
+        "label": "Zincir Markası",
+        "type": "select",
+        "options": [
+          "Bağımsız",
+          "BİM",
+          "A101",
+          "Şok",
+          "Migros",
+          "CarrefourSA",
+          "Macrocenter",
+          "ONUR",
+          "File",
+          "Diğer"
+        ]
+      },
+      {
+        "key": "monthly_volume_band",
+        "label": "Aylık Sipariş Hacmi",
+        "type": "select",
+        "options": ["Düşük (<10k)", "Orta (10k-50k)", "Yüksek (50k-200k)", "Çok Yüksek (>200k)"]
+      }
+    ]
+  },
+
+  "iconSet": "retail",
+  "primaryColorSuggestion": "#059669",
+
+  "samplePolicy": { "enabled": false }
+}

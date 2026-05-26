@@ -1,0 +1,68 @@
+{
+  "id": "optician",
+  "displayName": "Optisyen",
+  "description": "Optik gözlük, lens ve aksesuar toptan satışı için optisyenlik ziyaret modülü",
+
+  "labels": {
+    "customer": { "singular": "Optik", "plural": "Optikler" },
+    "customer_type": "Optik Tipi",
+    "discovery": "Çevremdeki Optikler",
+    "visit": "Ziyaret"
+  },
+
+  "customerTypes": [
+    { "key": "independent", "label": "Bağımsız Optisyen" },
+    { "key": "chain", "label": "Zincir Optisyen" },
+    { "key": "hospital_optician", "label": "Hastane Optisyeni" },
+    { "key": "concept_store", "label": "Konsept Mağaza" }
+  ],
+
+  "googlePlacesTypes": ["optometrist", "store"],
+
+  "visitOutcomes": [
+    { "key": "met", "label": "Görüşüldü", "color": "blue" },
+    { "key": "order_taken", "label": "Sipariş Alındı", "color": "green", "requiresOrder": true },
+    { "key": "frame_showcase_done", "label": "Yeni Çerçeve Tanıtıldı", "color": "indigo" },
+    { "key": "sample_left", "label": "Numune Bırakıldı", "color": "amber" },
+    { "key": "no_request", "label": "Talep Yok", "color": "gray" },
+    { "key": "closed", "label": "Kapalı", "color": "red" }
+  ],
+
+  "customFields": {
+    "account": [
+      {
+        "key": "optician_name",
+        "label": "Sorumlu Optisyen",
+        "type": "text"
+      },
+      {
+        "key": "has_eye_exam",
+        "label": "Göz Muayenesi Sunuyor",
+        "type": "boolean"
+      },
+      {
+        "key": "specialties",
+        "label": "Uzmanlık Alanları",
+        "type": "multiselect",
+        "options": [
+          "Çerçeve Gözlük",
+          "Güneş Gözlüğü",
+          "Kontakt Lens",
+          "Çocuk Gözlüğü",
+          "Spor Gözlüğü",
+          "Tasarımcı/Lüks Marka"
+        ]
+      },
+      {
+        "key": "store_size_m2",
+        "label": "Mağaza Büyüklüğü (m²)",
+        "type": "number"
+      }
+    ]
+  },
+
+  "iconSet": "retail",
+  "primaryColorSuggestion": "#7C3AED",
+
+  "samplePolicy": { "enabled": false }
+}

@@ -1,0 +1,95 @@
+{
+  "id": "automotive_parts",
+  "displayName": "Oto Yedek Parça",
+  "description": "Servis, lastikçi ve yedek parça satıcılarına oto yedek parça ve aksesuar toptan satışı",
+
+  "labels": {
+    "customer": { "singular": "Bayi", "plural": "Bayiler" },
+    "customer_type": "Bayi Tipi",
+    "discovery": "Çevremdeki Bayiler",
+    "visit": "Ziyaret"
+  },
+
+  "customerTypes": [
+    { "key": "authorized_service", "label": "Yetkili Servis" },
+    { "key": "independent_service", "label": "Bağımsız Servis" },
+    { "key": "parts_dealer", "label": "Yedek Parçacı" },
+    { "key": "tire_shop", "label": "Lastikçi" },
+    { "key": "auto_glass", "label": "Oto Cam" },
+    { "key": "auto_paint", "label": "Oto Boya / Kaporta" },
+    { "key": "auto_electric", "label": "Oto Elektrik" },
+    { "key": "auto_accessories", "label": "Aksesuar / Tuning" },
+    { "key": "car_wash", "label": "Yıkama / Detailing" }
+  ],
+
+  "googlePlacesTypes": ["car_repair", "car_dealer", "car_wash"],
+
+  "visitOutcomes": [
+    { "key": "met", "label": "Görüşüldü", "color": "blue" },
+    { "key": "order_taken", "label": "Sipariş Alındı", "color": "green", "requiresOrder": true },
+    { "key": "warranty_discussed", "label": "Garanti / İade Görüşüldü", "color": "amber" },
+    { "key": "catalog_left", "label": "Katalog Bırakıldı", "color": "indigo" },
+    { "key": "training_done", "label": "Ürün Eğitimi Verildi", "color": "cyan" },
+    { "key": "no_request", "label": "Talep Yok", "color": "gray" },
+    { "key": "closed", "label": "Kapalı", "color": "red" }
+  ],
+
+  "customFields": {
+    "account": [
+      {
+        "key": "lift_count",
+        "label": "Lift / Servis Yolu Sayısı",
+        "type": "number"
+      },
+      {
+        "key": "brands_served",
+        "label": "Hizmet Verilen Markalar",
+        "type": "multiselect",
+        "options": [
+          "Mercedes",
+          "BMW",
+          "Audi/VW",
+          "Renault",
+          "Fiat",
+          "Ford",
+          "Opel",
+          "Peugeot/Citroen",
+          "Toyota",
+          "Hyundai",
+          "Kia",
+          "Honda",
+          "Nissan",
+          "Çin Markaları",
+          "Tüm Markalar"
+        ]
+      },
+      {
+        "key": "vehicle_types",
+        "label": "Hizmet Verilen Araç Tipleri",
+        "type": "multiselect",
+        "options": [
+          "Binek",
+          "Hafif Ticari",
+          "Ağır Vasıta / Kamyon",
+          "Motosiklet",
+          "Otobüs"
+        ]
+      },
+      {
+        "key": "is_insurance_contracted",
+        "label": "Sigorta Anlaşmalı",
+        "type": "boolean"
+      },
+      {
+        "key": "tuv_authorized",
+        "label": "TÜVTÜRK Kontrol Yetkisi",
+        "type": "boolean"
+      }
+    ]
+  },
+
+  "iconSet": "automotive",
+  "primaryColorSuggestion": "#0F172A",
+
+  "samplePolicy": { "enabled": false }
+}

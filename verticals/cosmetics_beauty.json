@@ -1,0 +1,84 @@
+{
+  "id": "cosmetics_beauty",
+  "displayName": "Kozmetik / Güzellik",
+  "description": "Güzellik salonu, kuaför, spa ve estetik kliniklerine kozmetik ürün toptan satışı",
+
+  "labels": {
+    "customer": { "singular": "Salon", "plural": "Salonlar" },
+    "customer_type": "İşletme Tipi",
+    "discovery": "Çevremdeki Salonlar",
+    "visit": "Ziyaret"
+  },
+
+  "customerTypes": [
+    { "key": "beauty_salon", "label": "Güzellik Salonu" },
+    { "key": "hair_salon", "label": "Kuaför" },
+    { "key": "barbershop", "label": "Erkek Kuaförü" },
+    { "key": "nail_salon", "label": "Tırnak / Manikür Salonu" },
+    { "key": "spa", "label": "Spa / Wellness" },
+    { "key": "aesthetic_clinic", "label": "Estetik / Cilt Kliniği" },
+    { "key": "tattoo_studio", "label": "Dövme / Piercing Stüdyosu" },
+    { "key": "academy", "label": "Güzellik Akademisi" }
+  ],
+
+  "googlePlacesTypes": ["beauty_salon", "hair_care", "spa"],
+
+  "visitOutcomes": [
+    { "key": "met", "label": "Görüşüldü", "color": "blue" },
+    { "key": "order_taken", "label": "Sipariş Alındı", "color": "green", "requiresOrder": true },
+    { "key": "training_done", "label": "Ürün Eğitimi Verildi", "color": "indigo" },
+    { "key": "demo_done", "label": "Uygulama Demosu Yapıldı", "color": "purple" },
+    { "key": "sample_left", "label": "Numune Bırakıldı", "color": "amber" },
+    { "key": "no_request", "label": "Talep Yok", "color": "gray" },
+    { "key": "closed", "label": "Kapalı", "color": "red" }
+  ],
+
+  "customFields": {
+    "account": [
+      {
+        "key": "stylist_count",
+        "label": "Çalışan Sayısı",
+        "type": "number"
+      },
+      {
+        "key": "services_offered",
+        "label": "Sunulan Hizmetler",
+        "type": "multiselect",
+        "options": [
+          "Saç Kesim/Boyama",
+          "Saç Bakım/Keratin",
+          "Cilt Bakımı",
+          "Makyaj",
+          "Tırnak (Manikür/Pedikür)",
+          "Lazer Epilasyon",
+          "Masaj/Spa",
+          "Estetik Uygulama",
+          "Gelin Hazırlığı"
+        ]
+      },
+      {
+        "key": "brand_focus",
+        "label": "Tercih Edilen Marka Segmenti",
+        "type": "select",
+        "options": ["Ekonomik", "Orta Segment", "Premium", "Lüks"]
+      },
+      {
+        "key": "has_retail_shelf",
+        "label": "Müşteriye Ürün Satıyor",
+        "type": "boolean"
+      }
+    ]
+  },
+
+  "iconSet": "retail",
+  "primaryColorSuggestion": "#EC4899",
+
+  "features": {
+    "photoCompliance": {
+      "enabled": false,
+      "minPhotos": 0
+    }
+  },
+
+  "samplePolicy": { "enabled": false }
+}

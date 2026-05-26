@@ -1,0 +1,78 @@
+{
+  "id": "medical_supply",
+  "displayName": "Medikal Cihaz/Malzeme",
+  "description": "Hastane, klinik ve dağıtıcılara medikal cihaz ve malzeme toptan satışı",
+
+  "labels": {
+    "customer": { "singular": "Müşteri", "plural": "Müşteriler" },
+    "customer_type": "Müşteri Tipi",
+    "discovery": "Çevremdeki Sağlık Noktaları",
+    "visit": "Ziyaret"
+  },
+
+  "customerTypes": [
+    { "key": "public_hospital", "label": "Devlet Hastanesi" },
+    { "key": "private_hospital", "label": "Özel Hastane" },
+    { "key": "university_hospital", "label": "Üniversite Hastanesi" },
+    { "key": "polyclinic", "label": "Poliklinik" },
+    { "key": "private_clinic", "label": "Özel Klinik" },
+    { "key": "lab", "label": "Tahlil/Görüntüleme Merkezi" },
+    { "key": "distributor", "label": "Bayi/Dağıtıcı" },
+    { "key": "home_care", "label": "Evde Bakım Şirketi" }
+  ],
+
+  "googlePlacesTypes": ["hospital", "doctor", "physiotherapist"],
+
+  "visitOutcomes": [
+    { "key": "met", "label": "Görüşüldü", "color": "blue" },
+    { "key": "order_taken", "label": "Sipariş Alındı", "color": "green", "requiresOrder": true },
+    { "key": "tender_discussed", "label": "İhale Görüşüldü", "color": "purple" },
+    { "key": "demo_done", "label": "Cihaz Demo Yapıldı", "color": "indigo" },
+    { "key": "sample_left", "label": "Numune Bırakıldı", "color": "amber" },
+    { "key": "training_done", "label": "Eğitim Verildi", "color": "cyan" },
+    { "key": "no_request", "label": "Talep Yok", "color": "gray" }
+  ],
+
+  "customFields": {
+    "account": [
+      {
+        "key": "departments",
+        "label": "İlgili Bölümler",
+        "type": "multiselect",
+        "options": [
+          "Yoğun Bakım",
+          "Ameliyathane",
+          "Acil",
+          "Ortopedi",
+          "Kardiyoloji",
+          "Radyoloji",
+          "Laboratuvar",
+          "Diyaliz",
+          "Onkoloji",
+          "Doğumhane"
+        ]
+      },
+      {
+        "key": "bed_count",
+        "label": "Yatak Kapasitesi",
+        "type": "number"
+      },
+      {
+        "key": "tender_calendar_url",
+        "label": "İhale Takvimi Linki",
+        "type": "text",
+        "placeholder": "EKAP veya kurum sitesi"
+      },
+      {
+        "key": "is_sgk_contract",
+        "label": "SGK Anlaşmalı",
+        "type": "boolean"
+      }
+    ]
+  },
+
+  "iconSet": "medical",
+  "primaryColorSuggestion": "#DC2626",
+
+  "samplePolicy": { "enabled": false }
+}

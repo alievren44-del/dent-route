@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Branding renkleri runtime'da applyBranding() ile set edilir.
+ * Default değerler (config yüklenmeden önce) burada.
+ */
+@layer base {
+  :root {
+    --color-primary: 37 99 235;          /* #2563EB */
+    --color-primary-foreground: 255 255 255;
+    --color-accent: 16 185 129;          /* #10B981 */
+    --color-accent-foreground: 255 255 255;
+    --color-background: 255 255 255;
+    --color-foreground: 15 23 42;        /* slate-900 */
+    --color-muted: 241 245 249;          /* slate-100 */
+    --color-muted-foreground: 100 116 139; /* slate-500 */
+    --color-border: 226 232 240;         /* slate-200 */
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+    overscroll-behavior: none;
+  }
+
+  /* Saha kullanımı: hızlı interaksiyon */
+  button,
+  [role='button'] {
+    @apply select-none;
+    touch-action: manipulation;
+  }
+
+  /* Mobile-first input zoom önleme */
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+@layer utilities {
+  /* Safe area padding (iPhone notch + Android navbar için) */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
