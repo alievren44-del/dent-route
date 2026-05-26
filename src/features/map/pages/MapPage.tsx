@@ -36,11 +36,25 @@ export default function MapPage() {
 
     map.on('load', () => {
       setMapReady(true);
+      map.resize();
     });
 
     mapRef.current = map;
 
+    // Container 0x0 init olabilir — ResizeObserver ile takip et
+    const ro = new ResizeObserver(() => {
+      map.resize();
+    });
+    ro.observe(containerRef.current);
+
+    // İlk render sonrası bir kez daha resize (Mapbox'ın bilinen pattern'i)
+    const t1 = setTimeout(() => map.resize(), 100);
+    const t2 = setTimeout(() => map.resize(), 500);
+
     return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      ro.disconnect();
       markerRef.current?.remove();
       markerRef.current = null;
       map.remove();
@@ -70,8 +84,11 @@ export default function MapPage() {
   const isDenied = geolocation.status === 'denied';
 
   return (
-    <div className="relative h-[calc(100vh-4rem)] w-full">
-      <div ref={containerRef} className="absolute inset-0" />
+    <div
+      ref={containerRef}
+      className="relative w-full"
+      style={{ height: 'calc(100dvh - 4rem - 5rem)', minHeight: '400px' }}
+    >
 
       <div className="pointer-events-none absolute right-3 top-3 z-10">
         <div className="pointer-events-auto rounded-lg bg-white/90 px-3 py-2 shadow-md backdrop-blur">

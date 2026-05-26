@@ -126,6 +126,76 @@ Detay: `.ai_context/05-verticals.md`
 
 ---
 
+## Deploy — Cloudflare Pages
+
+### Tek seferlik kurulum
+1. https://dash.cloudflare.com → **Workers & Pages** → **Create application** → **Pages** → **Connect to Git**
+2. GitHub `alievren44-del/dent-route` repo'sunu bağla
+3. Build settings:
+   - **Build command:** `npm run build`
+   - **Build output:** `dist`
+   - **Root directory:** `/`
+   - **Node version:** 20 (Environment variables → `NODE_VERSION=20`)
+4. **Environment variables** (Production + Preview):
+   - `VITE_SUPABASE_URL=https://rranpzicmhgfupgabgbi.supabase.co`
+   - `VITE_SUPABASE_ANON_KEY=...` (Parla anon key)
+   - `VITE_MAPBOX_PUBLIC_TOKEN=pk....` (Mapbox default public token)
+5. **Save & Deploy**
+
+### Production URL
+- `https://dent-route-saha.pages.dev` (CF default)
+- Custom domain bağlamak için: Cloudflare DNS → CNAME → pages.dev
+
+### Edge Function ALLOWED_ORIGINS güncelle
+Deploy sonrası Supabase Dashboard → Project Settings → Edge Functions → Secrets:
+- `ALLOWED_ORIGINS=http://localhost:5173,https://dent-route-saha.pages.dev,https://saha.parla.com`
+
+### Sonraki deploylar
+Otomatik: `main` branch'e push → CF Pages auto-build.
+
+---
+
+## Mobile APK Build (Capacitor)
+
+Parla saha ekibi için Android APK. Capacitor 8 wrapper.
+
+### İlk kurulum (tek seferlik)
+```powershell
+npm install
+npx cap add android
+```
+
+### Geliştirme döngüsü
+```powershell
+# Web bundle hazırla + Capacitor sync + Android Studio aç
+npm run cap:android
+
+# Veya sync only (Android Studio açma)
+npm run cap:sync
+```
+
+### Release APK build
+```powershell
+npm run cap:android:build
+# Çıktı: android/app/build/outputs/apk/release/app-release.apk
+```
+
+### Production URL bağla
+`capacitor.config.ts` içindeki `server.url`'yi prod domain'e set et (CF Pages deploy sonrası):
+```typescript
+server: {
+  url: 'https://saha.parla.com',
+  cleartext: false,
+}
+```
+
+### Gereksinimler
+- Android Studio (Java 17+, Gradle)
+- Android SDK 33+
+- JDK 17+
+
+---
+
 ## 📝 Lisans & Telif
 
 Bu proje Parla Diş Deposu için geliştirilmektedir. SaaS lisansı modeli henüz belirlenmemiştir.

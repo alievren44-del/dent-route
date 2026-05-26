@@ -1,5 +1,6 @@
 import { useAuthStore } from '@core/auth/authStore';
 import { loadSahaConfig } from '@config/loadConfig';
+import { NotificationBell } from '@features/notifications/components/NotificationBell';
 
 function handleSignOut() {
   void useAuthStore.getState().signOut();
@@ -16,6 +17,7 @@ export function Header() {
       </div>
       {profile && (
         <div className="flex items-center gap-3">
+          <NotificationBell />
           <span className="hidden text-xs text-muted-foreground sm:inline">
             {profile.fullName ?? profile.email}
           </span>

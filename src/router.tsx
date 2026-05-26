@@ -11,6 +11,14 @@ const DiscoveryPage = lazy(() => import('@features/discovery/pages/DiscoveryPage
 const RoutePlannerPage = lazy(() => import('@features/routes/pages/RoutePlannerPage'));
 const ActiveRoutePage = lazy(() => import('@features/routes/pages/ActiveRoutePage'));
 const SamplesPage = lazy(() => import('@features/sampling/pages/SamplesPage'));
+const NotificationsPage = lazy(() => import('@features/notifications/pages/NotificationsPage'));
+const RegionAssignmentPage = lazy(() => import('@features/admin/pages/RegionAssignmentPage'));
+const CustomerDetailPage = lazy(() => import('@features/customers/pages/CustomerDetailPage'));
+const OrderFormPage = lazy(() => import('@features/orders/pages/OrderFormPage'));
+const DashboardPage = lazy(() => import('@features/admin/pages/DashboardPage'));
+const HeatmapPage = lazy(() => import('@features/admin/pages/HeatmapPage'));
+const CsvImportPage = lazy(() => import('@features/admin/pages/CsvImportPage'));
+const ClinicScanPage = lazy(() => import('@features/admin/pages/ClinicScanPage'));
 
 function PlaceholderPage({ name }: { name: string }) {
   return (
@@ -69,7 +77,16 @@ export function AppRouter() {
           }
         />
         <Route path="/clinics" element={withShell('Müşteri Listesi')} />
-        <Route path="/clinics/:id" element={withShell('Müşteri Detay')} />
+        <Route
+          path="/clinics/:id"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <CustomerDetailPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/clinics/discover"
           element={
@@ -102,7 +119,36 @@ export function AppRouter() {
         />
         <Route path="/visits/check-in/:id" element={withShell('Check-in', true)} />
         <Route path="/visits/:id" element={withShell('Ziyaret Formu')} />
-        <Route path="/orders/new" element={withShell('Yeni Sipariş')} />
+        <Route
+          path="/orders/new"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <OrderFormPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <NotificationsPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/regions"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <RegionAssignmentPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/samples"
           element={
@@ -116,10 +162,47 @@ export function AppRouter() {
         <Route path="/history" element={withShell('Geçmiş')} />
 
         {/* Admin ekranları */}
-        <Route path="/admin/dashboard" element={withShellAdmin('Yönetici Paneli')} />
+        <Route
+          path="/admin/dashboard"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <DashboardPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
         <Route path="/admin/users" element={withShellAdmin('Kullanıcı Yönetimi')} />
-        <Route path="/admin/clinics" element={withShellAdmin('Müşteri Yönetimi')} />
-        <Route path="/admin/heatmap" element={withShellAdmin('Heatmap')} />
+        <Route
+          path="/admin/clinics"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <CsvImportPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/heatmap"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <HeatmapPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/clinic-scan"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <ClinicScanPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
 
         <Route
           path="*"

@@ -29,9 +29,22 @@
     "saha:check-migrations": "tsx scripts/check-saha-migrations.ts",
     "db:local-reset": "tsx scripts/local-supabase-reset.ts",
     "db:local-dump-baseline": "supabase db dump --linked --schema public -f supabase/local/parla-schema-baseline.sql",
+    "build:native": "cross-env VITE_BUILD_TARGET=native vite build",
+    "cap:sync": "npm run build:native && npx cap sync",
+    "cap:android": "npm run build:native && npx cap sync android && npx cap open android",
+    "cap:android:build": "npm run build:native && npx cap sync android && cd android && ./gradlew assembleRelease",
     "prepare": "echo 'skip husky in CI'"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/browser": "^8.0.3",
+    "@capacitor/core": "^8.3.4",
+    "@capacitor/keyboard": "^8.0.3",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/share": "^8.0.1",
+    "@capacitor/splash-screen": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.2",
     "@hookform/resolvers": "^3.6.0",
     "@supabase/supabase-js": "^2.45.0",
     "@tanstack/query-async-storage-persister": "^5.51.0",
@@ -51,6 +64,7 @@
     "zustand": "^4.5.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.3.4",
     "@playwright/test": "^1.45.0",
     "@testing-library/jest-dom": "^6.4.0",
     "@testing-library/react": "^16.0.0",
@@ -62,6 +76,7 @@
     "@typescript-eslint/parser": "^7.13.0",
     "@vitejs/plugin-react": "^4.3.0",
     "autoprefixer": "^10.4.19",
+    "cross-env": "^7.0.3",
     "eslint": "^8.57.0",
     "eslint-plugin-jsx-a11y": "^6.9.0",
     "eslint-plugin-react": "^7.34.0",

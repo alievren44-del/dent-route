@@ -25,8 +25,10 @@ import type {
   NewOrderItem,
   Order,
   OrderQuote,
+  OrderStatus,
   Page,
   Product,
+  QuotedItem,
   SearchOptions,
 } from '../types';
 import { AdapterError } from '../errors';
@@ -182,47 +184,388 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
     throw AdapterError.notImplemented('updateCustomer (Sprint 2)');
   }
 
-  // ─── Balance (TODO: Sprint 5) ─────────────────────────
+  // ─── Balance ──────────────────────────────────────────
 
-  getBalance(_customerId: string, _opts?: { forceFresh?: boolean }): Promise<Balance> {
-    throw AdapterError.notImplemented('getBalance (Sprint 5)');
+  async getBalance(customerId: string, _opts?: { forceFresh?: boolean }): Promise<Balance> {
+    const { data, error } = await this.supabase
+      .from('wallet_transactions')
+      .select('amount, type, created_at')
+      .eq('user_id', customerId);
+
+    if (error) {
+      // wallet_transactions yoksa veya RLS engelliyse — boş balance dön
+      return {
+        customerId,
+        totalOrders: 0,
+        totalPaid: 0,
+        balance: 0,
+        currency: 'TRY',
+        asOf: new Date().toISOString(),
+        cached: false,
+      };
+    }
+
+    let balance = 0;
+    let lastMovement: string | undefined;
+    const rows = (data ?? []) as Array<{
+      amount: number | string;
+      type: string | null;
+      created_at: string;
+    }>;
+    for (const row of rows) {
+      const amt = Number(row.amount);
+      const type = String(row.type ?? '').toLowerCase();
+      const sign = ['credit', 'alacak', 'add', 'deposit'].includes(type) ? 1 : -1;
+      balance += amt * sign;
+      if (!lastMovement || row.created_at > lastMovement) lastMovement = row.created_at;
+    }
+
+    return {
+      customerId,
+      totalOrders: 0,
+      totalPaid: 0,
+      balance,
+      currency: 'TRY',
+      lastMovementAt: lastMovement,
+      asOf: new Date().toISOString(),
+      cached: false,
+    };
   }
 
-  // ─── Orders (TODO: Sprint 5) ──────────────────────────
+  // ─── Orders ───────────────────────────────────────────
 
-  listOrders(_customerId: string, _opts?: ListOptions): Promise<Page<Order>> {
-    throw AdapterError.notImplemented('listOrders (Sprint 5)');
+  async listOrders(customerId: string, opts?: ListOptions): Promise<Page<Order>> {
+    const { data, error, count } = await this.supabase
+      .from('orders')
+      .select(
+        'id, order_number, user_id, status, total, total_amount, notes, sales_rep_id, created_at, order_items(product_id, quantity, unit_price, line_total)',
+        { count: 'exact' },
+      )
+      .eq('user_id', customerId)
+      .order('created_at', { ascending: false })
+      .limit(opts?.limit ?? 50);
+
+    if (error) {
+      throw new AdapterError('UNKNOWN', error.message, { originalError: error });
+    }
+
+    return {
+      items: (data ?? []).map((r: any) => ({
+        id: r.id,
+        externalId: r.order_number ?? undefined,
+        customerId: r.user_id,
+        status: mapOrderStatus(r.status),
+        items: (r.order_items ?? []).map((li: any) => ({
+          productId: li.product_id ?? undefined,
+          productName: String(li.product_name ?? li.product_id ?? 'Ürün'),
+          quantity: Number(li.quantity ?? 0),
+          unitPrice: Number(li.unit_price ?? 0),
+          lineTotal: li.line_total != null ? Number(li.line_total) : undefined,
+        })),
+        totalAmount: Number(r.total ?? r.total_amount ?? 0),
+        currency: 'TRY',
+        notes: r.notes ?? undefined,
+        createdBy: r.sales_rep_id ?? r.user_id,
+        createdAt: r.created_at,
+      })),
+      total: count ?? undefined,
+    };
   }
 
-  getOrder(_id: string): Promise<Order> {
-    throw AdapterError.notImplemented('getOrder (Sprint 5)');
+  async getOrder(id: string): Promise<Order> {
+    const { data, error } = await this.supabase
+      .from('orders')
+      .select(
+        'id, order_number, user_id, status, total, total_amount, notes, sales_rep_id, created_at, order_items(product_id, quantity, unit_price, line_total)',
+      )
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) {
+      throw new AdapterError('UNKNOWN', error.message, { originalError: error });
+    }
+    if (!data) {
+      throw AdapterError.notFound('Order', id);
+    }
+
+    const r = data as any;
+    return {
+      id: r.id,
+      externalId: r.order_number ?? undefined,
+      customerId: r.user_id,
+      status: mapOrderStatus(r.status),
+      items: (r.order_items ?? []).map((li: any) => ({
+        productId: li.product_id ?? undefined,
+        productName: String(li.product_name ?? li.product_id ?? 'Ürün'),
+        quantity: Number(li.quantity ?? 0),
+        unitPrice: Number(li.unit_price ?? 0),
+        lineTotal: li.line_total != null ? Number(li.line_total) : undefined,
+      })),
+      totalAmount: Number(r.total ?? r.total_amount ?? 0),
+      currency: 'TRY',
+      notes: r.notes ?? undefined,
+      createdBy: r.sales_rep_id ?? r.user_id,
+      createdAt: r.created_at,
+    };
   }
 
-  createOrder(_order: NewOrder): Promise<Order> {
-    throw AdapterError.notImplemented('createOrder (Sprint 5)');
+  async createOrder(order: NewOrder): Promise<Order> {
+    const { data: userData } = await this.supabase.auth.getUser();
+    const salesRepId = userData.user?.id;
+
+    // Idempotency check
+    if (order.idempotencyKey) {
+      const { data: existing } = await this.supabase
+        .from('orders')
+        .select('id')
+        .eq('notes', `idempotency:${order.idempotencyKey}`)
+        .maybeSingle();
+      if (existing?.id) {
+        return this.getOrder(existing.id);
+      }
+    }
+
+    // Calculate total client-side (server-side validation Parla'da)
+    let subtotal = 0;
+    const lineItems = order.items.map((it) => {
+      const unitPrice = it.unitPriceOverride ?? 0;
+      const lineTotal = unitPrice * it.quantity;
+      subtotal += lineTotal;
+      return { ...it, unitPrice, lineTotal };
+    });
+
+    const notesValue = order.notes
+      ? `${order.notes} | idempotency:${order.idempotencyKey}`
+      : `idempotency:${order.idempotencyKey}`;
+
+    const { data: newOrder, error: insErr } = await this.supabase
+      .from('orders')
+      .insert({
+        user_id: order.customerId,
+        sales_rep_id: salesRepId,
+        status: 'pending',
+        subtotal,
+        total: subtotal,
+        total_amount: subtotal,
+        notes: notesValue,
+      })
+      .select('id')
+      .single();
+
+    if (insErr || !newOrder) {
+      throw new AdapterError('UNKNOWN', insErr?.message ?? 'order insert failed', {
+        originalError: insErr,
+      });
+    }
+
+    const itemsPayload = lineItems.map((it) => ({
+      order_id: newOrder.id,
+      product_id: it.productId,
+      quantity: it.quantity,
+      unit_price: it.unitPrice,
+      line_total: it.lineTotal,
+    }));
+    const { error: itemsErr } = await this.supabase.from('order_items').insert(itemsPayload);
+    if (itemsErr) {
+      console.warn('order_items insert warning:', itemsErr.message);
+    }
+
+    return this.getOrder(newOrder.id);
   }
 
-  quoteOrder(_items: NewOrderItem[], _customerId: string): Promise<OrderQuote> {
-    throw AdapterError.notImplemented('quoteOrder (Sprint 5)');
+  async quoteOrder(items: NewOrderItem[], _customerId: string): Promise<OrderQuote> {
+    const productIds = items.map((i) => i.productId);
+    const { data: products } = await this.supabase
+      .from('products')
+      .select('id, name, base_price, sale_price, currency')
+      .in('id', productIds);
+
+    const priceMap = new Map<string, { price: number; currency: string }>();
+    const productRows = (products ?? []) as Array<{
+      id: string;
+      base_price: number | string;
+      sale_price: number | string | null;
+      currency: string | null;
+    }>;
+    for (const p of productRows) {
+      priceMap.set(p.id, {
+        price: Number(p.sale_price ?? p.base_price),
+        currency: p.currency ?? 'TRY',
+      });
+    }
+
+    let subtotal = 0;
+    const quotedItems: QuotedItem[] = items.map((it) => {
+      const pi = priceMap.get(it.productId);
+      const unitPrice = it.unitPriceOverride ?? pi?.price ?? 0;
+      const lineTotal = unitPrice * it.quantity;
+      subtotal += lineTotal;
+      return {
+        ...it,
+        unitPrice,
+        appliedDiscount: 0,
+        lineTotal,
+      };
+    });
+
+    const vatTotal = subtotal * 0.20;
+    return {
+      items: quotedItems,
+      subtotal,
+      discountTotal: 0,
+      vatTotal,
+      grandTotal: subtotal + vatTotal,
+      currency: 'TRY',
+      appliedCampaigns: [],
+    };
   }
 
-  // ─── Products (TODO: Sprint 5) ────────────────────────
+  // ─── Products ─────────────────────────────────────────
 
-  listProducts(_opts?: ListProductsOptions): Promise<Page<Product>> {
-    throw AdapterError.notImplemented('listProducts (Sprint 5)');
+  async listProducts(opts?: ListProductsOptions): Promise<Page<Product>> {
+    let q = this.supabase
+      .from('products')
+      .select(
+        'id, sku, name, description, category_id, base_price, sale_price, currency, stock_quantity, is_active, main_image',
+        { count: 'exact' },
+      )
+      .eq('is_active', true)
+      .order('name');
+
+    if (opts?.search) q = q.ilike('name', `%${opts.search}%`);
+    if (opts?.category) q = q.eq('category_id', opts.category);
+    if (opts?.isActive !== undefined) q = q.eq('is_active', opts.isActive);
+    q = q.limit(opts?.limit ?? 50);
+
+    const { data, error, count } = await q;
+    if (error) {
+      throw new AdapterError('UNKNOWN', error.message, { originalError: error });
+    }
+
+    return {
+      items: (data ?? []).map((r: any) => ({
+        id: r.id,
+        sku: r.sku ?? undefined,
+        name: r.name,
+        description: r.description ?? undefined,
+        category: r.category_id ?? undefined,
+        unit: 'adet',
+        basePrice: r.sale_price != null ? Number(r.sale_price) : Number(r.base_price ?? 0),
+        currency: r.currency ?? 'TRY',
+        stockQuantity: r.stock_quantity ?? undefined,
+        isActive: Boolean(r.is_active),
+        imageUrl: r.main_image ?? undefined,
+      })),
+      total: count ?? undefined,
+    };
   }
 
-  getProduct(_id: string): Promise<Product> {
-    throw AdapterError.notImplemented('getProduct (Sprint 5)');
+  async getProduct(id: string): Promise<Product> {
+    const { data, error } = await this.supabase
+      .from('products')
+      .select(
+        'id, sku, name, description, category_id, base_price, sale_price, currency, stock_quantity, is_active, main_image',
+      )
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) {
+      throw new AdapterError('UNKNOWN', error.message, { originalError: error });
+    }
+    if (!data) {
+      throw AdapterError.notFound('Product', id);
+    }
+
+    const r = data as any;
+    return {
+      id: r.id,
+      sku: r.sku ?? undefined,
+      name: r.name,
+      description: r.description ?? undefined,
+      category: r.category_id ?? undefined,
+      unit: 'adet',
+      basePrice: r.sale_price != null ? Number(r.sale_price) : Number(r.base_price ?? 0),
+      currency: r.currency ?? 'TRY',
+      stockQuantity: r.stock_quantity ?? undefined,
+      isActive: Boolean(r.is_active),
+      imageUrl: r.main_image ?? undefined,
+    };
   }
 
-  searchProducts(_query: string, _limit?: number): Promise<Product[]> {
-    throw AdapterError.notImplemented('searchProducts (Sprint 5)');
+  async searchProducts(query: string, limit?: number): Promise<Product[]> {
+    const { data, error } = await this.supabase
+      .from('products')
+      .select(
+        'id, sku, name, description, category_id, base_price, sale_price, currency, stock_quantity, is_active, main_image',
+      )
+      .eq('is_active', true)
+      .ilike('name', `%${query}%`)
+      .order('name')
+      .limit(limit ?? 20);
+
+    if (error) {
+      throw new AdapterError('UNKNOWN', error.message, { originalError: error });
+    }
+
+    return (data ?? []).map((r: any) => ({
+      id: r.id,
+      sku: r.sku ?? undefined,
+      name: r.name,
+      description: r.description ?? undefined,
+      category: r.category_id ?? undefined,
+      unit: 'adet',
+      basePrice: r.sale_price != null ? Number(r.sale_price) : Number(r.base_price ?? 0),
+      currency: r.currency ?? 'TRY',
+      stockQuantity: r.stock_quantity ?? undefined,
+      isActive: Boolean(r.is_active),
+      imageUrl: r.main_image ?? undefined,
+    }));
   }
 
   // ─── Campaigns (TODO: Faz 2) ──────────────────────────
 
   listActiveCampaigns(_customerId?: string): Promise<Campaign[]> {
     throw AdapterError.notImplemented('listActiveCampaigns (Faz 2)');
+  }
+}
+
+function mapOrderStatus(s: string | null | undefined): OrderStatus {
+  const v = String(s ?? '').toLowerCase().trim();
+  switch (v) {
+    case 'draft':
+    case 'taslak':
+      return 'draft';
+    case 'pending':
+    case 'beklemede':
+    case 'awaiting':
+    case 'new':
+    case 'created':
+      return 'pending';
+    case 'confirmed':
+    case 'approved':
+    case 'onaylandi':
+    case 'onaylandı':
+    case 'processing':
+    case 'preparing':
+      return 'confirmed';
+    case 'shipped':
+    case 'in_transit':
+    case 'kargoda':
+    case 'kargolandi':
+    case 'kargolandı':
+      return 'shipped';
+    case 'delivered':
+    case 'completed':
+    case 'teslim_edildi':
+    case 'tamamlandi':
+    case 'tamamlandı':
+      return 'delivered';
+    case 'cancelled':
+    case 'canceled':
+    case 'iptal':
+    case 'iptal_edildi':
+      return 'cancelled';
+    default:
+      return 'pending';
   }
 }

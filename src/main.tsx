@@ -10,6 +10,7 @@ import { loadSahaConfig } from '@config/loadConfig';
 import { applyBranding } from '@config/branding';
 import { VerticalProvider } from '@core/verticals/VerticalContext';
 import { AuthBootstrap } from '@components/layout/AuthBootstrap';
+import { initSyncQueue } from '@core/offline/syncQueue';
 import './styles/globals.css';
 
 // 1. Config + branding
@@ -38,6 +39,9 @@ const persister = createAsyncStoragePersister({
   storage: typeof window !== 'undefined' ? window.localStorage : undefined,
   key: 'saha-query-cache',
 });
+
+// 4. Offline sync queue (online/offline event handler register)
+initSyncQueue();
 
 // 3. Mount
 const rootEl = document.getElementById('root');

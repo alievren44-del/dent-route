@@ -11,7 +11,7 @@ interface NavItem {
 
 const items: NavItem[] = [
   { to: '/', label: 'Harita', Icon: Map },
-  { to: '/clinics', label: 'Klinikler', Icon: Users },
+  { to: '/clinics/discover', label: 'Klinikler', Icon: Users },
   { to: '/routes/plan', label: 'Rota', Icon: Route },
   { to: '/samples', label: 'Numune', Icon: Gift },
   { to: '/admin/dashboard', label: 'Yönetici', Icon: BarChart3, adminOnly: true },

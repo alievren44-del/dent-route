@@ -1,8 +1,9 @@
 /**
  * DiscoveryPage — GPS-based müşteri keşfi.
  *
- * Akış: Geolocation → paralel (saha searchNearby + Google Places Edge Function)
+ * Akış: Geolocation → paralel (saha searchNearby + saha_clinics RPC)
  * → dedupCandidates → ClinicCard listesi. Vertical-aware başlık ve etiketler.
+ * Live Google çağrısı YOK — klinikler admin tarafından `clinic-scan` ile önceden eklenir.
  */
 
 import { useEffect, useState } from 'react';
@@ -21,33 +22,38 @@ import { SupabaseCRMAdapter } from '@core/adapters/builtin/SupabaseCRMAdapter';
 
 const adapter = new SupabaseCRMAdapter();
 
-interface GooglePlaceResult {
-  placeId: string;
+interface SahaClinicRow {
+  id: string;
+  google_place_id: string;
   name: string;
   lat: number;
   lng: number;
-  address?: string;
-  rating?: number;
-  types?: string[];
+  address: string | null;
+  phone: string | null;
+  rating: number | null;
+  user_ratings_total: number | null;
+  types: string[];
+  province_slug: string | null;
+  district_slug: string | null;
+  distance_m: number;
 }
 
-interface GooglePlacesResponse {
-  results: GooglePlaceResult[];
-  status: string;
-}
-
-async function fetchGooglePlaces(
+async function fetchSahaClinics(
   lat: number,
   lng: number,
   radiusM: number,
-  types: string[],
-): Promise<GooglePlacesResponse> {
+  verticalKey: string,
+): Promise<SahaClinicRow[]> {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.functions.invoke('google-places-search', {
-    body: { lat, lng, radiusM, types },
+  const { data, error } = await supabase.rpc('saha_search_nearby_clinics', {
+    _lat: lat,
+    _lng: lng,
+    _radius_m: radiusM,
+    _vertical_key: verticalKey,
+    _limit: 100,
   });
   if (error) throw error;
-  return data as GooglePlacesResponse;
+  return (data ?? []) as SahaClinicRow[];
 }
 
 const RADIUS_OPTIONS: number[] = [1, 2, 5, 10];
@@ -64,19 +70,17 @@ function DiscoveryPage(): JSX.Element {
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['discovery', position?.lat, position?.lng, radiusKm, vertical.id],
     enabled: !!position,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
     queryFn: async () => {
       if (!position) return [];
 
-      const [sahaResult, googleResult] = await Promise.allSettled([
+      const [sahaResult, clinicsResult] = await Promise.allSettled([
         adapter.searchNearby({ lat: position.lat, lng: position.lng }, radiusKm, {
           limit: 50,
         }),
-        fetchGooglePlaces(
-          position.lat,
-          position.lng,
-          radiusKm * 1000,
-          vertical.googlePlacesTypes,
-        ),
+        fetchSahaClinics(position.lat, position.lng, radiusKm * 1000, vertical.id),
       ]);
 
       const candidates: DiscoveryCandidate[] = [];
@@ -98,16 +102,17 @@ function DiscoveryPage(): JSX.Element {
         }
       }
 
-      if (googleResult.status === 'fulfilled') {
-        for (const r of googleResult.value.results) {
+      if (clinicsResult.status === 'fulfilled') {
+        for (const r of clinicsResult.value) {
           candidates.push({
             source: 'google_places',
-            externalId: r.placeId,
+            externalId: r.google_place_id,
             name: r.name,
             lat: r.lat,
             lng: r.lng,
-            address: r.address,
-            rating: r.rating,
+            address: r.address ?? undefined,
+            phone: r.phone ?? undefined,
+            rating: r.rating ?? undefined,
             types: r.types,
           });
         }
@@ -220,8 +225,12 @@ function DiscoveryPage(): JSX.Element {
       )}
 
       {position && data && data.length === 0 && !showSpinner && !isError && (
-        <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
-          Bu yarıçapta sonuç bulunamadı.
+        <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground space-y-2">
+          <p>Bu yarıçapta klinik bulunamadı.</p>
+          <p className="text-xs">
+            Admin'e tarama talebinde bulun (vertical: <code>{vertical.id}</code>, konum:{' '}
+            {position.lat.toFixed(4)}, {position.lng.toFixed(4)}, yarıçap: {radiusKm}km).
+          </p>
         </div>
       )}
     </div>

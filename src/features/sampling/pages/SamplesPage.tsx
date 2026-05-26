@@ -15,6 +15,8 @@ import { getSupabaseClient } from '@lib/supabase';
 import { getQuota, currentYearMonth, getRemainingBudget } from '@core/sampling/quotas';
 import SampleFormMobile from '@features/sampling/components/SampleFormMobile';
 import SampleListView from '@features/sampling/components/SampleListView';
+import HunterListView from '@features/sampling/components/HunterListView';
+import ROIReportView from '@features/sampling/components/ROIReportView';
 import type { SampleStatus } from '@core/sampling/types';
 
 type TabKey = 'new' | 'active' | 'history' | 'hunters' | 'roi';
@@ -36,14 +38,6 @@ function isValidTab(value: string | null): value is TabKey {
     value === 'history' ||
     value === 'hunters' ||
     value === 'roi'
-  );
-}
-
-function Placeholder({ text }: { text: string }): JSX.Element {
-  return (
-    <div className="flex min-h-[40vh] items-center justify-center p-6 text-center">
-      <p className="text-sm text-muted-foreground">{text}</p>
-    </div>
   );
 }
 
@@ -179,10 +173,8 @@ function SamplesPage(): JSX.Element {
             <SampleListView filterStatus={HISTORY_STATUSES} />
           </div>
         )}
-        {activeTab === 'hunters' && (
-          <Placeholder text="Sprint 5.5+ — numune avcısı tespiti gelecek" />
-        )}
-        {activeTab === 'roi' && <Placeholder text="ROI raporu gelecek" />}
+        {activeTab === 'hunters' && <HunterListView />}
+        {activeTab === 'roi' && <ROIReportView />}
       </div>
     </div>
   );
