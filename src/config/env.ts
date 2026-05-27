@@ -14,7 +14,8 @@ interface SahaEnv {
 
 function read(name: string, required = true): string {
   const env = import.meta.env as Record<string, string | undefined>;
-  const value = env[name];
+  // CF Pages env UI paste'inde leading/internal whitespace sızabiliyor — strip et.
+  const value = env[name]?.replace(/\s+/g, '');
   if (required && !value) {
     throw new Error(`Gerekli env var eksik: ${name}. .env dosyasını kontrol et.`);
   }
