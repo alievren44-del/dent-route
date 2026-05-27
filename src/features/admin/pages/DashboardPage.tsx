@@ -44,7 +44,7 @@ interface RepAggregate {
 
 interface DashboardData {
   reps: RepRow[];
-  byRep: Map<string, RepAggregate>;
+  byRep: Record<string, RepAggregate>;
   totals: {
     repCount: number;
     checkIns: number;
@@ -97,13 +97,13 @@ async function fetchDashboard(sinceIso: string): Promise<DashboardData> {
   if (orders.error) throw orders.error;
 
   const repRows = (reps.data ?? []) as RepRow[];
-  const byRep = new Map<string, RepAggregate>();
+  const byRep: Record<string, RepAggregate> = {};
 
   function bucket(id: string): RepAggregate {
-    let entry = byRep.get(id);
+    let entry = byRep[id];
     if (!entry) {
       entry = { checkIns: 0, km: 0, orders: 0 };
-      byRep.set(id, entry);
+      byRep[id] = entry;
     }
     return entry;
   }
@@ -176,8 +176,8 @@ export default function DashboardPage() {
   const sortedReps = useMemo(() => {
     if (!data) return [];
     return [...reps].sort((a, b) => {
-      const aa = data.byRep.get(a.id) ?? { checkIns: 0, km: 0, orders: 0 };
-      const bb = data.byRep.get(b.id) ?? { checkIns: 0, km: 0, orders: 0 };
+      const aa = data.byRep[a.id] ?? { checkIns: 0, km: 0, orders: 0 };
+      const bb = data.byRep[b.id] ?? { checkIns: 0, km: 0, orders: 0 };
       const aScore = aa.checkIns + aa.orders + aa.km;
       const bScore = bb.checkIns + bb.orders + bb.km;
       if (bScore !== aScore) return bScore - aScore;
@@ -320,7 +320,7 @@ export default function DashboardPage() {
                   </tr>
                 )}
                 {sortedReps.map((rep) => {
-                  const agg = data?.byRep.get(rep.id) ?? {
+                  const agg = data?.byRep[rep.id] ?? {
                     checkIns: 0,
                     km: 0,
                     orders: 0,
