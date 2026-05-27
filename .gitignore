@@ -15,7 +15,8 @@ build/
 !.env.example
 
 # Deployment config (tenant-specific)
-config/.saha-config.json
+# Not: tek-tenant Parla deploy için repoya commit ediliyor (secret içermez, sadece env var ref'leri + feature flags)
+# config/.saha-config.json
 
 # Testing
 coverage/

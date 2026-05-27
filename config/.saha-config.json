@@ -1,0 +1,83 @@
+{
+  "tenant": {
+    "id": "parla",
+    "name": "Parla Diş Deposu",
+    "domain": "saha.parladisdeposu.com"
+  },
+
+  "branding": {
+    "name": "Parla Saha",
+    "logo": "/assets/parla-logo.svg",
+    "primaryColor": "#2563EB",
+    "accentColor": "#10B981"
+  },
+
+  "vertical": {
+    "extends": "dental",
+    "overrides": {}
+  },
+
+  "crm": {
+    "type": "supabase",
+    "config": {}
+  },
+
+  "features": {
+    "orders": true,
+    "balance": true,
+    "campaigns": true,
+    "mileageTracking": true,
+    "recurringRoutes": true,
+    "visitPhotos": true,
+    "offlineMode": true,
+    "realtimeTraffic": true
+  },
+
+  "external": {
+    "mapbox": {
+      "publicTokenEnvVar": "VITE_MAPBOX_PUBLIC_TOKEN",
+      "rateLimit": {
+        "optimizationPerUserPerDay": 100,
+        "directionsPerUserPerDay": 500
+      }
+    },
+    "googlePlaces": {
+      "rateLimit": {
+        "searchesPerUserPerDay": 200,
+        "autocompletePerUserPerDay": 500
+      }
+    },
+    "mapTiler": {
+      "enabled": false,
+      "publicKeyEnvVar": "VITE_MAPTILER_KEY"
+    }
+  },
+
+  "geo": {
+    "country": "TR",
+    "defaultMapCenter": {
+      "lat": 41.0082,
+      "lng": 28.9784,
+      "zoom": 11
+    },
+    "discoveryRadiusKm": 5,
+    "discoveryMaxResults": 30
+  },
+
+  "legal": {
+    "kvkkRequired": true,
+    "kvkkVersion": "1.0",
+    "kvkkUrl": "/legal/kvkk-aydinlatma.pdf",
+    "dataRetention": {
+      "visitsMonths": 24,
+      "gpsLogDays": 90,
+      "photosMonths": 12
+    }
+  },
+
+  "deployment": {
+    "supabaseUrlEnvVar": "VITE_SUPABASE_URL",
+    "supabaseAnonKeyEnvVar": "VITE_SUPABASE_ANON_KEY",
+    "environment": "production"
+  }
+}
