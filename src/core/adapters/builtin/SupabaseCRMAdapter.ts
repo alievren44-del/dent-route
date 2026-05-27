@@ -126,53 +126,64 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
     const radiusM = Math.round(radiusKm * 1000);
     const limit = opts?.limit ?? 50;
 
-    const { data, error } = await this.supabase.rpc('saha_search_nearby_accounts', {
+    const { data, error } = await this.supabase.rpc('saha_search_nearby_clinics', {
       _lat: location.lat,
       _lng: location.lng,
       _radius_m: radiusM,
-      _customer_type: opts?.type ?? null,
+      _vertical_key: 'dental',
       _limit: limit,
     });
 
     if (error) {
       throw new AdapterError('UNKNOWN', `searchNearby başarısız: ${error.message}`, {
         originalError: error,
-        details: { rpc: 'saha_search_nearby_accounts' },
+        details: { rpc: 'saha_search_nearby_clinics' },
       });
     }
 
-    type RpcRow = {
+    type ClinicRow = {
       id: string;
+      google_place_id: string | null;
       name: string;
-      type: string | null;
+      lat: number | null;
+      lng: number | null;
+      address: string | null;
       phone: string | null;
-      whatsapp: string | null;
-      email: string | null;
-      status: 'active' | 'inactive' | 'prospect';
-      region: string | null;
-      addresses: unknown;
-      contacts: unknown;
-      custom_fields: Record<string, unknown> | null;
-      created_at: string;
-      updated_at: string;
+      rating: number | null;
+      user_ratings_total: number | null;
+      types: string[] | null;
+      province_slug: string | null;
+      district_slug: string | null;
+      clinic_segment: string | null;
+      last_verified_at: string | null;
       distance_m: number;
     };
 
-    const rows = (data ?? []) as RpcRow[];
-    return rows.map((r) => ({
+    const rows = (data ?? []) as ClinicRow[];
+    return rows.map<Customer>((r) => ({
       id: r.id,
       name: r.name,
-      type: r.type ?? undefined,
+      type: r.clinic_segment ?? undefined,
       phone: r.phone ?? undefined,
-      whatsapp: r.whatsapp ?? undefined,
-      email: r.email ?? undefined,
-      status: r.status,
-      region: r.region ?? undefined,
-      addresses: Array.isArray(r.addresses) ? (r.addresses as Customer['addresses']) : [],
-      contacts: Array.isArray(r.contacts) ? (r.contacts as Customer['contacts']) : undefined,
-      customFields: r.custom_fields ?? undefined,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
+      status: 'active' as const,
+      addresses: r.lat != null && r.lng != null
+        ? [{
+            addressLine: r.address ?? '',
+            district: r.district_slug ?? undefined,
+            city: r.province_slug ?? undefined,
+            location: { lat: r.lat, lng: r.lng },
+            isPrimary: true,
+          }] as Customer['addresses']
+        : [],
+      customFields: {
+        google_place_id: r.google_place_id,
+        rating: r.rating,
+        user_ratings_total: r.user_ratings_total,
+        types: r.types,
+        last_verified_at: r.last_verified_at,
+      },
+      createdAt: r.last_verified_at ?? new Date().toISOString(),
+      updatedAt: r.last_verified_at ?? new Date().toISOString(),
     }));
   }
 
