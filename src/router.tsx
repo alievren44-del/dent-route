@@ -6,56 +6,54 @@ import { ProtectedRoute } from '@components/layout/ProtectedRoute';
 
 const LoginPage = lazy(() => import('@features/auth/pages/LoginPage'));
 const KvkkConsentPage = lazy(() => import('@features/auth/pages/KvkkConsentPage'));
+const FirstAdminPage = lazy(() => import('@features/auth/pages/FirstAdminPage'));
 const MapPage = lazy(() => import('@features/map/pages/MapPage'));
 const DiscoveryPage = lazy(() => import('@features/discovery/pages/DiscoveryPage'));
+const NearbyProvincesPage = lazy(() => import('@features/discovery/pages/NearbyProvincesPage'));
+const SahaTaraPage = lazy(() => import('@features/discovery/pages/SahaTaraPage'));
 const RoutePlannerPage = lazy(() => import('@features/routes/pages/RoutePlannerPage'));
 const ActiveRoutePage = lazy(() => import('@features/routes/pages/ActiveRoutePage'));
+const DistrictAutoRoutePage = lazy(() => import('@features/routes/pages/DistrictAutoRoutePage'));
+const CorridorRoutePage = lazy(() => import('@features/routes/pages/CorridorRoutePage'));
+const AssignedRoutesPage = lazy(() => import('@features/routes/pages/AssignedRoutesPage'));
+const CollectionListPage = lazy(() => import('@features/rep-ops/pages/CollectionListPage'));
+const TaskListPage = lazy(() => import('@features/rep-ops/pages/TaskListPage'));
+const DownloadAPKPage = lazy(() => import('@features/app/pages/DownloadAPKPage'));
 const SamplesPage = lazy(() => import('@features/sampling/pages/SamplesPage'));
 const NotificationsPage = lazy(() => import('@features/notifications/pages/NotificationsPage'));
 const RegionAssignmentPage = lazy(() => import('@features/admin/pages/RegionAssignmentPage'));
+const CustomerListPage = lazy(() => import('@features/customers/pages/CustomerListPage'));
 const CustomerDetailPage = lazy(() => import('@features/customers/pages/CustomerDetailPage'));
 const OrderFormPage = lazy(() => import('@features/orders/pages/OrderFormPage'));
+const OrderApprovalPage = lazy(() => import('@features/orders/pages/OrderApprovalPage'));
+const OrderHistoryPage = lazy(() => import('@features/orders/pages/OrderHistoryPage'));
 const DashboardPage = lazy(() => import('@features/admin/pages/DashboardPage'));
 const HeatmapPage = lazy(() => import('@features/admin/pages/HeatmapPage'));
 const CsvImportPage = lazy(() => import('@features/admin/pages/CsvImportPage'));
 const ClinicScanPage = lazy(() => import('@features/admin/pages/ClinicScanPage'));
+const ScanJobDetailPage = lazy(() => import('@features/admin/pages/ScanJobDetailPage'));
+const ScanRoutePlanner = lazy(() => import('@features/admin/pages/ScanRoutePlanner'));
+const UsersPage = lazy(() => import('@features/admin/pages/UsersPage'));
+const AuditLogPage = lazy(() => import('@features/admin/pages/AuditLogPage'));
 
-function PlaceholderPage({ name }: { name: string }) {
-  return (
-    <div className="flex min-h-[60vh] items-center justify-center p-8 text-center">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">{name}</h1>
-        <p className="mt-2 text-muted-foreground">Bu ekran ilgili sprint&apos;te geliştirilecek.</p>
-      </div>
-    </div>
-  );
-}
+// Visits (Sprint 4)
+const CheckInPage = lazy(() => import('@features/visits/pages/CheckInPage'));
+const VisitFormPage = lazy(() => import('@features/visits/pages/VisitFormPage'));
+const VisitHistoryPage = lazy(() => import('@features/visits/pages/VisitHistoryPage'));
+
+// Invoicing (Sprint 6 — cari + fatura + ödeme + çek/senet)
+const CariListPage = lazy(() => import('@features/invoicing/pages/CariListPage'));
+const CariDetailPage = lazy(() => import('@features/invoicing/pages/CariDetailPage'));
+const InvoiceFormPage = lazy(() => import('@features/invoicing/pages/InvoiceFormPage'));
+const InvoiceDetailPage = lazy(() => import('@features/invoicing/pages/InvoiceDetailPage'));
+const PaymentFormPage = lazy(() => import('@features/invoicing/pages/PaymentFormPage'));
+const CekSenetListPage = lazy(() => import('@features/invoicing/pages/CekSenetListPage'));
 
 const Loading = () => (
   <div className="flex min-h-screen items-center justify-center">
     <div className="text-muted-foreground">Yükleniyor…</div>
   </div>
 );
-
-function withShell(name: string, hideNav = false) {
-  return (
-    <ProtectedRoute>
-      <AppShell hideNav={hideNav}>
-        <PlaceholderPage name={name} />
-      </AppShell>
-    </ProtectedRoute>
-  );
-}
-
-function withShellAdmin(name: string) {
-  return (
-    <ProtectedRoute requireRole="admin">
-      <AppShell>
-        <PlaceholderPage name={name} />
-      </AppShell>
-    </ProtectedRoute>
-  );
-}
 
 export function AppRouter() {
   return (
@@ -64,6 +62,9 @@ export function AppRouter() {
         {/* Auth ekranları — shell DIŞINDA */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/onboarding/kvkk" element={<KvkkConsentPage />} />
+        <Route path="/apk" element={<DownloadAPKPage />} />
+        <Route path="/indir" element={<DownloadAPKPage />} />
+        <Route path="/onboarding/first-admin" element={<FirstAdminPage />} />
 
         {/* Saha rep / admin ekranları — shell İÇİNDE */}
         <Route
@@ -76,7 +77,18 @@ export function AppRouter() {
             </ProtectedRoute>
           }
         />
-        <Route path="/clinics" element={withShell('Müşteri Listesi')} />
+
+        {/* Müşteri (account) ekranları */}
+        <Route
+          path="/clinics"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <CustomerListPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/clinics/:id"
           element={
@@ -98,6 +110,28 @@ export function AppRouter() {
           }
         />
         <Route
+          path="/nearby-provinces"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <NearbyProvincesPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/saha/tara"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <SahaTaraPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Rotalar */}
+        <Route
           path="/routes/plan"
           element={
             <ProtectedRoute>
@@ -117,8 +151,90 @@ export function AppRouter() {
             </ProtectedRoute>
           }
         />
-        <Route path="/visits/check-in/:id" element={withShell('Check-in', true)} />
-        <Route path="/visits/:id" element={withShell('Ziyaret Formu')} />
+        <Route
+          path="/routes/auto"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <DistrictAutoRoutePage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/routes/corridor"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <CorridorRoutePage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/routes/assigned"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <AssignedRoutesPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tahsilatlar"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <CollectionListPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/gorevler"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <TaskListPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Ziyaretler (Sprint 4) */}
+        <Route
+          path="/visits/check-in/:id"
+          element={
+            <ProtectedRoute>
+              <AppShell hideNav>
+                <CheckInPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/visits/:id"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <VisitFormPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/history"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <VisitHistoryPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Siparişler */}
         <Route
           path="/orders/new"
           element={
@@ -130,11 +246,119 @@ export function AppRouter() {
           }
         />
         <Route
+          path="/orders/approval"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <OrderApprovalPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/orders/history"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <OrderHistoryPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Cari / Fatura / Ödeme / Çek-Senet (Sprint 6) */}
+        <Route
+          path="/invoicing/cari"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <CariListPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/invoicing/cari/:id"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <CariDetailPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/invoicing/fatura/yeni"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <InvoiceFormPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/invoicing/fatura/:id"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <InvoiceDetailPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/invoicing/odeme/yeni"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <PaymentFormPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/invoicing/cek-senet"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <CekSenetListPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Bildirimler */}
+        <Route
           path="/notifications"
           element={
             <ProtectedRoute>
               <AppShell>
                 <NotificationsPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Numune */}
+        <Route
+          path="/samples"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <SamplesPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Admin ekranları */}
+        <Route
+          path="/admin/dashboard"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <DashboardPage />
               </AppShell>
             </ProtectedRoute>
           }
@@ -150,29 +374,25 @@ export function AppRouter() {
           }
         />
         <Route
-          path="/samples"
-          element={
-            <ProtectedRoute>
-              <AppShell>
-                <SamplesPage />
-              </AppShell>
-            </ProtectedRoute>
-          }
-        />
-        <Route path="/history" element={withShell('Geçmiş')} />
-
-        {/* Admin ekranları */}
-        <Route
-          path="/admin/dashboard"
+          path="/admin/users"
           element={
             <ProtectedRoute requireRole="admin">
               <AppShell>
-                <DashboardPage />
+                <UsersPage />
               </AppShell>
             </ProtectedRoute>
           }
         />
-        <Route path="/admin/users" element={withShellAdmin('Kullanıcı Yönetimi')} />
+        <Route
+          path="/admin/audit-logs"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <AuditLogPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/admin/clinics"
           element={
@@ -199,6 +419,26 @@ export function AppRouter() {
             <ProtectedRoute requireRole="admin">
               <AppShell>
                 <ClinicScanPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/clinic-scan/jobs/:id"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <ScanJobDetailPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/route-planner"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <ScanRoutePlanner />
               </AppShell>
             </ProtectedRoute>
           }

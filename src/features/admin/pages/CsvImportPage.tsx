@@ -10,13 +10,16 @@ import { useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
+  FileSpreadsheet,
   FileUp,
   Loader2,
   Upload,
+  Users,
   XCircle,
 } from 'lucide-react';
 
 import { getSupabaseClient } from '@/lib/supabase';
+import ClinicXlsxImport from '@/features/admin/components/ClinicXlsxImport';
 
 const KNOWN_COLUMNS = [
   'ad_soyad',
@@ -159,7 +162,7 @@ async function importRow(
   return { status: 'created', id: (data?.id as string | undefined) ?? undefined };
 }
 
-export default function CsvImportPage() {
+function UserCsvImport() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [parsed, setParsed] = useState<ParsedCsv | null>(null);
@@ -274,8 +277,8 @@ export default function CsvImportPage() {
   const canImport = !!parsed && parsed.rows.length > 0 && !importing;
 
   return (
-    <div className="flex h-full min-h-screen flex-col bg-slate-50">
-      <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
+    <div className="flex flex-1 flex-col">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">CSV İçeri Aktarım</h1>
           <p className="text-xs text-slate-500">
@@ -503,6 +506,55 @@ export default function CsvImportPage() {
           </section>
         )}
       </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// Tabbed wrapper — default export
+// ----------------------------------------------------------------------------
+
+type ImportTab = 'user-csv' | 'clinic-xlsx';
+
+export default function CsvImportPage() {
+  const [tab, setTab] = useState<ImportTab>('user-csv');
+
+  return (
+    <div className="flex h-full min-h-screen flex-col bg-slate-50">
+      <nav className="sticky top-0 z-10 flex flex-wrap items-center gap-1 border-b border-slate-200 bg-white px-4 py-2 shadow-sm">
+        <button
+          type="button"
+          onClick={() => setTab('user-csv')}
+          className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${
+            tab === 'user-csv'
+              ? 'bg-slate-900 text-white'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Users className="h-4 w-4" />
+          Kullanıcı CSV
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('clinic-xlsx')}
+          className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${
+            tab === 'clinic-xlsx'
+              ? 'bg-slate-900 text-white'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <FileSpreadsheet className="h-4 w-4" />
+          Klinik Excel
+        </button>
+      </nav>
+
+      {tab === 'user-csv' ? (
+        <UserCsvImport />
+      ) : (
+        <div className="flex-1 p-4">
+          <ClinicXlsxImport />
+        </div>
+      )}
     </div>
   );
 }

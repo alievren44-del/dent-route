@@ -1,0 +1,709 @@
+/**
+ * VisitFormPage — Ziyaret formu (check-in sonrası check-out + detay).
+ *
+ * URL: /visits/:id   ( :id = visit_id )
+ *
+ * Bölümler (sırayla, sticky alt buton):
+ *  1. Header: müşteri adı, check-in saati, elapsed timer (30sn'de bir güncellenir).
+ *  2. Görüşülen kişi (text input).
+ *  3. Outcome chips (vertical-aware — yoksa dental fallback).
+ *  4. Notes (textarea).
+ *  5. Photos (multi-upload, client-side resize, kategori dropdown).
+ *  6. Custom fields (vertical.customFields.visit varsa).
+ *  7. Sonraki ziyaret tarihi (HTML date, opsiyonel).
+ *  8. Sticky bottom: "Check-out + Kaydet".
+ *
+ * Submit:
+ *  - resize edilmiş foto'ları visit-photos bucket'ına {visitId}/{uuid}.jpg yolu ile yükler
+ *  - saha_visit_photos satırlarını ekler
+ *  - saha_visits update: check_out_at, status='completed', outcome, met_person, notes, ...
+ *  - Outcome'a göre yönlendirme:
+ *      order_taken → /orders/new?customerId=...
+ *      sample_given/sample_left → /samples?customerId=...
+ *      diğer → /history
+ */
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import {
+  ArrowLeft,
+  Camera,
+  CheckCircle2,
+  Clock,
+  Loader2,
+  Trash2,
+  X,
+} from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { tr } from 'date-fns/locale';
+import { getSupabaseClient } from '@lib/supabase';
+import { useVertical } from '@core/verticals/useVertical';
+import { resizeImage, extensionFor } from '@lib/imageResize';
+import type { CustomField, VisitOutcomeOption } from '@core/verticals/types';
+
+interface VisitRow {
+  id: string;
+  account_id: string;
+  rep_id: string;
+  check_in_at: string;
+  check_out_at: string | null;
+  status: 'in_progress' | 'completed' | 'cancelled';
+  outcome: string | null;
+  met_person: string | null;
+  notes: string | null;
+  custom_fields: Record<string, unknown> | null;
+  next_visit_date: string | null;
+}
+
+interface AccountRow {
+  id: string;
+  klinik_adi: string | null;
+  ad_soyad: string | null;
+  email: string | null;
+  city: string | null;
+}
+
+type PhotoCategory = 'storefront' | 'shelf' | 'price_tag' | 'other';
+
+interface PendingPhoto {
+  uid: string;
+  blob: Blob;
+  previewUrl: string;
+  category: PhotoCategory;
+  originalName: string;
+}
+
+const PHOTO_CATEGORY_OPTIONS: { value: PhotoCategory; label: string }[] = [
+  { value: 'storefront', label: 'Vitrin' },
+  { value: 'shelf', label: 'Raf' },
+  { value: 'price_tag', label: 'Etiket' },
+  { value: 'other', label: 'Diğer' },
+];
+
+// Fallback outcome set (dental temalı, plan PROMPT-9 spec)
+const FALLBACK_OUTCOMES: VisitOutcomeOption[] = [
+  { key: 'met', label: 'Görüşüldü', color: 'green' },
+  { key: 'callback', label: 'Tekrar Aranacak', color: 'amber' },
+  { key: 'no_meeting', label: 'Görüşülemedi', color: 'red' },
+  { key: 'order_taken', label: 'Sipariş Alındı', color: 'blue', requiresOrder: true },
+  { key: 'sample_given', label: 'Numune Verildi', color: 'purple' },
+];
+
+function outcomeColorClasses(
+  color: string | undefined,
+  selected: boolean,
+): string {
+  const base = 'border';
+  if (!selected) {
+    return `${base} bg-background border-border text-foreground hover:bg-muted`;
+  }
+  switch ((color ?? '').toLowerCase()) {
+    case 'green':
+      return `${base} bg-green-600 border-green-700 text-white`;
+    case 'amber':
+    case 'yellow':
+      return `${base} bg-amber-500 border-amber-600 text-white`;
+    case 'red':
+      return `${base} bg-red-600 border-red-700 text-white`;
+    case 'blue':
+      return `${base} bg-blue-600 border-blue-700 text-white`;
+    case 'purple':
+      return `${base} bg-purple-600 border-purple-700 text-white`;
+    case 'gray':
+    case 'grey':
+    default:
+      return `${base} bg-gray-600 border-gray-700 text-white`;
+  }
+}
+
+function randomId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function VisitFormPage(): JSX.Element {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const vertical = useVertical();
+  const supabase = getSupabaseClient();
+
+  const customerLabel = vertical.labels.customer.singular;
+  const outcomes: VisitOutcomeOption[] =
+    vertical.visitOutcomes && vertical.visitOutcomes.length > 0
+      ? vertical.visitOutcomes
+      : FALLBACK_OUTCOMES;
+  const visitCustomFields: CustomField[] = vertical.customFields?.visit ?? [];
+
+  // ---- Visit + Account query
+  const visitQuery = useQuery({
+    queryKey: ['visit', id],
+    enabled: Boolean(id),
+    queryFn: async (): Promise<VisitRow | null> => {
+      if (!id) return null;
+      const { data, error } = await supabase
+        .from('saha_visits')
+        .select(
+          'id, account_id, rep_id, check_in_at, check_out_at, status, outcome, met_person, notes, custom_fields, next_visit_date',
+        )
+        .eq('id', id)
+        .maybeSingle();
+      if (error) throw error;
+      return (data ?? null) as VisitRow | null;
+    },
+  });
+
+  const visit = visitQuery.data ?? null;
+  const accountId = visit?.account_id ?? null;
+
+  const accountQuery = useQuery({
+    queryKey: ['visit-account', accountId],
+    enabled: Boolean(accountId),
+    queryFn: async (): Promise<AccountRow | null> => {
+      if (!accountId) return null;
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, klinik_adi, ad_soyad, email, city')
+        .eq('id', accountId)
+        .maybeSingle();
+      if (error) throw error;
+      return (data ?? null) as AccountRow | null;
+    },
+  });
+  const account = accountQuery.data;
+  const accountName =
+    account?.klinik_adi ?? account?.ad_soyad ?? account?.email ?? customerLabel;
+
+  // ---- Form state
+  const [metPerson, setMetPerson] = useState<string>('');
+  const [outcome, setOutcome] = useState<string>('');
+  const [notes, setNotes] = useState<string>('');
+  const [photos, setPhotos] = useState<PendingPhoto[]>([]);
+  const [customValues, setCustomValues] = useState<Record<string, string>>({});
+  const [nextVisitDate, setNextVisitDate] = useState<string>('');
+  const [processingFile, setProcessingFile] = useState<boolean>(false);
+
+  // Initialize once when visit loads
+  const initRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!visit) return;
+    if (initRef.current === visit.id) return;
+    initRef.current = visit.id;
+    setMetPerson(visit.met_person ?? '');
+    setOutcome(visit.outcome ?? '');
+    setNotes(visit.notes ?? '');
+    setNextVisitDate(visit.next_visit_date ?? '');
+    if (visit.custom_fields) {
+      const init: Record<string, string> = {};
+      for (const [k, v] of Object.entries(visit.custom_fields)) {
+        init[k] = v == null ? '' : String(v);
+      }
+      setCustomValues(init);
+    }
+  }, [visit]);
+
+  // ---- Elapsed timer (30s tick)
+  const [, forceTick] = useState<number>(0);
+  useEffect(() => {
+    const t = setInterval(() => forceTick((n) => n + 1), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  const elapsedLabel = useMemo<string>(() => {
+    if (!visit?.check_in_at) return '—';
+    try {
+      return formatDistanceToNow(new Date(visit.check_in_at), {
+        addSuffix: false,
+        locale: tr,
+      });
+    } catch {
+      return '—';
+    }
+  }, [visit?.check_in_at]);
+
+  // ---- Photo cleanup on unmount
+  useEffect(() => {
+    return () => {
+      for (const p of photos) {
+        URL.revokeObjectURL(p.previewUrl);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handlePhotoChange(
+    e: React.ChangeEvent<HTMLInputElement>,
+  ): Promise<void> {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setProcessingFile(true);
+    const next: PendingPhoto[] = [];
+    try {
+      for (const file of Array.from(files)) {
+        try {
+          const blob = await resizeImage(file, {
+            maxDimension: 1600,
+            quality: 0.8,
+            mimeType: 'image/jpeg',
+          });
+          const previewUrl = URL.createObjectURL(blob);
+          next.push({
+            uid: randomId(),
+            blob,
+            previewUrl,
+            category: 'other',
+            originalName: file.name,
+          });
+        } catch (err) {
+          console.warn('Resize hatası, orijinal kullanılacak:', err);
+          const previewUrl = URL.createObjectURL(file);
+          next.push({
+            uid: randomId(),
+            blob: file,
+            previewUrl,
+            category: 'other',
+            originalName: file.name,
+          });
+        }
+      }
+    } finally {
+      setProcessingFile(false);
+      // input reset (aynı dosyayı tekrar seçebilmek için)
+      e.target.value = '';
+    }
+    setPhotos((prev) => [...prev, ...next]);
+  }
+
+  function updatePhotoCategory(uid: string, category: PhotoCategory): void {
+    setPhotos((prev) =>
+      prev.map((p) => (p.uid === uid ? { ...p, category } : p)),
+    );
+  }
+
+  function removePhoto(uid: string): void {
+    setPhotos((prev) => {
+      const target = prev.find((p) => p.uid === uid);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((p) => p.uid !== uid);
+    });
+  }
+
+  function updateCustomValue(key: string, value: string): void {
+    setCustomValues((prev) => ({ ...prev, [key]: value }));
+  }
+
+  // ---- Submit
+  const [submitting, setSubmitting] = useState<boolean>(false);
+
+  const canSubmit = Boolean(
+    !submitting &&
+      visit &&
+      visit.status === 'in_progress' &&
+      outcome.length > 0,
+  );
+
+  async function handleSubmit(): Promise<void> {
+    if (!visit || !id) return;
+    if (!canSubmit) {
+      toast.error('Sonuç seçin.');
+      return;
+    }
+
+    // Required custom fields kontrolü
+    for (const f of visitCustomFields) {
+      if (f.required && !(customValues[f.key] ?? '').trim()) {
+        toast.error(`${f.label} alanı zorunlu.`);
+        return;
+      }
+    }
+
+    setSubmitting(true);
+    try {
+      // 1. Foto upload
+      const uploaded: { storage_path: string; category: PhotoCategory }[] = [];
+      for (const photo of photos) {
+        const ext = extensionFor(photo.blob.type || 'image/jpeg');
+        const path = `${id}/${randomId()}.${ext}`;
+        const { error: upErr } = await supabase.storage
+          .from('visit-photos')
+          .upload(path, photo.blob, {
+            contentType: photo.blob.type || 'image/jpeg',
+            upsert: false,
+          });
+        if (upErr) {
+          console.warn('Foto upload hatası', upErr);
+          continue;
+        }
+        uploaded.push({ storage_path: path, category: photo.category });
+      }
+
+      // 2. Foto satırları
+      if (uploaded.length > 0) {
+        const photoRows = uploaded.map((u) => ({
+          visit_id: id,
+          storage_path: u.storage_path,
+          category: u.category,
+        }));
+        const { error: photoErr } = await supabase
+          .from('saha_visit_photos')
+          .insert(photoRows);
+        if (photoErr) {
+          console.warn('Foto satır insert hatası', photoErr);
+        }
+      }
+
+      // 3. Visit update — check-out
+      // custom_fields type-aware dönüştürme
+      const customPayload: Record<string, unknown> = {};
+      for (const f of visitCustomFields) {
+        const raw = customValues[f.key];
+        if (raw == null || raw === '') continue;
+        if (f.type === 'number') {
+          const n = Number(raw);
+          if (!Number.isNaN(n)) customPayload[f.key] = n;
+        } else if (f.type === 'boolean') {
+          customPayload[f.key] = raw === 'true';
+        } else {
+          customPayload[f.key] = raw;
+        }
+      }
+
+      const updatePayload: Record<string, unknown> = {
+        check_out_at: new Date().toISOString(),
+        status: 'completed',
+        outcome,
+        met_person: metPerson.trim() || null,
+        notes: notes.trim() || null,
+        custom_fields: customPayload,
+        next_visit_date: nextVisitDate || null,
+      };
+
+      const { error: updErr } = await supabase
+        .from('saha_visits')
+        .update(updatePayload)
+        .eq('id', id);
+      if (updErr) throw updErr;
+
+      toast.success('Ziyaret kaydedildi');
+
+      // 4. Outcome-based navigation
+      const opt = outcomes.find((o) => o.key === outcome);
+      if (opt?.requiresOrder || outcome === 'order_taken') {
+        navigate(`/orders/new?customerId=${visit.account_id}`, { replace: true });
+      } else if (outcome === 'sample_given' || outcome === 'sample_left') {
+        navigate(`/samples?customerId=${visit.account_id}`, { replace: true });
+      } else {
+        navigate('/history', { replace: true });
+      }
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : 'Ziyaret kaydedilirken hata oluştu.';
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!id) {
+    return (
+      <div className="p-6 text-center text-muted-foreground">Ziyaret ID bulunamadı.</div>
+    );
+  }
+
+  if (visitQuery.isLoading) {
+    return (
+      <div className="p-6 flex items-center justify-center text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin mr-2" />
+        Yükleniyor…
+      </div>
+    );
+  }
+
+  if (!visit) {
+    return (
+      <div className="p-6 text-center text-muted-foreground">Ziyaret bulunamadı.</div>
+    );
+  }
+
+  const alreadyCompleted = visit.status === 'completed';
+
+  return (
+    <div className="flex flex-col min-h-full pb-28">
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-border bg-background sticky top-0 z-10">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="p-2 -ml-2 rounded-full hover:bg-muted min-h-tap-min min-w-tap-min flex items-center justify-center"
+            aria-label="Geri"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-lg font-semibold text-foreground truncate">
+              {accountName}
+            </h1>
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <Clock className="h-3 w-3" aria-hidden="true" />
+              <span>Check-in: {formatTime(visit.check_in_at)}</span>
+              <span aria-hidden="true">·</span>
+              <span>{elapsedLabel}</span>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 px-4 py-4 space-y-5">
+        {alreadyCompleted && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            Bu ziyaret zaten tamamlanmış. Yine de güncelleyebilirsiniz.
+          </div>
+        )}
+
+        {/* 1. Görüşülen kişi */}
+        <section className="space-y-2">
+          <label
+            htmlFor="met-person"
+            className="text-sm font-medium text-foreground"
+          >
+            Görüşülen Kişi
+          </label>
+          <input
+            id="met-person"
+            type="text"
+            value={metPerson}
+            onChange={(e) => setMetPerson(e.target.value)}
+            placeholder="Örn: Dr. Ayşe Yılmaz"
+            className="w-full rounded-xl border border-border bg-background px-3 h-12 min-h-tap-min text-base"
+          />
+        </section>
+
+        {/* 2. Outcome chips */}
+        <section className="space-y-2" aria-labelledby="outcome-heading">
+          <div id="outcome-heading" className="text-sm font-medium text-foreground">
+            Sonuç <span className="text-red-600">*</span>
+          </div>
+          <div className="flex flex-col gap-2">
+            {outcomes.map((o) => {
+              const selected = outcome === o.key;
+              return (
+                <button
+                  key={o.key}
+                  type="button"
+                  onClick={() => setOutcome(o.key)}
+                  className={`w-full text-left px-4 h-12 min-h-tap-min rounded-xl text-sm font-medium ${outcomeColorClasses(
+                    o.color,
+                    selected,
+                  )}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span>{o.label}</span>
+                    {selected && (
+                      <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* 3. Notes */}
+        <section className="space-y-2">
+          <label
+            htmlFor="visit-notes"
+            className="text-sm font-medium text-foreground"
+          >
+            Notlar
+          </label>
+          <textarea
+            id="visit-notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={4}
+            placeholder="Ziyaret notları, geri bildirim, sonraki adımlar…"
+            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-base"
+          />
+        </section>
+
+        {/* 4. Photos */}
+        <section className="space-y-2" aria-labelledby="photos-heading">
+          <div id="photos-heading" className="text-sm font-medium text-foreground">Fotoğraflar</div>
+          <label className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-background h-12 min-h-tap-min cursor-pointer">
+            {processingFile ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+                <span className="text-sm">İşleniyor…</span>
+              </>
+            ) : (
+              <>
+                <Camera className="h-5 w-5" aria-hidden="true" />
+                <span className="text-sm">Fotoğraf ekle</span>
+              </>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                void handlePhotoChange(e);
+              }}
+            />
+          </label>
+          {photos.length > 0 && (
+            <div className="grid grid-cols-2 gap-3">
+              {photos.map((p) => (
+                <div
+                  key={p.uid}
+                  className="rounded-xl border border-border bg-card overflow-hidden flex flex-col"
+                >
+                  <div className="relative aspect-square bg-muted">
+                    <img
+                      src={p.previewUrl}
+                      alt={p.originalName}
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(p.uid)}
+                      className="absolute top-1 right-1 inline-flex items-center justify-center rounded-full bg-background/90 h-8 w-8"
+                      aria-label="Fotoğrafı kaldır"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <select
+                    value={p.category}
+                    onChange={(e) =>
+                      updatePhotoCategory(p.uid, e.target.value as PhotoCategory)
+                    }
+                    className="border-t border-border bg-background h-11 min-h-tap-min text-sm px-2"
+                  >
+                    {PHOTO_CATEGORY_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* 5. Custom fields */}
+        {visitCustomFields.length > 0 && (
+          <section className="space-y-2" aria-labelledby="extra-heading">
+            <div id="extra-heading" className="text-sm font-medium text-foreground">Ek Bilgiler</div>
+            <div className="space-y-3">
+              {visitCustomFields.map((f) => (
+                <div key={f.key} className="space-y-1">
+                  <label
+                    htmlFor={`cf-${f.key}`}
+                    className="text-xs text-muted-foreground"
+                  >
+                    {f.label}
+                    {f.required && <span className="text-red-600 ml-1">*</span>}
+                  </label>
+                  {f.type === 'number' ? (
+                    <input
+                      id={`cf-${f.key}`}
+                      type="number"
+                      inputMode="decimal"
+                      value={customValues[f.key] ?? ''}
+                      onChange={(e) => updateCustomValue(f.key, e.target.value)}
+                      placeholder={f.placeholder ?? ''}
+                      className="w-full rounded-xl border border-border bg-background px-3 h-12 min-h-tap-min text-base"
+                    />
+                  ) : (
+                    <input
+                      id={`cf-${f.key}`}
+                      type="text"
+                      value={customValues[f.key] ?? ''}
+                      onChange={(e) => updateCustomValue(f.key, e.target.value)}
+                      placeholder={f.placeholder ?? ''}
+                      className="w-full rounded-xl border border-border bg-background px-3 h-12 min-h-tap-min text-base"
+                    />
+                  )}
+                  {f.helperText && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {f.helperText}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* 6. Next visit date */}
+        <section className="space-y-2">
+          <label
+            htmlFor="next-visit"
+            className="text-sm font-medium text-foreground"
+          >
+            Sonraki Ziyaret Tarihi
+          </label>
+          <input
+            id="next-visit"
+            type="date"
+            value={nextVisitDate}
+            onChange={(e) => setNextVisitDate(e.target.value)}
+            className="w-full rounded-xl border border-border bg-background px-3 h-12 min-h-tap-min text-base"
+          />
+        </section>
+
+        {/* Foto sayısı + temizle */}
+        {photos.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              for (const p of photos) URL.revokeObjectURL(p.previewUrl);
+              setPhotos([]);
+            }}
+            className="inline-flex items-center gap-1.5 text-xs text-red-700"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Tüm fotoğrafları temizle ({photos.length})
+          </button>
+        )}
+      </div>
+
+      {/* Sticky save */}
+      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-border bg-background/95 backdrop-blur px-4 py-3 safe-area-inset">
+        <button
+          type="button"
+          onClick={() => void handleSubmit()}
+          disabled={!canSubmit}
+          className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground font-semibold h-14 min-h-tap-min text-base disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {submitting ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+              Kaydediliyor…
+            </>
+          ) : (
+            <>
+              <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+              Check-out + Kaydet
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default VisitFormPage;

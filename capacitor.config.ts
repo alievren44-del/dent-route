@@ -6,9 +6,19 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   server: {
     androidScheme: 'https',
-    // Production URL — CF Pages deploy sonrası set edilir
-    // url: 'https://saha.parla.com',
+    // Native APK bundled webDir'ı kullanır — offline çalışır.
+    // Eğer remote URL kullanmak istersen yorum sat:
+    //   url: 'https://saha.parladisdeposu.com',
+    // (ama ağ gerektirir, saha şartlarında riskli)
     cleartext: false,
+    // Deep-link/OAuth callback için izinli host'lar (CapacitorHttp bypass):
+    allowNavigation: [
+      'saha.parladisdeposu.com',
+      '*.parladisdeposu.com',
+      'rranpzicmhgfupgabgbi.supabase.co',
+      'api.mapbox.com',
+      'maps.googleapis.com',
+    ],
   },
   android: {
     backgroundColor: '#1F4E78',

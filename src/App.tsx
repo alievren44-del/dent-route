@@ -1,5 +1,8 @@
+import { Toaster } from 'sonner';
 import { AppRouter } from './router';
 import { useVertical } from '@core/verticals/useVertical';
+import '@/lib/debugLog';
+import { DebugOverlay } from '@/components/debug/DebugOverlay';
 
 function App() {
   // Vertical erişilebilir mi smoke check (Sprint 1 sonu acceptance criteria)
@@ -14,6 +17,8 @@ function App() {
         </div>
       )}
       <AppRouter />
+      <Toaster position="top-center" richColors />
+      <DebugOverlay />
     </div>
   );
 }

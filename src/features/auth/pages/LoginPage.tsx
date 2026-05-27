@@ -1,8 +1,22 @@
-import { useState, type FormEvent } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { useEffect, useState, type FormEvent } from 'react';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@core/auth/authStore';
 import { usePermissions } from '@core/auth/usePermissions';
 import { loadSahaConfig } from '@config/loadConfig';
+import { getSupabaseClient } from '@lib/supabase';
+
+async function shouldShowFirstSetup(): Promise<boolean> {
+  try {
+    const supabase = getSupabaseClient();
+    const { count, error } = await supabase
+      .from('profiles')
+      .select('id', { count: 'exact', head: true });
+    if (error) return false;
+    return (count ?? 0) === 0;
+  } catch {
+    return false;
+  }
+}
 
 export default function LoginPage() {
   const config = loadSahaConfig();
@@ -14,6 +28,18 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showFirstSetup, setShowFirstSetup] = useState(false);
+  const locationHint = (location.state as { hint?: string } | null)?.hint ?? null;
+
+  useEffect(() => {
+    let cancelled = false;
+    void shouldShowFirstSetup().then((show) => {
+      if (!cancelled) setShowFirstSetup(show);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (isAuthenticated) {
     const next = kvkkAccepted ? ((location.state as { from?: string } | null)?.from ?? '/') : '/onboarding/kvkk';
@@ -67,6 +93,15 @@ export default function LoginPage() {
           />
         </label>
 
+        {locationHint && (
+          <div
+            role="status"
+            className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700"
+          >
+            {locationHint}
+          </div>
+        )}
+
         {error && (
           <div role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
             {error}
@@ -80,6 +115,21 @@ export default function LoginPage() {
         >
           {submitting ? 'Giriş yapılıyor…' : 'Giriş Yap'}
         </button>
+
+        {showFirstSetup && (
+          <div className="rounded-lg border border-dashed border-primary/40 bg-primary/5 px-3 py-3 text-center text-sm text-foreground">
+            <p className="mb-1 text-xs text-muted-foreground">Sistemde henüz kullanıcı yok.</p>
+            <p>
+              İlk kez kuruyorsanız:{' '}
+              <Link
+                to="/onboarding/first-admin"
+                className="font-semibold text-primary underline-offset-2 hover:underline"
+              >
+                İlk Admin Kurulumu
+              </Link>
+            </p>
+          </div>
+        )}
 
         <p className="text-center text-xs text-muted-foreground">
           Parla web/mobil ile aynı hesabı kullanın.

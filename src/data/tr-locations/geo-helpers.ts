@@ -21,8 +21,16 @@ export interface District {
   nufus_2023: number;
 }
 
-const PROVINCES = provinces as Province[];
-const DISTRICTS = districts as District[];
+const COLLATOR = new Intl.Collator('tr-TR');
+
+const PROVINCES = [...(provinces as Province[])].sort((a, b) =>
+  COLLATOR.compare(a.ad, b.ad),
+);
+const DISTRICTS = [...(districts as District[])].sort((a, b) => {
+  const byProv = COLLATOR.compare(a.il_ad, b.il_ad);
+  if (byProv !== 0) return byProv;
+  return COLLATOR.compare(a.ad, b.ad);
+});
 
 const TR_MAP: Record<string, string> = {
   'ç': 'c', 'Ç': 'C',
@@ -54,11 +62,11 @@ export function getProvinces(): Province[] {
 }
 
 export function getDistrictsByProvince(provinceAdOrPlaka: string | number): District[] {
-  if (typeof provinceAdOrPlaka === 'number') {
-    return DISTRICTS.filter((d) => d.il_plaka === provinceAdOrPlaka);
-  }
-  const q = normalize(provinceAdOrPlaka);
-  return DISTRICTS.filter((d) => normalize(d.il_ad) === q);
+  const list =
+    typeof provinceAdOrPlaka === 'number'
+      ? DISTRICTS.filter((d) => d.il_plaka === provinceAdOrPlaka)
+      : DISTRICTS.filter((d) => normalize(d.il_ad) === normalize(provinceAdOrPlaka));
+  return [...list].sort((a, b) => COLLATOR.compare(a.ad, b.ad));
 }
 
 export function getProvince(adOrPlaka: string | number): Province | undefined {

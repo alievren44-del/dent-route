@@ -6,8 +6,24 @@
  */
 
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Users, MapPin, Route, ShoppingCart } from 'lucide-react';
+import {
+  Users,
+  MapPin,
+  Route,
+  ShoppingCart,
+  Radar,
+  FileUp,
+  Activity,
+  MapPinned,
+  UserCog,
+  ScrollText,
+  ClipboardCheck,
+  Wallet,
+  Receipt,
+  CreditCard,
+} from 'lucide-react';
 
 import { getSupabaseClient } from '@/lib/supabase';
 
@@ -212,6 +228,25 @@ export default function DashboardPage() {
       )}
 
       <div className="flex flex-1 flex-col gap-4 p-4">
+        {/* Hızlı erişim grid */}
+        <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Yönetici Menüsü
+          </h2>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+            <AdminLink to="/admin/clinic-scan" label="Klinik Tarama" icon={<Radar className="h-4 w-4" />} />
+            <AdminLink to="/admin/clinics" label="CSV / Excel İçe Aktar" icon={<FileUp className="h-4 w-4" />} />
+            <AdminLink to="/admin/heatmap" label="Heatmap" icon={<Activity className="h-4 w-4" />} />
+            <AdminLink to="/admin/regions" label="Bölge Atama" icon={<MapPinned className="h-4 w-4" />} />
+            <AdminLink to="/admin/users" label="Kullanıcı Yönetimi" icon={<UserCog className="h-4 w-4" />} />
+            <AdminLink to="/admin/audit-logs" label="Audit Log" icon={<ScrollText className="h-4 w-4" />} />
+            <AdminLink to="/orders/approval" label="Sipariş Onay" icon={<ClipboardCheck className="h-4 w-4" />} />
+            <AdminLink to="/invoicing/cari" label="Cariler" icon={<Wallet className="h-4 w-4" />} />
+            <AdminLink to="/invoicing/fatura/yeni" label="Yeni Fatura" icon={<Receipt className="h-4 w-4" />} />
+            <AdminLink to="/invoicing/cek-senet" label="Çek / Senet" icon={<CreditCard className="h-4 w-4" />} />
+          </div>
+        </section>
+
         {/* Kart grid */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
@@ -341,5 +376,23 @@ function StatCard({ label, value, icon, loading }: StatCardProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+interface AdminLinkProps {
+  to: string;
+  label: string;
+  icon: React.ReactNode;
+}
+
+function AdminLink({ to, label, icon }: AdminLinkProps) {
+  return (
+    <Link
+      to={to}
+      className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-emerald-50 hover:text-emerald-700"
+    >
+      <span className="shrink-0 text-emerald-600">{icon}</span>
+      <span className="truncate">{label}</span>
+    </Link>
   );
 }

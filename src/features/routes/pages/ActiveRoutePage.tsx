@@ -11,7 +11,7 @@
  *    "Durağı Tamamla" sadece UI state ilerletir.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import mapboxgl from 'mapbox-gl';
@@ -24,12 +24,22 @@ import {
   MapPin,
   Navigation,
   X,
+  StickyNote,
+  Phone,
+  Sparkles,
+  ShoppingCart,
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { decodePolyline } from '@/lib/polyline';
+import { computeDetour } from '@features/routes/lib/detour-calc';
+import { useRouteBasket } from '@features/routes/store/routeBasketStore';
 
 import { getSupabaseClient } from '@lib/supabase';
 import { getEnv } from '@config/env';
 import { useAuthStore } from '@core/auth/authStore';
+import { useGeolocation } from '@features/map/hooks/useGeolocation';
 import { resolveMarkerColor } from '@features/map/marker-colors';
+import { RouteExportPanel } from '@features/routes/components/RouteExportPanel';
 
 type RouteStatus = 'planned' | 'active' | 'completed' | 'cancelled';
 
@@ -61,6 +71,84 @@ async function fetchRoute(id: string): Promise<SahaRouteRow> {
     throw error ?? new Error('route_not_found');
   }
   return data;
+}
+
+interface RouteStopCoord {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  address?: string;
+  phone?: string;
+}
+
+interface AccountAddressJoinRow {
+  location: { type: 'Point'; coordinates: [number, number] } | null;
+  is_primary: boolean;
+}
+
+interface AccountWithAddressRow {
+  id: string;
+  name: string;
+  account_addresses: AccountAddressJoinRow[];
+}
+
+async function fetchStopCoords(accountIds: string[]): Promise<RouteStopCoord[]> {
+  if (accountIds.length === 0) return [];
+  const supabase = getSupabaseClient();
+
+  // Paralel iki kaynak: Parla accounts + saha_clinics. Discovery / SahaTara /
+  // DistrictAutoRoute / Corridor sepete saha_clinics.id (uuid) yazıyor;
+  // Parla'nın eski CRM rotalarında accounts.id olabilir → ikisini de dene.
+  const [accRes, clinicRes] = await Promise.all([
+    supabase
+      .from('accounts')
+      .select('id, name, account_addresses!inner(location, is_primary)')
+      .in('id', accountIds),
+    supabase
+      .from('saha_clinics')
+      .select('id, name, lat, lng, address, phone')
+      .in('id', accountIds),
+  ]);
+
+  const byId = new Map<string, RouteStopCoord>();
+  if (accRes.data) {
+    const rows = accRes.data as unknown as AccountWithAddressRow[];
+    for (const row of rows) {
+      const addrs = row.account_addresses ?? [];
+      const addr = addrs.find((a) => a.is_primary) ?? addrs[0];
+      if (!addr?.location?.coordinates) continue;
+      const [lng, lat] = addr.location.coordinates;
+      byId.set(row.id, { id: row.id, name: row.name, lat, lng });
+    }
+  }
+  if (clinicRes.data) {
+    for (const row of clinicRes.data as Array<{
+      id: string;
+      name: string;
+      lat: number;
+      lng: number;
+      address: string | null;
+      phone: string | null;
+    }>) {
+      if (byId.has(row.id)) continue;
+      byId.set(row.id, {
+        id: row.id,
+        name: row.name,
+        lat: row.lat,
+        lng: row.lng,
+        address: row.address ?? undefined,
+        phone: row.phone ?? undefined,
+      });
+    }
+  }
+  // Rotadaki sırayı koru
+  const ordered: RouteStopCoord[] = [];
+  for (const aid of accountIds) {
+    const stop = byId.get(aid);
+    if (stop) ordered.push(stop);
+  }
+  return ordered;
 }
 
 interface CompleteRoutePayload {
@@ -126,6 +214,26 @@ export default function ActiveRoutePage(): JSX.Element {
   const [currentStopIndex, setCurrentStopIndex] = useState<number>(0);
   const [showFinishModal, setShowFinishModal] = useState<boolean>(false);
   const [finishError, setFinishError] = useState<string | null>(null);
+  const [notingStop, setNotingStop] = useState<RouteStopCoord | null>(null);
+  const [noteText, setNoteText] = useState<string>('');
+  const [savingNote, setSavingNote] = useState<boolean>(false);
+
+  // Yol-üstü dinamik öneri state
+  const [corridorOpen, setCorridorOpen] = useState(false);
+  const [corridorCandidates, setCorridorCandidates] = useState<
+    Array<{
+      id: string;
+      name: string;
+      lat: number;
+      lng: number;
+      address: string | null;
+      phone: string | null;
+      clinic_segment: 'private' | 'kamu';
+      detourKm: number;
+      detourMin: number;
+    }>
+  >([]);
+  const [corridorLoading, setCorridorLoading] = useState(false);
 
   const {
     data: route,
@@ -141,10 +249,105 @@ export default function ActiveRoutePage(): JSX.Element {
     enabled: !!id,
   });
 
+  // Export panel için durak koordinatlarını ayrı sorguda çek
+  const stopCoordsQuery = useQuery<RouteStopCoord[], Error>({
+    queryKey: ['active-route-stops', id, route?.account_ids ?? []],
+    queryFn: () => fetchStopCoords(route?.account_ids ?? []),
+    enabled: !!route && (route?.account_ids?.length ?? 0) > 0,
+  });
+
+  // Export için başlangıç noktası = kullanıcının canlı GPS konumu
+  const geolocation = useGeolocation();
+  useEffect(() => {
+    if (route && !geolocation.position && geolocation.status !== 'denied') {
+      geolocation.request();
+    }
+  }, [route, geolocation]);
+
   const totalStops = route?.account_ids.length ?? 0;
   const stopsVisited = Math.min(currentStopIndex, totalStops);
   const progressPct =
     totalStops > 0 ? Math.round((stopsVisited / totalStops) * 100) : 0;
+
+  // Yol-üstü dinamik öneri — şu anki konum → sıradaki durak rotasındaki klinikleri öner.
+  const fetchCorridor = useCallback(async () => {
+    if (!geolocation.position) {
+      toast.error('GPS gerekli');
+      return;
+    }
+    if (!stopCoordsQuery.data || !route) return;
+    const accountId = route.account_ids[currentStopIndex];
+    if (!accountId) return;
+    const nextStop = stopCoordsQuery.data.find((s) => s.id === accountId);
+    if (!nextStop) {
+      toast.error('Sıradaki durak bulunamadı');
+      return;
+    }
+    setCorridorLoading(true);
+    try {
+      const supabase = getSupabaseClient();
+      const a = { lat: geolocation.position.lat, lng: geolocation.position.lng };
+      const b = { lat: nextStop.lat, lng: nextStop.lng };
+      const { data: dirData, error: dirErr } = await supabase.functions.invoke('mapbox-directions', {
+        body: { coords: [a, b], profile: 'driving' },
+      });
+      if (dirErr) throw new Error(dirErr.message);
+      const dir = dirData as { status: string; geometry?: string };
+      if (dir.status !== 'ok' || !dir.geometry) throw new Error('Yol bulunamadı');
+      const decoded = decodePolyline(dir.geometry);
+      const lineGeojson = JSON.stringify({ type: 'LineString', coordinates: decoded });
+      const { data: nearData, error: nearErr } = await supabase.rpc('saha_clinics_near_polyline', {
+        _line_geojson: lineGeojson,
+        _buffer_m: 2000,
+        _vertical_key: 'dental',
+        _limit: 30,
+      });
+      if (nearErr) throw nearErr;
+      const raw = (nearData ?? []) as Array<{
+        id: string;
+        name: string;
+        lat: number;
+        lng: number;
+        address: string | null;
+        phone: string | null;
+        clinic_segment: 'private' | 'kamu';
+      }>;
+      const enriched = raw
+        .filter((c) => c.id !== accountId)
+        .map((c) => {
+          const { distanceKm, durationMin } = computeDetour(a, { lat: c.lat, lng: c.lng }, b, 'driving');
+          return { ...c, detourKm: distanceKm, detourMin: durationMin };
+        })
+        .filter((c) => c.detourKm <= 7 && c.detourMin <= 15)
+        .sort((x, y) => x.detourMin - y.detourMin);
+      setCorridorCandidates(enriched);
+      setCorridorOpen(true);
+      if (enriched.length === 0) toast.info('Yol üstünde uygun klinik yok');
+    } catch (e) {
+      toast.error(`Hata: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setCorridorLoading(false);
+    }
+  }, [geolocation.position, stopCoordsQuery.data, route, currentStopIndex]);
+
+  const addCandidateToBasket = useCallback(
+    (c: { id: string; name: string; lat: number; lng: number; address: string | null; phone: string | null }) => {
+      const basket = useRouteBasket.getState();
+      const res = basket.add({
+        id: c.id,
+        name: c.name,
+        lat: c.lat,
+        lng: c.lng,
+        source: 'saha',
+        address: c.address ?? undefined,
+        phone: c.phone ?? undefined,
+      });
+      if (res.ok) toast.success(`${c.name} sepete eklendi`);
+      else if (res.reason === 'duplicate') toast.info('Zaten sepette');
+      else toast.error('Sepet dolu');
+    },
+    [],
+  );
 
   const isOwner = useMemo<boolean>(() => {
     if (!route || !session) return false;
@@ -203,14 +406,23 @@ export default function ActiveRoutePage(): JSX.Element {
   };
 
   const handleOpenGoogleMaps = (): void => {
-    // Koordinat saklanmadığından bu iterasyonda destekleyemiyoruz;
-    // gelecek iterasyonda accountId → koordinat çözümü yapılınca aktive olacak.
-    // Çağrı yine de defansif:
-    if (typeof window !== 'undefined') {
-      window.alert(
-        'Sıradaki durağın koordinatı bu rotada saklanmıyor. Sprint 4 ile birlikte aktive olacak.',
-      );
+    if (!route || !stopCoordsQuery.data) return;
+    const accountId = route.account_ids[currentStopIndex];
+    if (!accountId) return;
+    const stop = stopCoordsQuery.data.find((s) => s.id === accountId);
+    if (!stop) {
+      toast.error('Bu durağın koordinatı bulunamadı');
+      return;
     }
+    // Google Maps directions URL — kullanıcı konumundan stop'a navigasyon
+    const origin = geolocation.position
+      ? `${geolocation.position.lat},${geolocation.position.lng}`
+      : '';
+    const dest = `${stop.lat},${stop.lng}`;
+    const url = origin
+      ? `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}&travelmode=driving`
+      : `https://www.google.com/maps/search/?api=1&query=${dest}`;
+    window.open(url, '_blank', 'noopener');
   };
 
   const handleSubmitFinish = (): void => {
@@ -315,6 +527,25 @@ export default function ActiveRoutePage(): JSX.Element {
         </div>
       </div>
 
+      {/* Export panel — durak koordinatları yüklendiyse + GPS aktifse */}
+      {geolocation.position &&
+        stopCoordsQuery.data &&
+        stopCoordsQuery.data.length > 0 && (
+          <div className="border-b border-border bg-slate-50 p-3">
+            <RouteExportPanel
+              start={{
+                lat: geolocation.position.lat,
+                lng: geolocation.position.lng,
+              }}
+              stops={stopCoordsQuery.data.map((s) => ({
+                lat: s.lat,
+                lng: s.lng,
+                name: s.name,
+              }))}
+            />
+          </div>
+        )}
+
       {/* Map + Stops */}
       <div className="flex flex-1 flex-col md:flex-row min-h-0">
         <div ref={containerRef} className="relative h-64 w-full md:h-auto md:flex-1" />
@@ -337,6 +568,7 @@ export default function ActiveRoutePage(): JSX.Element {
                 kind: 'customer',
                 isPending: !isDone,
               });
+              const stop = stopCoordsQuery.data?.find((s) => s.id === accountId);
               return (
                 <li
                   key={`${accountId}-${idx}`}
@@ -352,16 +584,37 @@ export default function ActiveRoutePage(): JSX.Element {
                     {isDone ? <CheckCircle2 className="h-4 w-4" /> : idx + 1}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <MapPin className="h-3 w-3" aria-hidden="true" />
-                      <span className="truncate">{accountId}</span>
+                    <div className="truncate text-sm font-medium">
+                      {stop?.name ?? accountId.slice(0, 8)}
                     </div>
-                    <div className="text-sm font-medium">
-                      {isDone
-                        ? 'Tamamlandı'
-                        : isCurrent
-                          ? 'Şu anki durak'
-                          : 'Bekliyor'}
+                    {stop?.address && (
+                      <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                        <MapPin className="mr-0.5 inline h-3 w-3" />
+                        {stop.address}
+                      </div>
+                    )}
+                    <div className="mt-1 flex items-center gap-2 text-[11px]">
+                      <span className={isDone ? 'text-emerald-600' : isCurrent ? 'text-blue-600 font-semibold' : 'text-muted-foreground'}>
+                        {isDone ? 'Tamamlandı' : isCurrent ? '● Şu anki' : 'Bekliyor'}
+                      </span>
+                      {stop?.phone && (
+                        <a
+                          href={`tel:${stop.phone}`}
+                          className="inline-flex items-center gap-0.5 rounded bg-slate-100 px-1.5 py-0.5 text-slate-700"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Phone className="h-2.5 w-2.5" />
+                          Ara
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setNotingStop(stop ?? { id: accountId, name: accountId, lat: 0, lng: 0 })}
+                        className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-amber-800 hover:bg-amber-200"
+                      >
+                        <StickyNote className="h-2.5 w-2.5" />
+                        Not Yaz
+                      </button>
                     </div>
                   </div>
                 </li>
@@ -400,6 +653,130 @@ export default function ActiveRoutePage(): JSX.Element {
             <Flag className="h-4 w-4" aria-hidden="true" />
             Rotayı Bitir
           </button>
+        </div>
+      )}
+
+      {/* Yol üstü dinamik öneri */}
+      {!isStale && (
+        <div className="border-t border-border bg-amber-50 p-3">
+          <button
+            type="button"
+            onClick={() => void fetchCorridor()}
+            disabled={corridorLoading || currentStopIndex >= totalStops}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 h-10 text-sm font-semibold text-white shadow hover:bg-amber-700 disabled:opacity-50"
+          >
+            <Sparkles className="h-4 w-4" />
+            {corridorLoading ? 'Yol üstü klinikler aranıyor…' : 'Yol Üstü Klinik Öner'}
+          </button>
+          {corridorOpen && corridorCandidates.length > 0 && (
+            <ul className="mt-2 space-y-1.5">
+              {corridorCandidates.map((c) => (
+                <li
+                  key={c.id}
+                  className="flex items-center gap-2 rounded-lg bg-white p-2 shadow-sm"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">{c.name}</div>
+                    <div className="text-[11px] text-amber-700">
+                      +{c.detourKm.toFixed(1)} km / +{Math.round(c.detourMin)} dk uzatma
+                    </div>
+                    {c.address && (
+                      <div className="truncate text-[11px] text-slate-500">{c.address}</div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => addCandidateToBasket(c)}
+                    className="shrink-0 rounded-lg bg-emerald-600 p-2 text-white hover:bg-emerald-700"
+                    aria-label="Sepete ekle"
+                  >
+                    <ShoppingCart className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {/* Not yaz modal */}
+      {notingStop && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => {
+            if (!savingNote) {
+              setNotingStop(null);
+              setNoteText('');
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-xl bg-background p-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold">{notingStop.name}</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setNotingStop(null);
+                  setNoteText('');
+                }}
+                disabled={savingNote}
+                aria-label="Kapat"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {notingStop.address && (
+              <p className="mb-2 text-xs text-muted-foreground">{notingStop.address}</p>
+            )}
+            <textarea
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              placeholder="Ziyaret notu, görüşülen kişi, sonraki adım…"
+              className="w-full rounded-lg border border-border bg-background p-2 text-sm"
+              rows={5}
+              disabled={savingNote}
+            />
+            <button
+              type="button"
+              disabled={savingNote || !noteText.trim()}
+              onClick={async () => {
+                if (!notingStop || !session?.userId) return;
+                setSavingNote(true);
+                try {
+                  const supabase = getSupabaseClient();
+                  const gpsLat = geolocation.position?.lat ?? null;
+                  const gpsLng = geolocation.position?.lng ?? null;
+                  const { error: insErr } = await supabase.from('saha_visits').insert({
+                    account_id: notingStop.id,
+                    rep_id: session.userId,
+                    route_id: route?.id ?? null,
+                    check_in_at: new Date().toISOString(),
+                    check_in_lat: gpsLat,
+                    check_in_lng: gpsLng,
+                    status: 'completed',
+                    notes: noteText.trim(),
+                    custom_fields: {},
+                  });
+                  if (insErr) throw insErr;
+                  toast.success('Not kaydedildi');
+                  setNotingStop(null);
+                  setNoteText('');
+                } catch (e) {
+                  toast.error('Not kaydedilemedi: ' + (e instanceof Error ? e.message : String(e)));
+                } finally {
+                  setSavingNote(false);
+                }
+              }}
+              className="mt-3 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {savingNote ? 'Kaydediliyor…' : 'Notu Kaydet'}
+            </button>
+          </div>
         </div>
       )}
 

@@ -8,16 +8,23 @@
  */
 
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Phone, MessageCircle, ShoppingCart, RefreshCw, ArrowLeft } from 'lucide-react';
-import { SupabaseCRMAdapter } from '@core/adapters/builtin/SupabaseCRMAdapter';
+import {
+  Phone,
+  MessageCircle,
+  ShoppingCart,
+  ArrowLeft,
+  CalendarPlus,
+  Receipt,
+} from 'lucide-react';
 import { getSupabaseClient } from '@lib/supabase';
-import type { Order } from '@core/adapters/types';
 
-const adapter = new SupabaseCRMAdapter();
+import CariBalanceCard from '@features/invoicing/components/CariBalanceCard';
+import CustomerVisitTimeline from '@features/visits/components/CustomerVisitTimeline';
+import RecentOrdersCard from '@features/orders/components/RecentOrdersCard';
 
-type TabKey = 'orders' | 'visits' | 'samples';
+type TabKey = 'overview' | 'visits' | 'samples';
 
 interface ProfileRow {
   id: string;
@@ -27,14 +34,6 @@ interface ProfileRow {
   klinik_adi: string | null;
   city: string | null;
   role: string | null;
-}
-
-interface VisitRow {
-  id: string;
-  visited_at: string | null;
-  status: string | null;
-  notes: string | null;
-  outcome: string | null;
 }
 
 interface SampleRow {
@@ -54,32 +53,6 @@ const SAMPLE_STATUS_STYLES: Record<string, string> = {
   iade: 'bg-gray-200 text-gray-700',
 };
 
-const ORDER_STATUS_STYLES: Record<string, string> = {
-  draft: 'bg-gray-200 text-gray-700',
-  pending: 'bg-amber-100 text-amber-800',
-  confirmed: 'bg-blue-100 text-blue-800',
-  shipped: 'bg-indigo-100 text-indigo-800',
-  delivered: 'bg-green-100 text-green-800',
-  cancelled: 'bg-red-100 text-red-800',
-};
-
-const ORDER_STATUS_LABELS: Record<string, string> = {
-  draft: 'Taslak',
-  pending: 'Beklemede',
-  confirmed: 'Onaylandı',
-  shipped: 'Kargoda',
-  delivered: 'Teslim Edildi',
-  cancelled: 'İptal',
-};
-
-function formatTL(n: number): string {
-  return n.toLocaleString('tr-TR', {
-    style: 'currency',
-    currency: 'TRY',
-    maximumFractionDigits: 2,
-  });
-}
-
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -93,8 +66,8 @@ function formatDate(iso: string | null | undefined): string {
 
 function CustomerDetailPage(): JSX.Element {
   const { id } = useParams<{ id: string }>();
-  const [activeTab, setActiveTab] = useState<TabKey>('orders');
-  const [refreshTick, setRefreshTick] = useState(0);
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<TabKey>('overview');
 
   const { data: customerData, isLoading: custLoading } = useQuery({
     queryKey: ['customer-detail', id],
@@ -108,34 +81,6 @@ function CustomerDetailPage(): JSX.Element {
         .maybeSingle();
       if (error) throw error;
       return (data ?? null) as ProfileRow | null;
-    },
-  });
-
-  const { data: balance, isFetching: balanceLoading, refetch: refetchBalance } = useQuery({
-    queryKey: ['balance', id, refreshTick],
-    enabled: !!id,
-    queryFn: () => adapter.getBalance(id!, { forceFresh: refreshTick > 0 }),
-  });
-
-  const { data: ordersPage, isLoading: ordersLoading } = useQuery({
-    queryKey: ['customer-orders', id],
-    enabled: !!id && activeTab === 'orders',
-    queryFn: () => adapter.listOrders(id!, { limit: 10 }),
-  });
-
-  const { data: visits, isLoading: visitsLoading } = useQuery({
-    queryKey: ['customer-visits', id],
-    enabled: !!id && activeTab === 'visits',
-    queryFn: async (): Promise<VisitRow[]> => {
-      const supabase = getSupabaseClient();
-      const { data, error } = await supabase
-        .from('rep_visits')
-        .select('id, visited_at, status, notes, outcome, account_id, client_id')
-        .or(`account_id.eq.${id},client_id.eq.${id}`)
-        .order('visited_at', { ascending: false })
-        .limit(10);
-      if (error) throw error;
-      return (data ?? []) as VisitRow[];
     },
   });
 
@@ -159,11 +104,6 @@ function CustomerDetailPage(): JSX.Element {
     customerData?.klinik_adi ?? customerData?.ad_soyad ?? customerData?.email ?? 'Müşteri';
   const phone = customerData?.telefon ?? '';
   const customerType = customerData?.role ?? '';
-
-  function handleRefreshBalance(): void {
-    setRefreshTick((t) => t + 1);
-    void refetchBalance();
-  }
 
   if (!id) {
     return (
@@ -222,39 +162,44 @@ function CustomerDetailPage(): JSX.Element {
         </div>
       </div>
 
-      {/* Bakiye kartı */}
-      <div className="px-4 py-4">
-        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-xs text-muted-foreground">Toplam Bakiye</p>
-              <p className="text-2xl font-bold text-foreground mt-1">
-                {balance ? formatTL(balance.balance) : '—'}
-              </p>
-              {balance?.lastMovementAt && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Son hareket: {formatDate(balance.lastMovementAt)}
-                </p>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={handleRefreshBalance}
-              disabled={balanceLoading}
-              className="p-2 rounded-full hover:bg-muted disabled:opacity-50 min-h-tap-min min-w-tap-min flex items-center justify-center"
-              aria-label="Bakiyeyi yenile"
-            >
-              <RefreshCw className={`h-5 w-5 ${balanceLoading ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
-        </div>
+      {/* Cari bakiye + kredi limit kartı */}
+      <div className="px-4 pt-4">
+        <CariBalanceCard customerId={id} />
+      </div>
+
+      {/* Hızlı aksiyonlar */}
+      <div className="px-4 py-3 grid grid-cols-3 gap-2">
+        <button
+          type="button"
+          onClick={() => navigate(`/orders/new?customerId=${id}`)}
+          className="flex flex-col items-center justify-center gap-1 px-2 py-3 rounded-xl border border-border bg-card hover:bg-muted/40 min-h-tap-min"
+        >
+          <ShoppingCart className="h-5 w-5 text-primary" />
+          <span className="text-[11px] font-medium text-foreground">Yeni Sipariş</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate(`/visits/check-in/${id}`)}
+          className="flex flex-col items-center justify-center gap-1 px-2 py-3 rounded-xl border border-border bg-card hover:bg-muted/40 min-h-tap-min"
+        >
+          <CalendarPlus className="h-5 w-5 text-primary" />
+          <span className="text-[11px] font-medium text-foreground">Yeni Ziyaret</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate(`/invoicing/fatura/yeni?profile_id=${id}`)}
+          className="flex flex-col items-center justify-center gap-1 px-2 py-3 rounded-xl border border-border bg-card hover:bg-muted/40 min-h-tap-min"
+        >
+          <Receipt className="h-5 w-5 text-primary" />
+          <span className="text-[11px] font-medium text-foreground">Fatura Kes</span>
+        </button>
       </div>
 
       {/* Tabs */}
       <div className="flex border-b border-border bg-background sticky top-[60px] z-[5]">
         {(
           [
-            { key: 'orders' as const, label: 'Siparişler' },
+            { key: 'overview' as const, label: 'Özet' },
             { key: 'visits' as const, label: 'Ziyaretler' },
             { key: 'samples' as const, label: 'Numuneler' },
           ]
@@ -278,12 +223,20 @@ function CustomerDetailPage(): JSX.Element {
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 px-4 py-3">
-        {activeTab === 'orders' && (
-          <OrdersTab loading={ordersLoading} orders={ordersPage?.items ?? []} />
+      <div className="flex-1 px-4 py-3 space-y-3">
+        {activeTab === 'overview' && (
+          <>
+            <RecentOrdersCard customerId={id} limit={5} />
+            <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+              <h3 className="text-sm font-semibold text-foreground mb-3">
+                Ziyaret Geçmişi
+              </h3>
+              <CustomerVisitTimeline customerId={id} hideHeader limit={5} />
+            </section>
+          </>
         )}
         {activeTab === 'visits' && (
-          <VisitsTab loading={visitsLoading} visits={visits ?? []} />
+          <CustomerVisitTimeline customerId={id} limit={20} />
         )}
         {activeTab === 'samples' && (
           <SamplesTab loading={samplesLoading} samples={samples ?? []} />
@@ -300,92 +253,6 @@ function CustomerDetailPage(): JSX.Element {
           Sipariş Oluştur
         </Link>
       </div>
-    </div>
-  );
-}
-
-function OrdersTab({
-  loading,
-  orders,
-}: {
-  loading: boolean;
-  orders: Order[];
-}): JSX.Element {
-  if (loading) {
-    return <p className="text-sm text-muted-foreground py-6 text-center">Yükleniyor…</p>;
-  }
-  if (orders.length === 0) {
-    return <p className="text-sm text-muted-foreground py-6 text-center">Sipariş yok.</p>;
-  }
-  return (
-    <div className="space-y-2">
-      {orders.map((o) => (
-        <Link
-          key={o.id}
-          to={`/orders/${o.id}`}
-          className="block p-3 rounded-lg border border-border bg-card hover:bg-muted/40"
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="font-medium text-sm text-foreground truncate">
-                {o.externalId ?? o.id.slice(0, 8)}
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">{formatDate(o.createdAt)}</p>
-            </div>
-            <div className="flex flex-col items-end gap-1">
-              <span
-                className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                  ORDER_STATUS_STYLES[o.status] ?? 'bg-gray-200 text-gray-700'
-                }`}
-              >
-                {ORDER_STATUS_LABELS[o.status] ?? o.status}
-              </span>
-              <span className="text-sm font-semibold text-foreground">
-                {formatTL(o.totalAmount)}
-              </span>
-            </div>
-          </div>
-        </Link>
-      ))}
-    </div>
-  );
-}
-
-function VisitsTab({
-  loading,
-  visits,
-}: {
-  loading: boolean;
-  visits: VisitRow[];
-}): JSX.Element {
-  if (loading) {
-    return <p className="text-sm text-muted-foreground py-6 text-center">Yükleniyor…</p>;
-  }
-  if (visits.length === 0) {
-    return <p className="text-sm text-muted-foreground py-6 text-center">Ziyaret yok.</p>;
-  }
-  return (
-    <div className="space-y-2">
-      {visits.map((v) => (
-        <div key={v.id} className="p-3 rounded-lg border border-border bg-card">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-medium text-foreground">
-              {formatDate(v.visited_at)}
-            </p>
-            {v.status && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
-                {v.status}
-              </span>
-            )}
-          </div>
-          {v.outcome && (
-            <p className="text-xs text-muted-foreground mt-1">Sonuç: {v.outcome}</p>
-          )}
-          {v.notes && (
-            <p className="text-xs text-foreground mt-1 line-clamp-2">{v.notes}</p>
-          )}
-        </div>
-      ))}
     </div>
   );
 }

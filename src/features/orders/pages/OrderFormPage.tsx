@@ -12,10 +12,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Plus, Minus, Trash2, ShoppingCart, X, Check } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, ShoppingCart, X, Check, AlertTriangle } from 'lucide-react';
 import { SupabaseCRMAdapter } from '@core/adapters/builtin/SupabaseCRMAdapter';
 import { getSupabaseClient } from '@lib/supabase';
+import { useAuthStore } from '@core/auth/authStore';
 import type { NewOrderItem, Product } from '@core/adapters/types';
+import {
+  needsApproval,
+  nextApproverRole,
+  thresholdFor,
+} from '@features/orders/lib/approvalRules';
 
 const adapter = new SupabaseCRMAdapter();
 
@@ -51,8 +57,12 @@ function useDebounced<T>(value: T, ms: number): T {
 
 function OrderFormPage(): JSX.Element {
   const [searchParams] = useSearchParams();
-  const initialCustomerId = searchParams.get('customerId') ?? '';
+  // Hem ?customerId hem ?customer_id desteklenir (diğer feature'lar customer_id kullanıyor).
+  const initialCustomerId =
+    searchParams.get('customerId') ?? searchParams.get('customer_id') ?? '';
   const navigate = useNavigate();
+  const profile = useAuthStore((s) => s.profile);
+  const userRole = String(profile?.role ?? 'USER').toUpperCase();
 
   const [customerId, setCustomerId] = useState<string>(initialCustomerId);
   const [customerLabel, setCustomerLabel] = useState<string>('');
@@ -194,12 +204,47 @@ function OrderFormPage(): JSX.Element {
         quantity: c.quantity,
         ...(c.unitPriceOverride !== undefined ? { unitPriceOverride: c.unitPriceOverride } : {}),
       }));
-      await adapter.createOrder({
+      const created = await adapter.createOrder({
         customerId,
         items,
         notes: notes.trim() || undefined,
         idempotencyKey,
       });
+
+      // Onay gerekirse: status'u 'approval_pending' olarak güncelle ve notify.
+      if (requiresApproval) {
+        const supabase = getSupabaseClient();
+        const { error: updErr } = await supabase
+          .from('orders')
+          .update({ status: 'approval_pending', idempotency_key: idempotencyKey })
+          .eq('id', created.id);
+        if (updErr) {
+          console.warn('[OrderFormPage] approval_pending status set edilemedi:', updErr.message);
+        }
+
+        // Notifications tablosuna kayıt — şema farklı olabilir (recipient_role kolonu
+        // bizim Parla baseline'da yok; user_id + type + title + message kullanır).
+        try {
+          const message = `Yeni onay bekleyen sipariş: ${created.externalId ?? created.id.slice(0, 8)} — ${grandTotal.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}`;
+          const { error: notErr } = await supabase.from('notifications').insert({
+            type: 'new_order',
+            title: 'Onay bekleyen sipariş',
+            message,
+            data: {
+              ref_id: created.id,
+              recipient_role: approverRole ?? 'ADMIN',
+              total: grandTotal,
+              sales_rep_id: profile?.id ?? null,
+            },
+          });
+          if (notErr) {
+            console.warn('[OrderFormPage] notifications insert atlandı:', notErr.message);
+          }
+        } catch (notErr) {
+          console.warn('[OrderFormPage] notifications tablosu yok / hata:', notErr);
+        }
+      }
+
       navigate(`/clinics/${customerId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sipariş oluşturulamadı.');
@@ -211,6 +256,11 @@ function OrderFormPage(): JSX.Element {
   const subtotal = quote?.subtotal ?? 0;
   const vatTotal = quote?.vatTotal ?? 0;
   const grandTotal = quote?.grandTotal ?? 0;
+
+  // Onay eşik kontrolü (Sprint 2 / PROMPT-15)
+  const requiresApproval = needsApproval(grandTotal, userRole);
+  const approvalLimit = thresholdFor(userRole);
+  const approverRole = nextApproverRole(userRole);
 
   return (
     <div className="flex flex-col min-h-full pb-32">
@@ -444,6 +494,32 @@ function OrderFormPage(): JSX.Element {
           </section>
         )}
 
+        {/* Onay eşiği uyarısı (Sprint 2 / PROMPT-15) */}
+        {cart.length > 0 && requiresApproval && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 flex items-start gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
+            <div className="min-w-0 text-amber-900">
+              <p className="text-sm font-semibold">Bu sipariş onay bekleyecek</p>
+              <p className="text-xs mt-0.5">
+                Toplam {formatTL(grandTotal)} {Number.isFinite(approvalLimit) ? (
+                  <>
+                    {' '}
+                    senin {formatTL(approvalLimit)} TL eşiğini aşıyor.
+                  </>
+                ) : (
+                  <> onay gerektiriyor.</>
+                )}
+                {approverRole && (
+                  <>
+                    {' '}
+                    {approverRole} onayına gönderilecek.
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Notlar */}
         <section>
           <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
@@ -480,7 +556,7 @@ function OrderFormPage(): JSX.Element {
           ) : (
             <>
               <Check className="h-5 w-5" />
-              Sipariş Oluştur
+              {requiresApproval ? 'Onaya Gönder' : 'Sipariş Oluştur'}
               {cart.length > 0 && (
                 <span className="ml-1 text-xs opacity-90">({formatTL(grandTotal)})</span>
               )}

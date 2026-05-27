@@ -6,7 +6,7 @@
  * `labels.customer.singular` değeri kullanılır.
  */
 
-import { Phone, MessageCircle, MapPin, Star, Plus, ChevronRight } from 'lucide-react';
+import { Phone, MessageCircle, MapPin, Star, Plus, Check, ChevronRight } from 'lucide-react';
 import { useVertical } from '@core/verticals/useVertical';
 
 export interface ClinicCardProps {
@@ -17,6 +17,8 @@ export interface ClinicCardProps {
   distanceM?: number;
   rating?: number;
   isExistingCustomer?: boolean;
+  /** Bu durak rota sepetinde mi? */
+  isInBasket?: boolean;
   onAdd?: () => void;
   onOpenDetail?: () => void;
 }
@@ -42,6 +44,7 @@ function ClinicCard({
   distanceM,
   rating,
   isExistingCustomer = false,
+  isInBasket = false,
   onAdd,
   onOpenDetail,
 }: ClinicCardProps): JSX.Element {
@@ -139,14 +142,26 @@ function ClinicCard({
         )}
 
         {showAdd && (
-          <button
-            type="button"
-            onClick={onAdd}
-            className="ml-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-3 min-h-tap-min h-11 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            Ekle
-          </button>
+          isInBasket ? (
+            <button
+              type="button"
+              disabled
+              aria-disabled="true"
+              className="ml-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-green-600 px-3 min-h-tap-min h-11 text-sm font-medium text-white cursor-default"
+            >
+              <Check className="h-4 w-4" aria-hidden="true" />
+              Sepette
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onAdd}
+              className="ml-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-3 min-h-tap-min h-11 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Ekle
+            </button>
+          )
         )}
       </div>
 

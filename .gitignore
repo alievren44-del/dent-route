@@ -52,3 +52,16 @@ temp/
 .claude/settings.local.json
 saha-app.zip
 ekran görüntüsü navigasyon/
+
+# Android signing — ASLA commit etme
+android/app/saha-release.keystore
+android/app/*.keystore
+android/local.properties
+android/.gradle/
+android/build/
+android/app/build/
+android/captures/
+
+# APK çıktıları (public/apk hariç — production dağıtım)
+*.apk
+!public/apk/saha-latest.apk

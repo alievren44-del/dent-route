@@ -95,6 +95,12 @@ export interface Balance {
   lastMovementAt?: string;
   asOf: string;
   cached: boolean;
+  /** Cari kredi limiti (saha_cariler.kredi_limiti). 0 → limit tanımlı değil. */
+  creditLimit?: number;
+  /** Kullanım oranı 0..1 → kredi limitinin yüzde kaçının dolu olduğu. */
+  creditUsed?: number;
+  /** Vadesi geçmiş + ödenmemiş fatura kalan toplamı (saha_faturalar.kalan). */
+  due?: number;
 }
 
 // ─── Order ────────────────────────────────────────────────────

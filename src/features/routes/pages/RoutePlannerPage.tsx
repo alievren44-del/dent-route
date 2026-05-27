@@ -1,15 +1,20 @@
 /**
  * RoutePlannerPage — Saha rep rota planlama ekranı.
  *
- * Sepet (URL ?ids=) → Mapbox Optimize → twoOpt iyileştirme → saha_routes insert.
+ * Sepet (zustand routeBasketStore) → Mapbox Optimize → twoOpt iyileştirme → saha_routes insert.
+ *
+ * NOT: Eski `?ids=` URL parametresi desteği kaldırıldı; sepet artık kalıcı
+ * (localStorage) zustand store'da tutuluyor. Discovery sayfası doğrudan store'a yazıyor.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { Link, useNavigate } from 'react-router-dom';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { Trash2, MapPin, Home, Play, Sparkles } from 'lucide-react';
+import { Trash2, MapPin, Home, Play, Sparkles, Car, Footprints, Activity } from 'lucide-react';
+import { toast } from 'sonner';
+import { usePermissions } from '@core/auth/usePermissions';
+import { AssignRouteModal } from '@features/routes/components/AssignRouteModal';
 
 import { getSupabaseClient } from '@/lib/supabase';
 import { getEnv } from '@config/env';
@@ -19,9 +24,36 @@ import {
   resolveMarkerColor,
   type MarkerSubjectCustomer,
 } from '@/features/map/marker-colors';
-import { twoOpt, type Waypoint } from '@/features/routes/two-opt';
+import { twoOpt, type Waypoint, haversineMeters } from '@/features/routes/two-opt';
 
-const MAX_BASKET = 12;
+/** Sıralı duraklar üstünden toplam haversine km (kuşbakışı baseline) */
+function baselineSequenceKm(
+  startLng: number,
+  startLat: number,
+  stops: Array<{ lat: number; lng: number }>,
+): number {
+  let total = 0;
+  let prev: Waypoint = { lat: startLat, lng: startLng };
+  for (const s of stops) {
+    total += haversineMeters(prev, s);
+    prev = s;
+  }
+  return total / 1000;
+}
+import { optimizeRouteHybrid } from '@/features/admin/lib/tsp';
+import {
+  MAX_BASKET,
+  useRouteBasket,
+} from '@/features/routes/store/routeBasketStore';
+import { RouteExportPanel } from '@/features/routes/components/RouteExportPanel';
+
+type RouteProfile = 'driving' | 'driving-traffic' | 'walking';
+
+const PROFILE_STORAGE_KEY = 'route-profile-v1';
+const WALKING_MAX_WAYPOINTS = 6;
+const WALKING_AVG_KMH = 5;
+// Mapbox Optimization API toplam 12 coord — start dahil. Klinik = 11 max.
+const DRIVING_MAX_STOPS = 11;
 
 interface BasketItem {
   id: string;
@@ -33,36 +65,12 @@ interface BasketItem {
 
 interface RouteResult {
   order: number[];
+  /** Sepet sırası ile gidilseydi toplam km (kuşbakışı, karşılaştırma için) */
+  baselineKm: number;
   distanceM: number;
   durationS: number;
   geometry: string;
   twoOptSavedM: number;
-}
-
-interface AccountAddressRow {
-  location: { type: 'Point'; coordinates: [number, number] } | null;
-  is_primary: boolean;
-}
-
-interface AccountRow {
-  id: string;
-  name: string;
-  type: string | null;
-  account_addresses: AccountAddressRow[];
-}
-
-interface MapboxOptimizeResponse {
-  code?: string;
-  trips?: Array<{
-    geometry: string;
-    distance: number;
-    duration: number;
-  }>;
-  waypoints?: Array<{
-    waypoint_index: number;
-    trips_index: number;
-    location: [number, number];
-  }>;
 }
 
 function decodePolyline(
@@ -97,62 +105,62 @@ function decodePolyline(
   return coords;
 }
 
-async function fetchBasketAccounts(ids: string[]): Promise<BasketItem[]> {
-  if (ids.length === 0) return [];
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from('accounts')
-    .select('id, name, type, account_addresses!inner(location, is_primary)')
-    .in('id', ids);
-  if (error || !data) return [];
-  const rows = data as unknown as AccountRow[];
-  return rows
-    .map((row): BasketItem | null => {
-      const addrs = row.account_addresses ?? [];
-      const addr = addrs.find((a) => a.is_primary) ?? addrs[0];
-      if (!addr?.location?.coordinates) return null;
-      const [lng, lat] = addr.location.coordinates;
-      return {
-        id: row.id,
-        name: row.name,
-        type: row.type ?? undefined,
-        lat,
-        lng,
-      };
-    })
-    .filter((x): x is BasketItem => x !== null);
-}
-
 export default function RoutePlannerPage() {
   const navigate = useNavigate();
   const vertical = useVertical();
   const geolocation = useGeolocation();
-  const [searchParams] = useSearchParams();
 
-  const idsParam = searchParams.get('ids') ?? '';
-  const ids = useMemo(
-    () => idsParam.split(',').map((s) => s.trim()).filter(Boolean),
-    [idsParam],
+  const basketItems = useRouteBasket((s) => s.items);
+  // Method-selector'lar `@typescript-eslint/unbound-method` tetiklemesin diye
+  // doğrudan store referansı üzerinden çağırıyoruz (store fonksiyonları stabil).
+  const basketRemove = useCallback(
+    (id: string) => useRouteBasket.getState().remove(id),
+    [],
+  );
+  const basketClear = useCallback(() => useRouteBasket.getState().clear(), []);
+
+  const basket = useMemo<BasketItem[]>(
+    () =>
+      basketItems.slice(0, MAX_BASKET).map((s) => ({
+        id: s.id,
+        name: s.name,
+        lat: s.lat,
+        lng: s.lng,
+        type: s.customerType,
+      })),
+    [basketItems],
   );
 
-  const [basket, setBasket] = useState<BasketItem[]>([]);
   const [startPoint, setStartPoint] = useState<'gps' | 'home'>('gps');
   const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
   const [optimizing, setOptimizing] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const { isAdmin } = usePermissions();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const basketQuery = useQuery({
-    queryKey: ['basket', ids],
-    queryFn: () => fetchBasketAccounts(ids),
-    enabled: ids.length > 0,
+  // Profil seçimi (localStorage persist)
+  const [profile, setProfileState] = useState<RouteProfile>(() => {
+    if (typeof window === 'undefined') return 'driving';
+    const stored = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+    return stored === 'driving' || stored === 'driving-traffic' || stored === 'walking'
+      ? stored
+      : 'driving';
   });
-
-  useEffect(() => {
-    if (basketQuery.data) {
-      setBasket(basketQuery.data.slice(0, MAX_BASKET));
+  const setProfile = useCallback((p: RouteProfile) => {
+    setProfileState(p);
+    try {
+      window.localStorage.setItem(PROFILE_STORAGE_KEY, p);
+    } catch {
+      /* yutulur */
     }
-  }, [basketQuery.data]);
+    setRouteResult(null);
+  }, []);
+
+  // Sepet değişince eski optimize sonucu geçersiz olur
+  useEffect(() => {
+    setRouteResult(null);
+  }, [basketItems]);
 
   useEffect(() => {
     if (startPoint === 'gps' && !geolocation.position) {
@@ -160,10 +168,13 @@ export default function RoutePlannerPage() {
     }
   }, [startPoint, geolocation]);
 
-  const removeFromBasket = useCallback((id: string) => {
-    setBasket((prev) => prev.filter((b) => b.id !== id));
-    setRouteResult(null);
-  }, []);
+  const removeFromBasket = useCallback(
+    (id: string) => {
+      basketRemove(id);
+      setRouteResult(null);
+    },
+    [basketRemove],
+  );
 
   const startCoord = useMemo<[number, number] | null>(() => {
     if (startPoint === 'gps' && geolocation.position) {
@@ -179,9 +190,40 @@ export default function RoutePlannerPage() {
     setOptimizing(true);
     setErrorMsg(null);
     try {
+      // Yaya modu — local NN+2-opt, Mapbox YOK (sıfır ücret, kuşbakışı)
+      if (profile === 'walking') {
+        const trimmed = basket.slice(0, WALKING_MAX_WAYPOINTS);
+        const startPt = { lat: startCoord[1], lng: startCoord[0] };
+        const points = trimmed.map((b) => ({ lat: b.lat, lng: b.lng }));
+        const baselineKm = baselineSequenceKm(startCoord[0], startCoord[1], points);
+        const result = await optimizeRouteHybrid(points, startPt, { returnHome: false });
+
+        const order = [0, ...result.order.map((i) => i + 1)];
+        const distanceM = result.totalDistanceKm * 1000;
+        const durationS = (result.totalDistanceKm / WALKING_AVG_KMH) * 3600;
+
+        setRouteResult({
+          order,
+          baselineKm,
+          distanceM,
+          durationS,
+          geometry: '',
+          twoOptSavedM: result.savedKm * 1000,
+        });
+        return;
+      }
+
+      // Araç modu — Mapbox Optimize edge fn
+      // Edge fn toplam 12 coord limit (start dahil) → klinik 11 max
+      const drivingBasket = basket.slice(0, DRIVING_MAX_STOPS);
+      const coordsForFn: Array<{ lat: number; lng: number }> = [
+        { lat: startCoord[1], lng: startCoord[0] },
+        ...drivingBasket.map((b) => ({ lat: b.lat, lng: b.lng })),
+      ];
+      // Lokal coords (tuple) — UI map drawing için
       const coords: Array<[number, number]> = [
         startCoord,
-        ...basket.map((b) => [b.lng, b.lat] as [number, number]),
+        ...drivingBasket.map((b) => [b.lng, b.lat] as [number, number]),
       ];
 
       const supabase = getSupabaseClient();
@@ -189,8 +231,8 @@ export default function RoutePlannerPage() {
         'mapbox-optimize',
         {
           body: {
-            coords,
-            profile: 'driving',
+            coords: coordsForFn,
+            profile,
             roundtrip: false,
             source: 'first',
             destination: 'last',
@@ -199,29 +241,29 @@ export default function RoutePlannerPage() {
       );
 
       if (error) throw new Error(error.message);
-      const resp = data as MapboxOptimizeResponse;
-      if (resp.code && resp.code !== 'Ok') {
-        throw new Error(`Mapbox: ${resp.code}`);
+      // Edge fn döndürür: {status, order:number[], distanceM, durationS, geometry, legs}
+      const resp = data as {
+        status: string;
+        order: number[];
+        distanceM: number;
+        durationS: number;
+        geometry: string;
+      };
+      if (resp.status !== 'ok' || !Array.isArray(resp.order)) {
+        throw new Error(`Mapbox: ${resp.status}`);
       }
-      const trip = resp.trips?.[0];
-      const waypoints = resp.waypoints;
-      if (!trip || !waypoints) throw new Error('Mapbox geçersiz yanıt');
 
-      const mapboxOrder = waypoints
-        .slice()
-        .sort((a, b) => a.waypoint_index - b.waypoint_index)
-        .map((w) =>
-          waypoints.findIndex((src) => src.waypoint_index === w.waypoint_index),
-        );
+      // Baseline: sepet sırası ile gidilseydi toplam km
+      const baselineKm = baselineSequenceKm(
+        startCoord[0],
+        startCoord[1],
+        drivingBasket.map((b) => ({ lat: b.lat, lng: b.lng })),
+      );
 
-      const orderedCoords: Array<[number, number]> = waypoints
-        .slice()
-        .sort((a, b) => a.waypoint_index - b.waypoint_index)
-        .map((w) => {
-          const inputIdx = waypoints.indexOf(w);
-          return coords[inputIdx]!;
-        });
-
+      // Mapbox sırasına göre koord dizisi (start=0 dahil)
+      const orderedCoords: Array<[number, number]> = resp.order.map(
+        (idx) => coords[idx]!,
+      );
       const waypointsForTwoOpt: Waypoint[] = orderedCoords.map(
         ([lng, lat]) => ({ lat, lng }),
       );
@@ -231,14 +273,15 @@ export default function RoutePlannerPage() {
       });
 
       const finalOrderInOriginal = twoOptResult.order.map(
-        (idx) => mapboxOrder[idx]!,
+        (i) => resp.order[i]!,
       );
 
       setRouteResult({
         order: finalOrderInOriginal,
-        distanceM: trip.distance,
-        durationS: trip.duration,
-        geometry: trip.geometry,
+        baselineKm,
+        distanceM: resp.distanceM,
+        durationS: resp.durationS,
+        geometry: resp.geometry,
         twoOptSavedM: twoOptResult.savedM,
       });
     } catch (err) {
@@ -247,10 +290,17 @@ export default function RoutePlannerPage() {
     } finally {
       setOptimizing(false);
     }
-  }, [basket, canOptimize, startCoord]);
+  }, [basket, canOptimize, startCoord, profile]);
 
   const handleStartRoute = useCallback(async () => {
-    if (!routeResult || !startCoord) return;
+    if (!routeResult) {
+      toast.error('Önce "Rotayı optimize et" butonuna bas');
+      return;
+    }
+    if (!startCoord) {
+      toast.error('Başlangıç noktası yok (GPS izni?)');
+      return;
+    }
     setStarting(true);
     setErrorMsg(null);
     try {
@@ -277,28 +327,37 @@ export default function RoutePlannerPage() {
         started_at: new Date().toISOString(),
       };
 
+      console.log('[handleStartRoute] insert payload:', insertRow);
       const { data: routeRow, error: insertErr } = await supabase
         .from('saha_routes')
         .insert(insertRow)
         .select('id')
         .single();
 
-      if (insertErr || !routeRow) throw new Error(insertErr?.message ?? 'Insert hatası');
+      if (insertErr) {
+        console.error('[handleStartRoute] insert error:', insertErr);
+        throw new Error(`${insertErr.code ?? ''} ${insertErr.message}`.trim());
+      }
+      if (!routeRow) throw new Error('Insert satırı dönmedi');
       const inserted = routeRow as { id: string };
+      basketClear();
       navigate(`/routes/active/${inserted.id}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Rota başlatılamadı';
+      console.error('[handleStartRoute] fail:', err);
       setErrorMsg(msg);
+      toast.error(`Rota başlatılamadı: ${msg}`);
     } finally {
       setStarting(false);
     }
-  }, [routeResult, startCoord, basket, navigate]);
+  }, [routeResult, startCoord, basket, navigate, basketClear]);
 
   // Map setup
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const [mapReady, setMapReady] = useState(false);
+  const [drawTrigger, setDrawTrigger] = useState(0);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -324,12 +383,22 @@ export default function RoutePlannerPage() {
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
+    // Style HMR/transition durumlarında henüz hazır değilse 'idle' event'inde
+    // tekrar render edilsin (drawTrigger state'i toggle).
+    if (!map.isStyleLoaded()) {
+      map.once('idle', () => setDrawTrigger((v) => v + 1));
+      return;
+    }
 
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
-    if (map.getLayer('route-line')) map.removeLayer('route-line');
-    if (map.getSource('route-src')) map.removeSource('route-src');
+    try {
+      if (map.getLayer('route-line')) map.removeLayer('route-line');
+      if (map.getSource('route-src')) map.removeSource('route-src');
+    } catch {
+      /* yutulur */
+    }
 
     if (!routeResult || !startCoord) {
       // Just show basket markers
@@ -361,29 +430,46 @@ export default function RoutePlannerPage() {
       return;
     }
 
-    const decoded = decodePolyline(routeResult.geometry);
-    map.addSource('route-src', {
-      type: 'geojson',
-      data: {
-        type: 'Feature',
-        properties: {},
-        geometry: {
-          type: 'LineString',
-          coordinates: decoded,
+    // Yaya modu polyline yok → sıralı duraklar üstünden düz çizgi LineString.
+    // Araç modu Mapbox encoded polyline'ı decode edilir.
+    let lineCoords: Array<[number, number]>;
+    if (routeResult.geometry) {
+      lineCoords = decodePolyline(routeResult.geometry);
+    } else {
+      lineCoords = [startCoord];
+      for (const idx of routeResult.order) {
+        if (idx === 0) continue;
+        const stop = basket[idx - 1];
+        if (stop) lineCoords.push([stop.lng, stop.lat]);
+      }
+    }
+    try {
+      map.addSource('route-src', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'LineString', coordinates: lineCoords },
         },
-      },
-    });
-    map.addLayer({
-      id: 'route-line',
-      type: 'line',
-      source: 'route-src',
-      layout: { 'line-join': 'round', 'line-cap': 'round' },
-      paint: {
-        'line-color': '#2563eb',
-        'line-width': 5,
-        'line-opacity': 0.85,
-      },
-    });
+      });
+      map.addLayer({
+        id: 'route-line',
+        type: 'line',
+        source: 'route-src',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: {
+          'line-color': profile === 'walking' ? '#16a34a' : '#2563eb',
+          'line-width': 5,
+          'line-opacity': 0.85,
+          ...(profile === 'walking' ? { 'line-dasharray': [2, 2] as unknown as number[] } : {}),
+        },
+      });
+    } catch (e) {
+      // Style not loaded race — idle event'inde retry tetiklenir
+      console.warn('[map] addSource/Layer race, retry pending:', e);
+      map.once('idle', () => setDrawTrigger((v) => v + 1));
+      return;
+    }
 
     // Start marker
     const startEl = buildStartMarker();
@@ -411,12 +497,12 @@ export default function RoutePlannerPage() {
       markersRef.current.push(marker);
     });
 
-    if (decoded.length > 0) {
+    if (lineCoords.length > 0) {
       const bounds = new mapboxgl.LngLatBounds();
-      decoded.forEach((c) => bounds.extend(c));
+      lineCoords.forEach((c) => bounds.extend(c));
       map.fitBounds(bounds, { padding: 60, maxZoom: 14 });
     }
-  }, [routeResult, startCoord, basket, mapReady, vertical]);
+  }, [routeResult, startCoord, basket, mapReady, vertical, profile, drawTrigger]);
 
   const orderedStops = useMemo(() => {
     if (!routeResult) return [];
@@ -443,6 +529,31 @@ export default function RoutePlannerPage() {
           </span>
         </header>
 
+        {/* Hızlı erişim — diğer rota modları */}
+        <div className="grid grid-cols-3 gap-1.5">
+          <Link
+            to="/routes/auto"
+            className="flex flex-col items-center justify-center rounded-lg border border-blue-200 bg-blue-50 p-2 text-[11px] font-medium text-blue-700 hover:bg-blue-100"
+          >
+            <Sparkles size={16} />
+            <span className="mt-0.5">İlçe Otomatik</span>
+          </Link>
+          <Link
+            to="/routes/corridor"
+            className="flex flex-col items-center justify-center rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] font-medium text-amber-700 hover:bg-amber-100"
+          >
+            <MapPin size={16} />
+            <span className="mt-0.5">Yol Üstü</span>
+          </Link>
+          <Link
+            to="/saha/tara"
+            className="flex flex-col items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
+          >
+            <Home size={16} />
+            <span className="mt-0.5">Saha Tarama</span>
+          </Link>
+        </div>
+
         {errorMsg && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {errorMsg}
@@ -452,18 +563,14 @@ export default function RoutePlannerPage() {
         {/* 1. Sepet */}
         <section className="rounded-xl bg-white p-3 shadow-sm">
           <h2 className="mb-2 text-sm font-semibold text-slate-700">Sepet</h2>
-          {basketQuery.isLoading ? (
+          {basket.length === 0 ? (
             <div className="py-4 text-center text-sm text-slate-500">
-              Yükleniyor…
-            </div>
-          ) : basket.length === 0 ? (
-            <div className="py-4 text-center text-sm text-slate-500">
-              Sepet boş —{' '}
+              Rota sepeti boş —{' '}
               <Link
                 to="/clinics/discover"
                 className="font-medium text-blue-600 underline"
               >
-                keşif sayfasından klinik ekle
+                Keşif sayfasına git
               </Link>
             </div>
           ) : (
@@ -502,7 +609,48 @@ export default function RoutePlannerPage() {
           )}
         </section>
 
-        {/* 2. Başlangıç noktası */}
+        {/* 2a. Rota modu (Araç / Trafik / Yaya) */}
+        <section className="rounded-xl bg-white p-3 shadow-sm">
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">Rota modu</h2>
+          <div className="grid grid-cols-3 gap-1.5">
+            {([
+              { key: 'driving', label: 'Araç', Icon: Car },
+              { key: 'driving-traffic', label: 'Trafik', Icon: Activity },
+              { key: 'walking', label: 'Yaya', Icon: Footprints },
+            ] as const).map(({ key, label, Icon }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setProfile(key)}
+                className={`flex h-10 items-center justify-center gap-1.5 rounded-lg border text-xs font-medium transition ${
+                  profile === key
+                    ? 'border-blue-600 bg-blue-600 text-white'
+                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <Icon size={14} />
+                {label}
+              </button>
+            ))}
+          </div>
+          {profile === 'walking' && basket.length > WALKING_MAX_WAYPOINTS && (
+            <p className="mt-2 text-xs text-amber-700">
+              Yaya modunda en fazla {WALKING_MAX_WAYPOINTS} durak optimize edilir; sepetin {basket.length} klinikten ilk {WALKING_MAX_WAYPOINTS}'sı kullanılacak.
+            </p>
+          )}
+          {profile !== 'walking' && basket.length > DRIVING_MAX_STOPS && (
+            <p className="mt-2 text-xs text-amber-700">
+              Araç modunda en fazla {DRIVING_MAX_STOPS} durak (Mapbox API limiti); sepetin {basket.length} klinikten ilk {DRIVING_MAX_STOPS}'i kullanılacak.
+            </p>
+          )}
+          {profile === 'walking' && (
+            <p className="mt-1 text-xs text-slate-500">
+              Tahmini yürüyüş süresi {WALKING_AVG_KMH} km/sa ortalama hıza göre hesaplanır.
+            </p>
+          )}
+        </section>
+
+        {/* 2b. Başlangıç noktası */}
         <section className="rounded-xl bg-white p-3 shadow-sm">
           <h2 className="mb-2 text-sm font-semibold text-slate-700">
             Başlangıç noktası
@@ -565,9 +713,19 @@ export default function RoutePlannerPage() {
         {/* 4. Sonuç özeti */}
         {routeResult && (
           <section className="rounded-xl bg-white p-3 shadow-sm">
-            <h2 className="mb-2 text-sm font-semibold text-slate-700">
-              Sonuç
-            </h2>
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-700">Sonuç</h2>
+              {profile === 'walking' && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                  <Footprints size={11} /> Yürüyüş — kuşbakışı tahmin
+                </span>
+              )}
+              {profile === 'driving-traffic' && (
+                <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-medium text-orange-700">
+                  Canlı trafikli
+                </span>
+              )}
+            </div>
             <div className="grid grid-cols-3 gap-2 text-center">
               <div>
                 <div className="text-xs text-slate-500">Mesafe</div>
@@ -576,18 +734,60 @@ export default function RoutePlannerPage() {
                 </div>
               </div>
               <div>
-                <div className="text-xs text-slate-500">Süre</div>
+                <div className="text-xs text-slate-500">
+                  {profile === 'walking' ? 'Yürüyüş süresi' : 'Süre'}
+                </div>
                 <div className="text-base font-bold text-slate-900">
                   {durationMin} dk
                 </div>
               </div>
               <div>
-                <div className="text-xs text-slate-500">2-opt</div>
+                <div className="text-xs text-slate-500">
+                  {profile === 'walking' ? 'NN+2-opt' : '2-opt'}
+                </div>
                 <div className="text-base font-bold text-emerald-600">
                   -{Math.round(routeResult.twoOptSavedM)} m
                 </div>
               </div>
             </div>
+
+            {/* Baseline kıyas — optimize gerçek mi test et */}
+            {(() => {
+              const optimizedKm = routeResult.distanceM / 1000;
+              const baselineKm = routeResult.baselineKm;
+              const savedKm = Math.max(0, baselineKm - optimizedKm);
+              const pct = baselineKm > 0 ? (savedKm / baselineKm) * 100 : 0;
+              return (
+                <div className="mt-3 rounded-lg bg-slate-50 p-2 text-xs">
+                  <div className="mb-1 font-semibold text-slate-700">Tasarruf kıyası</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <div className="text-slate-500">Sepet sırası</div>
+                      <div className="font-bold text-slate-700">
+                        {baselineKm.toFixed(1)} km
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-slate-500">Optimize</div>
+                      <div className="font-bold text-blue-700">
+                        {optimizedKm.toFixed(1)} km
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-slate-500">Tasarruf</div>
+                      <div className="font-bold text-emerald-700">
+                        {savedKm.toFixed(1)} km (%{pct.toFixed(0)})
+                      </div>
+                    </div>
+                  </div>
+                  <p className="mt-1.5 text-[10px] text-slate-500">
+                    {profile === 'walking'
+                      ? 'Kuşbakışı (haversine). Baseline = sepete eklendiği sıra.'
+                      : 'Optimize = Mapbox yol mesafesi. Baseline = sepete eklendiği sırayla kuşbakışı mesafe.'}
+                  </p>
+                </div>
+              );
+            })()}
           </section>
         )}
 
@@ -646,21 +846,67 @@ export default function RoutePlannerPage() {
           />
         </section>
 
-        {/* 7. Başlat */}
+        {/* 7. Dışa aktar (Google Maps / QR / Paylaş / Kopyala) */}
+        {routeResult && startCoord && orderedStops.length > 0 && (
+          <RouteExportPanel
+            start={{ lat: startCoord[1], lng: startCoord[0] }}
+            stops={orderedStops.map((s) => ({
+              lat: s.lat,
+              lng: s.lng,
+              name: s.name,
+            }))}
+          />
+        )}
+
+        {/* 8. Başlat + (admin için) Plasiyere Ata */}
         {routeResult && (
-          <button
-            type="button"
-            onClick={() => {
-              void handleStartRoute();
-            }}
-            disabled={starting}
-            className="flex min-h-tap-min h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-md hover:bg-emerald-700 disabled:opacity-50"
-          >
-            <Play size={18} />
-            {starting ? 'Başlatılıyor…' : 'Rotayı başlat'}
-          </button>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => {
+                void handleStartRoute();
+              }}
+              disabled={starting}
+              className="flex min-h-tap-min h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-md hover:bg-emerald-700 disabled:opacity-50"
+            >
+              <Play size={18} />
+              {starting ? 'Başlatılıyor…' : 'Kendim Başlat'}
+            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setAssignOpen(true)}
+                disabled={starting}
+                className="flex min-h-tap-min h-12 items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 text-sm font-semibold text-white shadow-md hover:bg-purple-700 disabled:opacity-50"
+              >
+                <Play size={18} />
+                Plasiyere Ata
+              </button>
+            )}
+          </div>
         )}
       </div>
+
+      {/* Assign modal */}
+      {routeResult && (
+        <AssignRouteModal
+          open={assignOpen}
+          onClose={() => setAssignOpen(false)}
+          payload={{
+            account_ids: (() => {
+              const ids: string[] = [];
+              for (const idx of routeResult.order) {
+                if (idx === 0) continue;
+                const stop = basket[idx - 1];
+                if (stop) ids.push(stop.id);
+              }
+              return ids;
+            })(),
+            total_distance_km: Number((routeResult.distanceM / 1000).toFixed(2)),
+            total_duration_min: Math.round(routeResult.durationS / 60),
+          }}
+        />
+      )}
     </div>
   );
 }

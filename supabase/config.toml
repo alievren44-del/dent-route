@@ -406,3 +406,27 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 # declarative_schema_path = "./database"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+# ─── Edge Functions — verify_jwt overrides ───
+# These functions perform their own auth (service_role server-to-server OR user JWT
+# + ADMIN role check inside the handler), so the gateway-level JWT check is disabled.
+[functions.osm-search]
+verify_jwt = false
+
+[functions.batch-scan]
+verify_jwt = false
+
+[functions.clinic-scan]
+verify_jwt = false
+
+[functions.admin-create-user]
+verify_jwt = false
+
+[functions.enum-neighborhoods]
+verify_jwt = false
+
+[functions.doktor-takvimi-scrape]
+verify_jwt = false
+
+[functions.clinic-scan-v3]
+verify_jwt = false

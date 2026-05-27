@@ -187,49 +187,136 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
   // ─── Balance ──────────────────────────────────────────
 
   async getBalance(customerId: string, _opts?: { forceFresh?: boolean }): Promise<Balance> {
-    const { data, error } = await this.supabase
-      .from('wallet_transactions')
-      .select('amount, type, created_at')
-      .eq('user_id', customerId);
+    // Önce saha_cariler / saha_faturalar üzerinden gerçek cari bakiyeyi dene.
+    // Tablo yoksa (invoicing migration uygulanmamış) — wallet_transactions
+    // fallback'ine düşeriz, o da yoksa sıfır bakiye döneriz.
+    try {
+      const { data: cari, error: cariErr } = await this.supabase
+        .from('saha_cariler')
+        .select('id, kredi_limiti, acilis_bakiyesi')
+        .eq('profile_id', customerId)
+        .maybeSingle();
 
-    if (error) {
-      // wallet_transactions yoksa veya RLS engelliyse — boş balance dön
+      if (cariErr) {
+        // Tablo yok / RLS engelli → fallback
+        throw cariErr;
+      }
+
+      if (!cari) {
+        // Cari kaydı yok → sıfır bakiye, limit yok.
+        return {
+          customerId,
+          totalOrders: 0,
+          totalPaid: 0,
+          balance: 0,
+          due: 0,
+          currency: 'TRY',
+          creditLimit: 0,
+          creditUsed: 0,
+          asOf: new Date().toISOString(),
+          cached: false,
+        };
+      }
+
+      const cariRow = cari as {
+        id: string;
+        kredi_limiti: number | string | null;
+        acilis_bakiyesi: number | string | null;
+      };
+
+      const { data: faturalar } = await this.supabase
+        .from('saha_faturalar')
+        .select('toplam, odenen, durum, tip, updated_at')
+        .eq('cari_id', cariRow.id)
+        .neq('durum', 'iptal');
+
+      let due = 0;
+      let lastMovement: string | undefined;
+      const rows = (faturalar ?? []) as Array<{
+        toplam: number | string;
+        odenen: number | string;
+        durum: string | null;
+        tip: string | null;
+        updated_at: string | null;
+      }>;
+      for (const f of rows) {
+        const kalan = Number(f.toplam ?? 0) - Number(f.odenen ?? 0);
+        const sign = String(f.tip ?? '').toLowerCase() === 'iade' ? -1 : 1;
+        due += sign * kalan;
+        if (f.updated_at && (!lastMovement || f.updated_at > lastMovement)) {
+          lastMovement = f.updated_at;
+        }
+      }
+
+      const acilis = Number(cariRow.acilis_bakiyesi ?? 0);
+      const balance = Math.round((acilis + due) * 100) / 100;
+      const creditLimit = Number(cariRow.kredi_limiti ?? 0) || 0;
+      const creditUsed = creditLimit > 0 ? Math.max(0, balance) / creditLimit : 0;
+
+      return {
+        customerId,
+        totalOrders: rows.length,
+        totalPaid: 0,
+        balance,
+        due: Math.max(0, due),
+        currency: 'TRY',
+        creditLimit,
+        creditUsed,
+        ...(lastMovement ? { lastMovementAt: lastMovement } : {}),
+        asOf: new Date().toISOString(),
+        cached: false,
+      };
+    } catch {
+      // saha_cariler yok ya da erişilemiyor — wallet_transactions fallback.
+      const { data, error } = await this.supabase
+        .from('wallet_transactions')
+        .select('amount, type, created_at')
+        .eq('user_id', customerId);
+
+      if (error) {
+        return {
+          customerId,
+          totalOrders: 0,
+          totalPaid: 0,
+          balance: 0,
+          due: 0,
+          currency: 'TRY',
+          creditLimit: 0,
+          creditUsed: 0,
+          asOf: new Date().toISOString(),
+          cached: false,
+        };
+      }
+
+      let balance = 0;
+      let lastMovement: string | undefined;
+      const rows = (data ?? []) as Array<{
+        amount: number | string;
+        type: string | null;
+        created_at: string;
+      }>;
+      for (const row of rows) {
+        const amt = Number(row.amount);
+        const type = String(row.type ?? '').toLowerCase();
+        const sign = ['credit', 'alacak', 'add', 'deposit'].includes(type) ? 1 : -1;
+        balance += amt * sign;
+        if (!lastMovement || row.created_at > lastMovement) lastMovement = row.created_at;
+      }
+
       return {
         customerId,
         totalOrders: 0,
         totalPaid: 0,
-        balance: 0,
+        balance,
+        due: Math.max(0, balance),
         currency: 'TRY',
+        creditLimit: 0,
+        creditUsed: 0,
+        ...(lastMovement ? { lastMovementAt: lastMovement } : {}),
         asOf: new Date().toISOString(),
         cached: false,
       };
     }
-
-    let balance = 0;
-    let lastMovement: string | undefined;
-    const rows = (data ?? []) as Array<{
-      amount: number | string;
-      type: string | null;
-      created_at: string;
-    }>;
-    for (const row of rows) {
-      const amt = Number(row.amount);
-      const type = String(row.type ?? '').toLowerCase();
-      const sign = ['credit', 'alacak', 'add', 'deposit'].includes(type) ? 1 : -1;
-      balance += amt * sign;
-      if (!lastMovement || row.created_at > lastMovement) lastMovement = row.created_at;
-    }
-
-    return {
-      customerId,
-      totalOrders: 0,
-      totalPaid: 0,
-      balance,
-      currency: 'TRY',
-      lastMovementAt: lastMovement,
-      asOf: new Date().toISOString(),
-      cached: false,
-    };
   }
 
   // ─── Orders ───────────────────────────────────────────

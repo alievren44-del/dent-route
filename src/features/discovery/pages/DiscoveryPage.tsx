@@ -7,7 +7,9 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { MapPin, Loader2, AlertCircle, Search } from 'lucide-react';
 import { useGeolocation } from '@features/map/hooks/useGeolocation';
 import {
@@ -19,6 +21,11 @@ import ClinicCard from '@features/discovery/components/ClinicCard';
 import { useVertical } from '@core/verticals/useVertical';
 import { getSupabaseClient } from '@lib/supabase';
 import { SupabaseCRMAdapter } from '@core/adapters/builtin/SupabaseCRMAdapter';
+import {
+  useRouteBasket,
+  type BasketStop,
+  type BasketStopSource,
+} from '@features/routes/store/routeBasketStore';
 
 const adapter = new SupabaseCRMAdapter();
 
@@ -58,10 +65,19 @@ async function fetchSahaClinics(
 
 const RADIUS_OPTIONS: number[] = [1, 2, 5, 10];
 
+function buildStopId(c: DiscoveryCandidate): string {
+  if (c.customerId) return c.customerId;
+  if (c.externalId) return `temp_${c.externalId}`;
+  return `temp_${c.name}`;
+}
+
 function DiscoveryPage(): JSX.Element {
   const vertical = useVertical();
+  const navigate = useNavigate();
   const { position, status, request } = useGeolocation();
   const [radiusKm, setRadiusKm] = useState<number>(5);
+  const basketAdd = useRouteBasket((s) => s.add);
+  const basketItems = useRouteBasket((s) => s.items);
 
   useEffect(() => {
     request();
@@ -204,6 +220,8 @@ function DiscoveryPage(): JSX.Element {
           {data.map((c) => {
             const key = c.customerId ?? c.externalId ?? `${c.lat},${c.lng},${c.name}`;
             const isExisting = c.sources.includes('saha');
+            const stopId = buildStopId(c);
+            const inBasket = basketItems.some((s) => s.id === stopId);
             return (
               <ClinicCard
                 key={key}
@@ -213,10 +231,33 @@ function DiscoveryPage(): JSX.Element {
                 distanceM={haversineMeters(position.lat, position.lng, c.lat, c.lng)}
                 rating={c.rating}
                 isExistingCustomer={isExisting}
+                isInBasket={inBasket}
                 onAdd={() => {
-                  // TODO: Sprint 2.5: createCustomer flow
-                  // eslint-disable-next-line no-console
-                  console.log('add candidate', c);
+                  const source: BasketStopSource = c.sources.includes('saha')
+                    ? 'saha'
+                    : 'google_places';
+                  const stop: Omit<BasketStop, 'addedAt'> = {
+                    id: stopId,
+                    name: c.name,
+                    lat: c.lat,
+                    lng: c.lng,
+                    source,
+                    address: c.address,
+                    phone: c.phone,
+                  };
+                  const result = basketAdd(stop);
+                  if (result.ok) {
+                    toast.success(`${c.name} sepete eklendi`, {
+                      action: {
+                        label: 'Rota',
+                        onClick: () => navigate('/routes/plan'),
+                      },
+                    });
+                  } else if (result.reason === 'duplicate') {
+                    toast.info('Bu durak zaten sepette');
+                  } else if (result.reason === 'full') {
+                    toast.error('Sepet dolu (maks 12 durak)');
+                  }
                 }}
               />
             );
