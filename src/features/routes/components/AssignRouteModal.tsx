@@ -17,7 +17,7 @@ import { useAuthStore } from '@core/auth/authStore';
 interface RepProfile {
   id: string;
   email: string;
-  full_name: string | null;
+  ad_soyad: string | null;
   role: string;
 }
 
@@ -51,7 +51,7 @@ export function AssignRouteModal({ open, onClose, payload }: Props) {
         const supabase = getSupabaseClient();
         const { data, error } = await supabase
           .from('profiles')
-          .select('id, email, full_name, role')
+          .select('id, email, ad_soyad, role')
           .order('email');
         if (error) throw error;
         const list = (data ?? []) as RepProfile[];
@@ -103,7 +103,7 @@ export function AssignRouteModal({ open, onClose, payload }: Props) {
 
       // 2. saha_notifications insert
       const rep = reps.find((r) => r.id === selectedRep);
-      const repLabel = rep?.full_name?.trim() || rep?.email || 'Plasiyer';
+      const repLabel = rep?.ad_soyad?.trim() || rep?.email || 'Plasiyer';
       await supabase.from('saha_notifications').insert({
         user_id: selectedRep,
         type: 'route_assigned',
@@ -173,7 +173,7 @@ export function AssignRouteModal({ open, onClose, payload }: Props) {
                 <option value="">Seç…</option>
                 {reps.map((r) => (
                   <option key={r.id} value={r.id}>
-                    {(r.full_name?.trim() || r.email) + ` (${r.role})`}
+                    {(r.ad_soyad?.trim() || r.email) + ` (${r.role})`}
                   </option>
                 ))}
               </select>
