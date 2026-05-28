@@ -113,14 +113,19 @@ export function adaptiveCorridorParams(routeKm: number): {
   detourMinMax: number;
   limit: number;
 } {
-  if (routeKm < 50) {
-    return { bufferM: 2000, detourKmMax: 7, detourMinMax: 15, limit: 100 };
+  // Sıkı filter: detour rota uzunluğunun %5'ini geçemez (min/max bandıyla).
+  // Buffer = detour × ~1.5 (yarım sapma haversine için).
+  if (routeKm < 30) {
+    return { bufferM: 800, detourKmMax: 1.5, detourMinMax: 4, limit: 25 };
   }
-  if (routeKm < 200) {
-    return { bufferM: 5000, detourKmMax: 15, detourMinMax: 25, limit: 200 };
+  if (routeKm < 100) {
+    return { bufferM: 2500, detourKmMax: 4, detourMinMax: 8, limit: 60 };
   }
-  if (routeKm < 500) {
-    return { bufferM: 10000, detourKmMax: 25, detourMinMax: 40, limit: 300 };
+  if (routeKm < 300) {
+    return { bufferM: 6000, detourKmMax: 10, detourMinMax: 15, limit: 120 };
   }
-  return { bufferM: 15000, detourKmMax: 40, detourMinMax: 60, limit: 400 };
+  if (routeKm < 600) {
+    return { bufferM: 12000, detourKmMax: 20, detourMinMax: 25, limit: 200 };
+  }
+  return { bufferM: 20000, detourKmMax: 30, detourMinMax: 35, limit: 300 };
 }

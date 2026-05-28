@@ -76,8 +76,21 @@ function DiscoveryPage(): JSX.Element {
   const navigate = useNavigate();
   const { position, status, request } = useGeolocation();
   const [radiusKm, setRadiusKm] = useState<number>(5);
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const basketAdd = useRouteBasket((s) => s.add);
   const basketItems = useRouteBasket((s) => s.items);
+
+  // Türkçe accent-fold + lowercase
+  const foldTr = (s: string) =>
+    s
+      .toLocaleLowerCase('tr')
+      .replace(/ç/g, 'c')
+      .replace(/ğ/g, 'g')
+      .replace(/ı/g, 'i')
+      .replace(/i̇/g, 'i')
+      .replace(/ö/g, 'o')
+      .replace(/ş/g, 's')
+      .replace(/ü/g, 'u');
 
   useEffect(() => {
     request();
@@ -214,10 +227,62 @@ function DiscoveryPage(): JSX.Element {
         </div>
       )}
 
+      {/* Akıllı arama */}
+      {position && data && data.length > 0 && (
+        <div className="relative">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Akıllı arama: ad, telefon, adres…"
+            className="w-full rounded-xl border border-border bg-background pl-9 pr-9 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-muted"
+              aria-label="Temizle"
+            >
+              <AlertCircle className="h-4 w-4 rotate-45" />
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Results */}
       {position && data && data.length > 0 && (
         <div className="space-y-3">
-          {data.map((c) => {
+          {(() => {
+            const q = foldTr(searchQuery.trim());
+            const qDigits = searchQuery.replace(/\D+/g, '');
+            const filtered = q
+              ? data.filter((c) => {
+                  const hay = foldTr(`${c.name} ${c.phone ?? ''} ${c.address ?? ''}`);
+                  const phoneHay = (c.phone ?? '').replace(/\D+/g, '');
+                  return hay.includes(q) || (qDigits.length >= 3 && phoneHay.includes(qDigits));
+                })
+              : data;
+            return filtered.length === 0 && q ? (
+              <p className="text-sm text-muted-foreground">"{searchQuery}" için sonuç yok.</p>
+            ) : null;
+          })()}
+          {(() => {
+            const q = foldTr(searchQuery.trim());
+            const qDigits = searchQuery.replace(/\D+/g, '');
+            const filtered = q
+              ? data.filter((c) => {
+                  const hay = foldTr(`${c.name} ${c.phone ?? ''} ${c.address ?? ''}`);
+                  const phoneHay = (c.phone ?? '').replace(/\D+/g, '');
+                  return hay.includes(q) || (qDigits.length >= 3 && phoneHay.includes(qDigits));
+                })
+              : data;
+            return filtered;
+          })().map((c) => {
             const key = c.customerId ?? c.externalId ?? `${c.lat},${c.lng},${c.name}`;
             const isExisting = c.sources.includes('saha');
             const stopId = buildStopId(c);
