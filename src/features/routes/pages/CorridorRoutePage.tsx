@@ -224,16 +224,18 @@ export default function CorridorRoutePage() {
         )} toplam klinik)`,
       );
 
-      // Selected route'un polyline'ı için corridor district status hesapla
+      // Selected route'un polyline'ı için TÜM rota üstü ilçeleri renkli liste
+      // (yeşil=fresh, turuncu=stale, kırmızı=untouched). minPopulation düşürüldü
+      // küçük ilçeler de görünsün (Mucur, Pınarbaşı gibi).
       if (resolved[0]) {
         const decoded = decodePolyline(resolved[0].geometry);
         const nearbyDistricts = districtsAlongPolyline(decoded, {
-          maxKm: 20,
-          minPopulation: 10_000,
+          maxKm: 25,
+          minPopulation: 5_000,
         });
         try {
-          const enriched = await enrichWithScanStatus(nearbyDistricts);
-          setCorridorDistricts(enriched);
+          const enrichedDistricts = await enrichWithScanStatus(nearbyDistricts);
+          setCorridorDistricts(enrichedDistricts);
         } catch {
           setCorridorDistricts(
             nearbyDistricts.map((d) => ({
@@ -580,46 +582,94 @@ export default function CorridorRoutePage() {
         className="h-[360px] w-full overflow-hidden rounded-xl border border-slate-200"
       />
 
-      {/* Corridor enrichment panel — taranmamış ilçeleri Google'dan zenginleştir */}
-      {routes.length > 0 && enrichmentCandidates.length > 0 && (
-        <section className="rounded-xl border border-purple-200 bg-purple-50 p-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-purple-900">
-            Veri tabanını zenginleştir
-          </h2>
-          <p className="mt-1 text-xs text-purple-800">
-            Bu rotada henüz taranmamış {enrichmentCandidates.length} ilçe var. Google Places'tan
-            hekim listesi çekilerek DB güçlendirilebilir.
-          </p>
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            {enrichmentCandidates.slice(0, 5).map((d) => (
-              <span
-                key={`${d.provinceSlug}-${d.districtSlug}`}
-                className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-purple-700 border border-purple-200"
-              >
-                {d.districtName}
-                {d.existingCount > 0 ? ` (${d.existingCount})` : ' (yeni)'}
-              </span>
-            ))}
-          </div>
-          {enrichProgress && enriching && (
-            <div className="mt-2 rounded bg-white p-2 text-[11px] text-purple-900">
-              <div className="font-semibold">
-                Tarama: {enrichProgress.done}/{enrichProgress.total}
-                {enrichProgress.currentDistrict ? ` — ${enrichProgress.currentDistrict}` : ''}
-              </div>
-              <div className="mt-0.5 text-purple-700">
-                {enrichProgress.newClinics} yeni klinik · {enrichProgress.scannedClinics} taranan
-              </div>
+      {/* Corridor enrichment panel — TÜM rota ilçeleri + renk kodu (yeşil/turuncu/kırmızı) */}
+      {routes.length > 0 && corridorDistricts.length > 0 && (
+        <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-700">
+                Rota üstündeki ilçeler ({corridorDistricts.length})
+              </h2>
+              <p className="mt-0.5 text-[11px] text-slate-500">
+                {(() => {
+                  const fresh = corridorDistricts.filter(
+                    (d) =>
+                      d.lastScanAt &&
+                      (Date.now() - new Date(d.lastScanAt).getTime()) / 86400_000 <= 14,
+                  ).length;
+                  const stale = corridorDistricts.filter((d) => {
+                    if (!d.lastScanAt) return false;
+                    const days = (Date.now() - new Date(d.lastScanAt).getTime()) / 86400_000;
+                    return days > 14;
+                  }).length;
+                  const untouched = corridorDistricts.length - fresh - stale;
+                  return `🟢 ${fresh} güncel · 🟠 ${stale} eski · 🔴 ${untouched} taranmamış`;
+                })()}
+              </p>
             </div>
+          </div>
+
+          <div className="mt-2 flex flex-wrap gap-1 max-h-44 overflow-y-auto">
+            {corridorDistricts.map((d) => {
+              let cls = 'bg-rose-100 text-rose-800 border-rose-300';
+              let label = 'yeni';
+              if (d.lastScanAt) {
+                const days = (Date.now() - new Date(d.lastScanAt).getTime()) / 86400_000;
+                if (days <= 14) {
+                  cls = 'bg-emerald-100 text-emerald-800 border-emerald-300';
+                  label = `${Math.round(days)}g`;
+                } else {
+                  cls = 'bg-amber-100 text-amber-800 border-amber-300';
+                  label = `${Math.round(days)}g eski`;
+                }
+              }
+              return (
+                <span
+                  key={`${d.provinceSlug}-${d.districtSlug}`}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${cls}`}
+                  title={`${d.provinceName} / ${d.districtName} — ${d.existingCount} klinik`}
+                >
+                  {d.districtName}
+                  <span className="opacity-70">·{d.existingCount}</span>
+                  <span className="opacity-50">({label})</span>
+                </span>
+              );
+            })}
+          </div>
+
+          {enrichmentCandidates.length > 0 && (
+            <>
+              <p className="mt-3 text-xs text-slate-600">
+                <strong>{enrichmentCandidates.length}</strong> ilçe taranmaya değer (yeni veya
+                eski). Tek seferde max 5 tarayabilir (Google rate limit). Tarama sırası: rotaya
+                yakın + büyük şehir.
+              </p>
+              {enrichProgress && enriching && (
+                <div className="mt-2 rounded bg-purple-50 p-2 text-[11px] text-purple-900">
+                  <div className="font-semibold">
+                    Tarama: {enrichProgress.done}/{enrichProgress.total}
+                    {enrichProgress.currentDistrict
+                      ? ` — ${enrichProgress.currentDistrict}`
+                      : ''}
+                  </div>
+                  <div className="mt-0.5 text-purple-700">
+                    {enrichProgress.newClinics} yeni klinik · {enrichProgress.scannedClinics}{' '}
+                    taranan
+                  </div>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => void handleEnrich()}
+                disabled={enriching}
+                className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-700 disabled:opacity-60"
+              >
+                {enriching
+                  ? 'Taranıyor…'
+                  : `Sıradaki ${Math.min(5, enrichmentCandidates.length)} ilçeyi tara`}
+              </button>
+            </>
           )}
-          <button
-            type="button"
-            onClick={() => void handleEnrich()}
-            disabled={enriching}
-            className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-700 disabled:opacity-60"
-          >
-            {enriching ? 'Taranıyor…' : `${enrichmentCandidates.length} ilçeyi tara`}
-          </button>
         </section>
       )}
 

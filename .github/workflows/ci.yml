@@ -98,7 +98,8 @@ jobs:
           for f in \
             supabase/migrations/20260528000007_saha_route_assignment.sql \
             supabase/migrations/20260528000008_saha_auth_trigger.sql \
-            supabase/migrations/20260528000009_saha_cari_sales_rep.sql; do
+            supabase/migrations/20260528000009_saha_cari_sales_rep.sql \
+            supabase/migrations/20260528000010_saha_scan_logs_v3_rep.sql; do
               echo "::group::Apply $f"
               psql --set ON_ERROR_STOP=on -v ON_ERROR_STOP=1 -f "$f"
               echo "::endgroup::"
