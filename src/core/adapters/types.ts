@@ -105,13 +105,7 @@ export interface Balance {
 
 // ─── Order ────────────────────────────────────────────────────
 
-export type OrderStatus =
-  | 'draft'
-  | 'pending'
-  | 'confirmed'
-  | 'shipped'
-  | 'delivered'
-  | 'cancelled';
+export type OrderStatus = 'draft' | 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
 
 export interface OrderItem {
   productId?: string;

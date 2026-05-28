@@ -16,8 +16,16 @@ import { useState, useMemo, useRef } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  Search, MapPin, CheckCircle2, AlertCircle, Loader2,
-  Layers, Globe, Map as MapIcon, ListChecks, AlertTriangle,
+  Search,
+  MapPin,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  Layers,
+  Globe,
+  Map as MapIcon,
+  ListChecks,
+  AlertTriangle,
 } from 'lucide-react';
 import { getProvinces, getDistrictsByProvince } from '@/data/tr-locations/geo-helpers';
 import { getSupabaseClient } from '@lib/supabase';
@@ -25,11 +33,10 @@ import ScanJobsPage from './ScanJobsPage';
 import ScanPreviewDialog from '@features/admin/components/ScanPreviewDialog';
 import DistrictClinicsDialog from '@features/admin/components/DistrictClinicsDialog';
 import ManualAddClinicModal from '@features/admin/components/ManualAddClinicModal';
-import EditClinicModal, { type SahaClinicRow as EditClinicTarget } from '@features/admin/components/EditClinicModal';
-import {
-  useScanPreview,
-  type ScanPreviewClinic,
-} from '@features/admin/store/scanPreviewStore';
+import EditClinicModal, {
+  type SahaClinicRow as EditClinicTarget,
+} from '@features/admin/components/EditClinicModal';
+import { useScanPreview, type ScanPreviewClinic } from '@features/admin/store/scanPreviewStore';
 
 // ============================================================================
 // Types
@@ -38,8 +45,13 @@ import {
 type SourceMode = 'google' | 'osm' | 'both' | 'doktor_takvimi' | 'all';
 type TabKey = 'single' | 'province' | 'region' | 'country' | 'jobs';
 type RegionSlug =
-  | 'marmara' | 'ege' | 'akdeniz' | 'ic_anadolu'
-  | 'karadeniz' | 'dogu_anadolu' | 'guneydogu';
+  | 'marmara'
+  | 'ege'
+  | 'akdeniz'
+  | 'ic_anadolu'
+  | 'karadeniz'
+  | 'dogu_anadolu'
+  | 'guneydogu';
 
 interface ScanResult {
   status: string;
@@ -70,8 +82,8 @@ type ScanInput = {
 };
 
 const TYPE_OPTIONS: Array<{ key: string; label: string }> = [
-  { key: 'dentist',  label: 'Diş Hekimi' },
-  { key: 'doctor',   label: 'Doktor' },
+  { key: 'dentist', label: 'Diş Hekimi' },
+  { key: 'doctor', label: 'Doktor' },
   { key: 'hospital', label: 'Hastane' },
 ];
 
@@ -79,35 +91,35 @@ const RADIUS_OPTIONS = [5, 10, 15, 20] as const;
 
 const SOURCE_OPTIONS: Array<{ key: SourceMode; label: string }> = [
   { key: 'google', label: 'Google (kapsamlı, ücretli)' },
-  { key: 'osm',    label: 'OSM (ücretsiz)' },
-  { key: 'both',   label: 'Her ikisi (önerilen)' },
+  { key: 'osm', label: 'OSM (ücretsiz)' },
+  { key: 'both', label: 'Her ikisi (önerilen)' },
 ];
 
 /** v3 motoru için ek kaynak seçenekleri (mahalle + DoktorTakvimi crawl). */
 const SOURCE_OPTIONS_V3: Array<{ key: SourceMode; label: string }> = [
-  { key: 'google',         label: 'Google (kapsamlı, ücretli)' },
-  { key: 'osm',            label: 'OSM (ücretsiz)' },
-  { key: 'both',           label: 'Google + OSM' },
+  { key: 'google', label: 'Google (kapsamlı, ücretli)' },
+  { key: 'osm', label: 'OSM (ücretsiz)' },
+  { key: 'both', label: 'Google + OSM' },
   { key: 'doktor_takvimi', label: 'DoktorTakvimi (web crawl, ücretsiz)' },
-  { key: 'all',            label: 'Hepsi (Google + OSM + DoktorTakvimi — önerilen)' },
+  { key: 'all', label: 'Hepsi (Google + OSM + DoktorTakvimi — önerilen)' },
 ];
 
 const REGION_OPTIONS: Array<{ key: RegionSlug; label: string }> = [
-  { key: 'marmara',      label: 'Marmara' },
-  { key: 'ege',          label: 'Ege' },
-  { key: 'akdeniz',      label: 'Akdeniz' },
-  { key: 'ic_anadolu',   label: 'İç Anadolu' },
-  { key: 'karadeniz',    label: 'Karadeniz' },
+  { key: 'marmara', label: 'Marmara' },
+  { key: 'ege', label: 'Ege' },
+  { key: 'akdeniz', label: 'Akdeniz' },
+  { key: 'ic_anadolu', label: 'İç Anadolu' },
+  { key: 'karadeniz', label: 'Karadeniz' },
   { key: 'dogu_anadolu', label: 'Doğu Anadolu' },
-  { key: 'guneydogu',    label: 'Güneydoğu Anadolu' },
+  { key: 'guneydogu', label: 'Güneydoğu Anadolu' },
 ];
 
 const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
-  { key: 'single',   label: 'Tek İlçe',     icon: <MapPin className="h-4 w-4" /> },
-  { key: 'province', label: 'Tüm İl',       icon: <MapIcon className="h-4 w-4" /> },
-  { key: 'region',   label: 'Bölge',        icon: <Layers className="h-4 w-4" /> },
-  { key: 'country',  label: 'Türkiye',      icon: <Globe className="h-4 w-4" /> },
-  { key: 'jobs',     label: "Aktif Job'lar", icon: <ListChecks className="h-4 w-4" /> },
+  { key: 'single', label: 'Tek İlçe', icon: <MapPin className="h-4 w-4" /> },
+  { key: 'province', label: 'Tüm İl', icon: <MapIcon className="h-4 w-4" /> },
+  { key: 'region', label: 'Bölge', icon: <Layers className="h-4 w-4" /> },
+  { key: 'country', label: 'Türkiye', icon: <Globe className="h-4 w-4" /> },
+  { key: 'jobs', label: "Aktif Job'lar", icon: <ListChecks className="h-4 w-4" /> },
 ];
 
 // ============================================================================
@@ -122,9 +134,11 @@ type ScanMode = 'v1' | 'v2' | 'v3';
 async function callScan(input: ScanInput): Promise<ScanResult> {
   const supabase = getSupabaseClient();
   const fnName =
-    input.scanMode === 'v3' ? 'clinic-scan-v3'
-    : input.scanMode === 'v2' ? 'clinic-scan-v2'
-    : 'clinic-scan';
+    input.scanMode === 'v3'
+      ? 'clinic-scan-v3'
+      : input.scanMode === 'v2'
+        ? 'clinic-scan-v2'
+        : 'clinic-scan';
   // v2: intensity → gridSize + useTextSearch eşlemesi
   //   standard → 9 grid, text kapalı  (~60-90sn, ~$3-5)
   //   high     → 13 grid, text kapalı (~90-120sn, ~$5-8)
@@ -226,8 +240,15 @@ async function fetchScanStats() {
     .order('last_verified_at', { ascending: false, nullsFirst: false })
     .limit(2000);
   if (error) throw error;
-  const byKey = new Map<string, { province: string; district: string | null; count: number; lastVerified: string | null }>();
-  for (const row of (data ?? []) as Array<{ province_slug: string | null; district_slug: string | null; last_verified_at: string | null }>) {
+  const byKey = new Map<
+    string,
+    { province: string; district: string | null; count: number; lastVerified: string | null }
+  >();
+  for (const row of (data ?? []) as Array<{
+    province_slug: string | null;
+    district_slug: string | null;
+    last_verified_at: string | null;
+  }>) {
     const key = `${row.province_slug ?? '-'}|${row.district_slug ?? '-'}`;
     const ex = byKey.get(key);
     if (ex) {
@@ -301,7 +322,9 @@ function SharedOptsBox(props: SharedScanOpts) {
               <label
                 key={t.key}
                 className={`inline-flex items-center gap-1.5 px-3 h-9 rounded-lg border cursor-pointer ${
-                  checked ? 'bg-primary text-primary-foreground border-primary' : 'border-border bg-background'
+                  checked
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'border-border bg-background'
                 }`}
               >
                 <input
@@ -309,7 +332,8 @@ function SharedOptsBox(props: SharedScanOpts) {
                   checked={checked}
                   onChange={() => {
                     const next = new Set(props.selectedTypes);
-                    if (checked) next.delete(t.key); else next.add(t.key);
+                    if (checked) next.delete(t.key);
+                    else next.add(t.key);
                     props.setSelectedTypes(next);
                   }}
                   className="sr-only"
@@ -328,7 +352,9 @@ function SharedOptsBox(props: SharedScanOpts) {
             <label
               key={s.key}
               className={`inline-flex items-center gap-2 px-3 h-10 rounded-lg border cursor-pointer ${
-                props.source === s.key ? 'bg-primary/10 border-primary' : 'border-border bg-background'
+                props.source === s.key
+                  ? 'bg-primary/10 border-primary'
+                  : 'border-border bg-background'
               }`}
             >
               <input
@@ -352,17 +378,45 @@ function SharedOptsBox(props: SharedScanOpts) {
           </span>
         </label>
         <div className="flex flex-col gap-1.5">
-          <label className={`inline-flex items-center gap-2 px-3 h-10 rounded-lg border cursor-pointer ${props.scanMode === 'v1' ? 'bg-primary/10 border-primary' : 'border-border bg-background'}`}>
-            <input type="radio" name="scan-mode" value="v1" checked={props.scanMode === 'v1'} onChange={() => props.setScanMode('v1')} />
+          <label
+            className={`inline-flex items-center gap-2 px-3 h-10 rounded-lg border cursor-pointer ${props.scanMode === 'v1' ? 'bg-primary/10 border-primary' : 'border-border bg-background'}`}
+          >
+            <input
+              type="radio"
+              name="scan-mode"
+              value="v1"
+              checked={props.scanMode === 'v1'}
+              onChange={() => props.setScanMode('v1')}
+            />
             <span className="text-sm">v1 — Hızlı (1-13 nokta, ~$0.5-3/ilçe)</span>
           </label>
-          <label className={`inline-flex items-center gap-2 px-3 h-10 rounded-lg border cursor-pointer ${props.scanMode === 'v2' ? 'bg-primary/10 border-primary' : 'border-border bg-background'}`}>
-            <input type="radio" name="scan-mode" value="v2" checked={props.scanMode === 'v2'} onChange={() => props.setScanMode('v2')} />
-            <span className="text-sm">v2 — Yüksek Kapsam (25 grid + 9 keyword + TextSearch, ~$10-25/ilçe)</span>
+          <label
+            className={`inline-flex items-center gap-2 px-3 h-10 rounded-lg border cursor-pointer ${props.scanMode === 'v2' ? 'bg-primary/10 border-primary' : 'border-border bg-background'}`}
+          >
+            <input
+              type="radio"
+              name="scan-mode"
+              value="v2"
+              checked={props.scanMode === 'v2'}
+              onChange={() => props.setScanMode('v2')}
+            />
+            <span className="text-sm">
+              v2 — Yüksek Kapsam (25 grid + 9 keyword + TextSearch, ~$10-25/ilçe)
+            </span>
           </label>
-          <label className={`inline-flex items-center gap-2 px-3 h-10 rounded-lg border cursor-pointer ${props.scanMode === 'v3' ? 'bg-primary/10 border-primary' : 'border-border bg-background'}`}>
-            <input type="radio" name="scan-mode" value="v3" checked={props.scanMode === 'v3'} onChange={() => props.setScanMode('v3')} />
-            <span className="text-sm">v3 — Akıllı (mahalle + uzmanlık + 9 keyword + DoktorTakvimi, ~$3-8/ilçe)</span>
+          <label
+            className={`inline-flex items-center gap-2 px-3 h-10 rounded-lg border cursor-pointer ${props.scanMode === 'v3' ? 'bg-primary/10 border-primary' : 'border-border bg-background'}`}
+          >
+            <input
+              type="radio"
+              name="scan-mode"
+              value="v3"
+              checked={props.scanMode === 'v3'}
+              onChange={() => props.setScanMode('v3')}
+            />
+            <span className="text-sm">
+              v3 — Akıllı (mahalle + uzmanlık + 9 keyword + DoktorTakvimi, ~$3-8/ilçe)
+            </span>
           </label>
         </div>
       </div>
@@ -381,7 +435,9 @@ function SharedOptsBox(props: SharedScanOpts) {
             <label
               key={opt.key}
               className={`inline-flex items-center gap-2 px-3 h-10 rounded-lg border cursor-pointer ${
-                props.intensity === opt.key ? 'bg-primary/10 border-primary' : 'border-border bg-background'
+                props.intensity === opt.key
+                  ? 'bg-primary/10 border-primary'
+                  : 'border-border bg-background'
               }`}
             >
               <input
@@ -408,8 +464,8 @@ const INTENSITY_OPTIONS: { key: ScanIntensity; label: string }[] = [
 
 /** v3 motoru için yoğunluk seçenekleri. */
 const INTENSITY_OPTIONS_V3: { key: ScanIntensity; label: string }[] = [
-  { key: 'standard',   label: 'Standart (~$3/ilçe, mahalle + 9 keyword)' },
-  { key: 'deep',       label: 'Derin (~$5/ilçe, + uzmanlık varyantları)' },
+  { key: 'standard', label: 'Standart (~$3/ilçe, mahalle + 9 keyword)' },
+  { key: 'deep', label: 'Derin (~$5/ilçe, + uzmanlık varyantları)' },
   { key: 'exhaustive', label: 'Eksiksiz (~$8/ilçe, + DoktorTakvimi crawl + TextSearch)' },
 ];
 
@@ -417,22 +473,30 @@ const INTENSITY_OPTIONS_V3: { key: ScanIntensity; label: string }[] = [
 // Tab content components
 // ============================================================================
 
-function SingleDistrictTab(props: SharedScanOpts & {
-  statsRefetcher: { current: (() => void) | null };
-  onDrillDown?: (row: { province: string; district: string | null }) => void;
-}) {
+function SingleDistrictTab(
+  props: SharedScanOpts & {
+    statsRefetcher: { current: (() => void) | null };
+    onDrillDown?: (row: { province: string; district: string | null }) => void;
+  },
+) {
   const [provinceSlug, setProvinceSlug] = useState<string>('');
   const [districtSlug, setDistrictSlug] = useState<string>('');
   const [lastResult, setLastResult] = useState<ScanResult | null>(null);
 
   const provinces = getProvinces();
-  const selectedProvince = provinceSlug ? provinces.find((p) => p.slug === provinceSlug) : undefined;
+  const selectedProvince = provinceSlug
+    ? provinces.find((p) => p.slug === provinceSlug)
+    : undefined;
   const districts = selectedProvince ? getDistrictsByProvince(selectedProvince.plaka) : [];
-  const selectedDistrict = districtSlug ? districts.find((d) => d.slug === districtSlug) : undefined;
+  const selectedDistrict = districtSlug
+    ? districts.find((d) => d.slug === districtSlug)
+    : undefined;
 
   const statsQuery = useQuery({ queryKey: ['clinic-scan-stats'], queryFn: fetchScanStats });
   // Expose refetcher to page root so commit handler can refresh stats after upsert.
-  props.statsRefetcher.current = () => { void statsQuery.refetch(); };
+  props.statsRefetcher.current = () => {
+    void statsQuery.refetch();
+  };
 
   const openPreview = useScanPreview((s) => s.openPreview);
 
@@ -460,7 +524,9 @@ function SingleDistrictTab(props: SharedScanOpts & {
     onError: (err: unknown) => {
       setLastResult({
         status: 'error',
-        scanned: 0, new: 0, updated: 0,
+        scanned: 0,
+        new: 0,
+        updated: 0,
         errors: [err instanceof Error ? err.message : String(err)],
       });
     },
@@ -499,12 +565,17 @@ function SingleDistrictTab(props: SharedScanOpts & {
           <label className="text-sm font-medium block mb-1">İl</label>
           <select
             value={provinceSlug}
-            onChange={(e) => { setProvinceSlug(e.target.value); setDistrictSlug(''); }}
+            onChange={(e) => {
+              setProvinceSlug(e.target.value);
+              setDistrictSlug('');
+            }}
             className="w-full h-11 rounded-lg border border-border bg-background px-3"
           >
             <option value="">İl seç…</option>
             {provinces.map((p) => (
-              <option key={p.slug} value={p.slug}>{p.ad} ({p.bolge})</option>
+              <option key={p.slug} value={p.slug}>
+                {p.ad} ({p.bolge})
+              </option>
             ))}
           </select>
         </div>
@@ -519,7 +590,9 @@ function SingleDistrictTab(props: SharedScanOpts & {
             >
               <option value="">Tüm il (merkez)</option>
               {districts.map((d) => (
-                <option key={d.slug} value={d.slug}>{d.ad}</option>
+                <option key={d.slug} value={d.slug}>
+                  {d.ad}
+                </option>
               ))}
             </select>
           </div>
@@ -535,26 +608,40 @@ function SingleDistrictTab(props: SharedScanOpts & {
             <span className="inline-flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" /> Taranıyor…
             </span>
-          ) : 'Tarama Başlat'}
+          ) : (
+            'Tarama Başlat'
+          )}
         </button>
       </div>
 
       {lastResult && (
-        <div className={`rounded-xl border p-4 ${lastResult.status === 'ok' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
+        <div
+          className={`rounded-xl border p-4 ${lastResult.status === 'ok' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}
+        >
           {lastResult.status === 'ok' ? (
             <div className="flex items-start gap-2">
               <CheckCircle2 className="h-5 w-5 text-green-700 mt-0.5" />
               <div className="text-sm">
                 <strong>Tarama tamam</strong>
                 <ul className="mt-1 space-y-0.5">
-                  <li>Toplam: <strong>{lastResult.scanned}</strong> klinik bulundu</li>
-                  <li>Yeni: <strong className="text-green-700">{lastResult.new}</strong></li>
-                  <li>Güncellendi: <strong>{lastResult.updated}</strong></li>
+                  <li>
+                    Toplam: <strong>{lastResult.scanned}</strong> klinik bulundu
+                  </li>
+                  <li>
+                    Yeni: <strong className="text-green-700">{lastResult.new}</strong>
+                  </li>
+                  <li>
+                    Güncellendi: <strong>{lastResult.updated}</strong>
+                  </li>
                   {typeof lastResult.google_count === 'number' && (
-                    <li>Google: <strong>{lastResult.google_count}</strong></li>
+                    <li>
+                      Google: <strong>{lastResult.google_count}</strong>
+                    </li>
                   )}
                   {typeof lastResult.osm_count === 'number' && (
-                    <li>OSM: <strong>{lastResult.osm_count}</strong></li>
+                    <li>
+                      OSM: <strong>{lastResult.osm_count}</strong>
+                    </li>
                   )}
                 </ul>
                 {typeof lastResult.filtered_out === 'number' && lastResult.filtered_out > 0 && (
@@ -562,7 +649,11 @@ function SingleDistrictTab(props: SharedScanOpts & {
                     <strong>{lastResult.filtered_out}</strong> kayıt alakasız kategoride filtrelendi
                     {lastResult.filtered_reasons && lastResult.filtered_reasons.length > 0 && (
                       <span className="block text-xs text-muted-foreground mt-1">
-                        Örnekler: {lastResult.filtered_reasons.slice(0, 3).map((r) => r.name).join(', ')}
+                        Örnekler:{' '}
+                        {lastResult.filtered_reasons
+                          .slice(0, 3)
+                          .map((r) => r.name)
+                          .join(', ')}
                       </span>
                     )}
                   </p>
@@ -602,7 +693,9 @@ function SingleDistrictTab(props: SharedScanOpts & {
                 <tr
                   key={`${row.province}|${row.district ?? '-'}`}
                   className="border-t border-border cursor-pointer hover:bg-muted/50"
-                  onClick={() => props.onDrillDown?.({ province: row.province, district: row.district })}
+                  onClick={() =>
+                    props.onDrillDown?.({ province: row.province, district: row.district })
+                  }
                 >
                   <td className="p-2">{row.province}</td>
                   <td className="p-2">{row.district ?? '—'}</td>
@@ -613,7 +706,11 @@ function SingleDistrictTab(props: SharedScanOpts & {
                 </tr>
               ))}
               {(!statsQuery.data || statsQuery.data.length === 0) && (
-                <tr><td colSpan={4} className="p-4 text-center text-muted-foreground">Henüz tarama yok</td></tr>
+                <tr>
+                  <td colSpan={4} className="p-4 text-center text-muted-foreground">
+                    Henüz tarama yok
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
@@ -628,8 +725,12 @@ function WholeProvinceTab(props: SharedScanOpts & { onJobCreated: () => void }) 
   const [message, setMessage] = useState<string | null>(null);
 
   const provinces = getProvinces();
-  const selectedProvince = provinceSlug ? provinces.find((p) => p.slug === provinceSlug) : undefined;
-  const districtCount = selectedProvince ? getDistrictsByProvince(selectedProvince.plaka).length : 0;
+  const selectedProvince = provinceSlug
+    ? provinces.find((p) => p.slug === provinceSlug)
+    : undefined;
+  const districtCount = selectedProvince
+    ? getDistrictsByProvince(selectedProvince.plaka).length
+    : 0;
 
   const createJob = useMutation({
     mutationFn: createBatchJob,
@@ -642,7 +743,8 @@ function WholeProvinceTab(props: SharedScanOpts & { onJobCreated: () => void }) 
     },
   });
 
-  const canStart = !!selectedProvince && districtCount > 0 && props.selectedTypes.size > 0 && !createJob.isPending;
+  const canStart =
+    !!selectedProvince && districtCount > 0 && props.selectedTypes.size > 0 && !createJob.isPending;
 
   return (
     <div className="space-y-4">
@@ -651,12 +753,17 @@ function WholeProvinceTab(props: SharedScanOpts & { onJobCreated: () => void }) 
           <label className="text-sm font-medium block mb-1">İl</label>
           <select
             value={provinceSlug}
-            onChange={(e) => { setProvinceSlug(e.target.value); setMessage(null); }}
+            onChange={(e) => {
+              setProvinceSlug(e.target.value);
+              setMessage(null);
+            }}
             className="w-full h-11 rounded-lg border border-border bg-background px-3"
           >
             <option value="">İl seç…</option>
             {provinces.map((p) => (
-              <option key={p.slug} value={p.slug}>{p.ad} ({p.bolge})</option>
+              <option key={p.slug} value={p.slug}>
+                {p.ad} ({p.bolge})
+              </option>
             ))}
           </select>
           {selectedProvince && (
@@ -688,7 +795,9 @@ function WholeProvinceTab(props: SharedScanOpts & { onJobCreated: () => void }) 
             <span className="inline-flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" /> Job oluşturuluyor…
             </span>
-          ) : `Bu il'in tüm ilçelerini tara`}
+          ) : (
+            `Bu il'in tüm ilçelerini tara`
+          )}
         </button>
       </div>
 
@@ -710,11 +819,11 @@ function RegionTab(props: SharedScanOpts & { onJobCreated: () => void }) {
     if (!region) return 0;
     return provinces.filter((p) => {
       const map: Record<string, RegionSlug> = {
-        'Marmara': 'marmara',
-        'Ege': 'ege',
-        'Akdeniz': 'akdeniz',
+        Marmara: 'marmara',
+        Ege: 'ege',
+        Akdeniz: 'akdeniz',
         'İç Anadolu': 'ic_anadolu',
-        'Karadeniz': 'karadeniz',
+        Karadeniz: 'karadeniz',
         'Doğu Anadolu': 'dogu_anadolu',
         'Güneydoğu Anadolu': 'guneydogu',
       };
@@ -742,12 +851,17 @@ function RegionTab(props: SharedScanOpts & { onJobCreated: () => void }) {
           <label className="text-sm font-medium block mb-1">Bölge</label>
           <select
             value={region}
-            onChange={(e) => { setRegion(e.target.value as RegionSlug); setMessage(null); }}
+            onChange={(e) => {
+              setRegion(e.target.value as RegionSlug);
+              setMessage(null);
+            }}
             className="w-full h-11 rounded-lg border border-border bg-background px-3"
           >
             <option value="">Bölge seç…</option>
             {REGION_OPTIONS.map((r) => (
-              <option key={r.key} value={r.key}>{r.label}</option>
+              <option key={r.key} value={r.key}>
+                {r.label}
+              </option>
             ))}
           </select>
           {region && (
@@ -777,12 +891,16 @@ function RegionTab(props: SharedScanOpts & { onJobCreated: () => void }) {
             <span className="inline-flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" /> Job oluşturuluyor…
             </span>
-          ) : 'Bu bölgedeki tüm illeri tara'}
+          ) : (
+            'Bu bölgedeki tüm illeri tara'
+          )}
         </button>
       </div>
 
       {message && (
-        <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm">{message}</div>
+        <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm">
+          {message}
+        </div>
       )}
     </div>
   );
@@ -815,8 +933,12 @@ function WholeCountryTab(props: SharedScanOpts & { onJobCreated: () => void }) {
             <p className="font-semibold">UYARI — Tüm Türkiye Taraması</p>
             <ul className="list-disc ml-5 space-y-0.5">
               <li>~973 ilçe işlenecek (mevcut veride ~611 ilçe — bazı iller eksik).</li>
-              <li>Her ilçe ortalama 3-5 saniye + 3 sn rate delay → toplam <strong>1-2 gün</strong>.</li>
-              <li>Google Places API maliyeti: ilçe başı ~$0.10 → toplam <strong>~$60-100</strong>.</li>
+              <li>
+                Her ilçe ortalama 3-5 saniye + 3 sn rate delay → toplam <strong>1-2 gün</strong>.
+              </li>
+              <li>
+                Google Places API maliyeti: ilçe başı ~$0.10 → toplam <strong>~$60-100</strong>.
+              </li>
               <li>OSM kaynağı seçerseniz Google maliyeti olmaz.</li>
               <li>Job'u istediğiniz zaman duraklatıp devam ettirebilirsiniz.</li>
             </ul>
@@ -856,12 +978,16 @@ function WholeCountryTab(props: SharedScanOpts & { onJobCreated: () => void }) {
             <span className="inline-flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" /> Job oluşturuluyor…
             </span>
-          ) : 'TÜRKIYE TARAMASINI BAŞLAT'}
+          ) : (
+            'TÜRKIYE TARAMASINI BAŞLAT'
+          )}
         </button>
       </div>
 
       {message && (
-        <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm">{message}</div>
+        <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm">
+          {message}
+        </div>
       )}
     </div>
   );
@@ -905,11 +1031,16 @@ export default function ClinicScanPage() {
   };
 
   const sharedOpts: SharedScanOpts = {
-    radiusKm, setRadiusKm,
-    selectedTypes, setSelectedTypes,
-    source, setSource,
-    intensity, setIntensity,
-    scanMode, setScanMode: setScanModeSafe,
+    radiusKm,
+    setRadiusKm,
+    selectedTypes,
+    setSelectedTypes,
+    source,
+    setSource,
+    intensity,
+    setIntensity,
+    scanMode,
+    setScanMode: setScanModeSafe,
   };
 
   // SingleDistrictTab statsQuery'sine commit sonrası refresh atmak için
@@ -918,11 +1049,15 @@ export default function ClinicScanPage() {
   const closePreview = useScanPreview((s) => s.close);
 
   // Mevcut Veritabanı satırına tıklayınca açılan ilçe-detay dialog'u.
-  const [drillDown, setDrillDown] = useState<{ province: string; district: string | null } | null>(null);
+  const [drillDown, setDrillDown] = useState<{ province: string; district: string | null } | null>(
+    null,
+  );
 
   // Manuel klinik ekleme modal'ı.
   const [manualOpen, setManualOpen] = useState(false);
-  const [manualSeed, setManualSeed] = useState<{ provinceSlug?: string; districtSlug?: string }>({});
+  const [manualSeed, setManualSeed] = useState<{ provinceSlug?: string; districtSlug?: string }>(
+    {},
+  );
 
   // Düzenleme modal'ı (ScanPreview veya DistrictDialog'dan tetiklenir).
   const [editClinic, setEditClinic] = useState<EditClinicTarget | null>(null);
@@ -1044,7 +1179,9 @@ export default function ClinicScanPage() {
           onDrillDown={(row) => setDrillDown(row)}
         />
       )}
-      {tab === 'province' && <WholeProvinceTab {...sharedOpts} onJobCreated={() => setTab('jobs')} />}
+      {tab === 'province' && (
+        <WholeProvinceTab {...sharedOpts} onJobCreated={() => setTab('jobs')} />
+      )}
       {tab === 'region' && <RegionTab {...sharedOpts} onJobCreated={() => setTab('jobs')} />}
       {tab === 'country' && <WholeCountryTab {...sharedOpts} onJobCreated={() => setTab('jobs')} />}
       {tab === 'jobs' && <ScanJobsPage embedded />}

@@ -32,7 +32,9 @@ export const APPROVAL_THRESHOLDS: Record<string, number> = {
  *   needsApproval(999999, 'ADMIN') // false (limit yok)
  */
 export function needsApproval(totalAmount: number, userRole: string): boolean {
-  const role = String(userRole ?? '').trim().toUpperCase();
+  const role = String(userRole ?? '')
+    .trim()
+    .toUpperCase();
   const limit = APPROVAL_THRESHOLDS[role] ?? 0;
   return totalAmount > limit;
 }
@@ -45,7 +47,9 @@ export function needsApproval(totalAmount: number, userRole: string): boolean {
  * ADMIN ve diğer  → null (artık üst yok)
  */
 export function nextApproverRole(currentRole: string): 'MANAGER' | 'ADMIN' | null {
-  const role = String(currentRole ?? '').trim().toUpperCase();
+  const role = String(currentRole ?? '')
+    .trim()
+    .toUpperCase();
   if (role === 'USER' || role === 'REP' || role === 'SALES_REP') return 'MANAGER';
   if (role === 'MANAGER') return 'ADMIN';
   return null;
@@ -56,7 +60,9 @@ export function nextApproverRole(currentRole: string): 'MANAGER' | 'ADMIN' | nul
  * Rol tanımlı değilse 0 döner.
  */
 export function thresholdFor(userRole: string): number {
-  const role = String(userRole ?? '').trim().toUpperCase();
+  const role = String(userRole ?? '')
+    .trim()
+    .toUpperCase();
   const limit = APPROVAL_THRESHOLDS[role];
   if (limit === undefined) return 0;
   if (limit === Number.POSITIVE_INFINITY) return Number.POSITIVE_INFINITY;

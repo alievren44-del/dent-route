@@ -46,11 +46,7 @@ interface RoutePlannerState {
   // Actions
   setClinics: (clinics: RouteClinic[]) => void;
   setStart: (start: { lat: number; lng: number } | null) => void;
-  setMeta: (meta: {
-    provinceSlug: string;
-    districtSlug: string | null;
-    repName: string;
-  }) => void;
+  setMeta: (meta: { provinceSlug: string; districtSlug: string | null; repName: string }) => void;
   clear: () => void;
 }
 

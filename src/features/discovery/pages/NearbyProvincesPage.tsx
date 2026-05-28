@@ -15,10 +15,7 @@ import { Locate, Loader2, AlertCircle } from 'lucide-react';
 
 import { useGeolocation } from '@features/map/hooks/useGeolocation';
 import { getSupabaseClient } from '@lib/supabase';
-import {
-  getNearbyProvinces,
-  type NearbyProvince,
-} from '@features/discovery/lib/nearby-provinces';
+import { getNearbyProvinces, type NearbyProvince } from '@features/discovery/lib/nearby-provinces';
 import { ProvinceCard } from '@features/discovery/components/ProvinceCard';
 
 const MAX_KM = 50;
@@ -88,7 +85,9 @@ export default function NearbyProvincesPage() {
           <AlertCircle className="h-5 w-5 shrink-0 text-destructive" />
           <div>
             <p className="text-sm font-medium text-destructive">Konum alınamadı</p>
-            <p className="text-xs text-muted-foreground">{geoErr ?? 'Tarayıcı konum izni yok veya GPS kapalı.'}</p>
+            <p className="text-xs text-muted-foreground">
+              {geoErr ?? 'Tarayıcı konum izni yok veya GPS kapalı.'}
+            </p>
           </div>
         </div>
       ) : provinces.length === 0 ? (

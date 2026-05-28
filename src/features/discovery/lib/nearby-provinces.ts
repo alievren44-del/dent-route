@@ -41,11 +41,7 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
  * @param maxKm — maksimum mesafe (km). Default 50.
  * @returns {NearbyProvince[]} mesafe ile zenginleştirilmiş ve sıralı.
  */
-export function getNearbyProvinces(
-  lat: number,
-  lng: number,
-  maxKm = 50,
-): NearbyProvince[] {
+export function getNearbyProvinces(lat: number, lng: number, maxKm = 50): NearbyProvince[] {
   const out: NearbyProvince[] = [];
   for (const p of PROVINCES) {
     const d = haversineKm(lat, lng, p.lat, p.lng);

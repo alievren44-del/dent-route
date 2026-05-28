@@ -140,9 +140,7 @@ function SamplesPage(): JSX.Element {
               type="button"
               onClick={() => setActiveTab(t.key)}
               className={`px-4 py-3 min-h-tap-min text-sm font-medium whitespace-nowrap ${
-                isActive
-                  ? 'text-primary border-b-2 border-primary'
-                  : 'text-muted-foreground'
+                isActive ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground'
               }`}
             >
               {t.label}

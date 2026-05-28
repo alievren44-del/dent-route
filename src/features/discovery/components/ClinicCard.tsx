@@ -141,8 +141,8 @@ function ClinicCard({
           </button>
         )}
 
-        {showAdd && (
-          isInBasket ? (
+        {showAdd &&
+          (isInBasket ? (
             <button
               type="button"
               disabled
@@ -161,8 +161,7 @@ function ClinicCard({
               <Plus className="h-4 w-4" aria-hidden="true" />
               Ekle
             </button>
-          )
-        )}
+          ))}
       </div>
 
       {/* Detail row */}

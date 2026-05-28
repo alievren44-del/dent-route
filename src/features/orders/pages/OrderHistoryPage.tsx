@@ -18,14 +18,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
-import {
-  ArrowLeft,
-  Calendar,
-  FileSpreadsheet,
-  Filter,
-  Search,
-  X,
-} from 'lucide-react';
+import { ArrowLeft, Calendar, FileSpreadsheet, Filter, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { getSupabaseClient } from '@lib/supabase';
@@ -197,10 +190,12 @@ function OrderHistoryPage(): JSX.Element {
         .in('role', ['REP', 'SALES_REP', 'ADMIN', 'MANAGER'])
         .order('ad_soyad');
       if (error) return [];
-      return (data ?? []).map((r: { id: string; ad_soyad: string | null; email: string | null }) => ({
-        id: r.id,
-        label: r.ad_soyad ?? r.email ?? r.id.slice(0, 8),
-      }));
+      return (data ?? []).map(
+        (r: { id: string; ad_soyad: string | null; email: string | null }) => ({
+          id: r.id,
+          label: r.ad_soyad ?? r.email ?? r.id.slice(0, 8),
+        }),
+      );
     },
   });
 
@@ -222,8 +217,7 @@ function OrderHistoryPage(): JSX.Element {
     queryKey,
     queryFn: async (): Promise<{ rows: OrderHistoryRow[]; total: number }> => {
       const supabase = getSupabaseClient();
-      const baseSelect =
-        `id, order_number, user_id, sales_rep_id, status, total, total_amount,
+      const baseSelect = `id, order_number, user_id, sales_rep_id, status, total, total_amount,
          shipping_status, tracking_number, notes, created_at,
          customer:profiles!orders_user_id_fkey (id, ad_soyad, klinik_adi, email),
          rep:profiles!orders_sales_rep_id_fkey (id, ad_soyad, email)`;
@@ -460,14 +454,10 @@ function OrderHistoryPage(): JSX.Element {
           </div>
         )}
 
-        {isError && (
-          <p className="text-sm text-red-600 py-6 text-center">Liste yüklenemedi.</p>
-        )}
+        {isError && <p className="text-sm text-red-600 py-6 text-center">Liste yüklenemedi.</p>}
 
         {!isLoading && !isError && rows.length === 0 && (
-          <p className="text-sm text-muted-foreground py-12 text-center">
-            Sipariş bulunamadı.
-          </p>
+          <p className="text-sm text-muted-foreground py-12 text-center">Sipariş bulunamadı.</p>
         )}
 
         {!isLoading && !isError && rows.length > 0 && (
@@ -534,9 +524,7 @@ function OrderHistoryPage(): JSX.Element {
                 <h2 className="text-base font-semibold text-foreground">
                   {detailFor.order_number ?? `#${detailFor.id.slice(0, 8)}`}
                 </h2>
-                <p className="text-xs text-muted-foreground">
-                  {formatDate(detailFor.created_at)}
-                </p>
+                <p className="text-xs text-muted-foreground">{formatDate(detailFor.created_at)}</p>
               </div>
               <button
                 type="button"
@@ -557,9 +545,7 @@ function OrderHistoryPage(): JSX.Element {
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Temsilci</dt>
-                <dd className="text-right text-foreground">
-                  {repName(detailFor.rep ?? null)}
-                </dd>
+                <dd className="text-right text-foreground">{repName(detailFor.rep ?? null)}</dd>
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Tutar</dt>
@@ -588,9 +574,7 @@ function OrderHistoryPage(): JSX.Element {
               {detailFor.notes && (
                 <div>
                   <dt className="text-muted-foreground text-xs mb-0.5">Notlar</dt>
-                  <dd className="text-xs whitespace-pre-wrap text-foreground">
-                    {detailFor.notes}
-                  </dd>
+                  <dd className="text-xs whitespace-pre-wrap text-foreground">{detailFor.notes}</dd>
                 </div>
               )}
             </dl>

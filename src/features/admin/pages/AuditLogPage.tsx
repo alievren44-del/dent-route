@@ -56,9 +56,7 @@ async function fetchAuditLogs(input: {
   const rows = (data ?? []) as AuditLogRow[];
 
   // Actor adlarını join et — profiles.ad_soyad / email
-  const actorIds = Array.from(
-    new Set(rows.map((r) => r.actor_id).filter((x): x is string => !!x)),
-  );
+  const actorIds = Array.from(new Set(rows.map((r) => r.actor_id).filter((x): x is string => !!x)));
   const actorMap = new Map<string, { ad_soyad: string | null; email: string | null }>();
   if (actorIds.length > 0) {
     const { data: profs, error: profErr } = await supabase
@@ -140,9 +138,7 @@ export default function AuditLogPage(): JSX.Element {
               Denetim İzi
             </h1>
             <p className="text-xs text-slate-500">
-              {logsQuery.isLoading
-                ? 'Yükleniyor…'
-                : `${rows.length} kayıt gösteriliyor`}
+              {logsQuery.isLoading ? 'Yükleniyor…' : `${rows.length} kayıt gösteriliyor`}
             </p>
           </div>
           <button
@@ -150,9 +146,7 @@ export default function AuditLogPage(): JSX.Element {
             onClick={() => logsQuery.refetch()}
             className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
           >
-            <RefreshCw
-              className={`h-4 w-4 ${logsQuery.isFetching ? 'animate-spin' : ''}`}
-            />
+            <RefreshCw className={`h-4 w-4 ${logsQuery.isFetching ? 'animate-spin' : ''}`} />
             Yenile
           </button>
         </div>
@@ -205,8 +199,7 @@ export default function AuditLogPage(): JSX.Element {
       <main className="flex-1 px-2 py-3 sm:px-4">
         {logsQuery.isError && (
           <div className="mb-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-            Denetim izi yüklenemedi:{' '}
-            {(logsQuery.error as Error | null)?.message ?? 'bilinmiyor'}
+            Denetim izi yüklenemedi: {(logsQuery.error as Error | null)?.message ?? 'bilinmiyor'}
           </div>
         )}
 
@@ -250,10 +243,7 @@ export default function AuditLogPage(): JSX.Element {
               ))}
               {rows.length === 0 && !logsQuery.isLoading && (
                 <tr>
-                  <td
-                    colSpan={5}
-                    className="px-3 py-8 text-center text-sm text-slate-500"
-                  >
+                  <td colSpan={5} className="px-3 py-8 text-center text-sm text-slate-500">
                     Denetim kaydı yok.
                   </td>
                 </tr>

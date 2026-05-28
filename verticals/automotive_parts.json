@@ -67,13 +67,7 @@
         "key": "vehicle_types",
         "label": "Hizmet Verilen Araç Tipleri",
         "type": "multiselect",
-        "options": [
-          "Binek",
-          "Hafif Ticari",
-          "Ağır Vasıta / Kamyon",
-          "Motosiklet",
-          "Otobüs"
-        ]
+        "options": ["Binek", "Hafif Ticari", "Ağır Vasıta / Kamyon", "Motosiklet", "Otobüs"]
       },
       {
         "key": "is_insurance_contracted",

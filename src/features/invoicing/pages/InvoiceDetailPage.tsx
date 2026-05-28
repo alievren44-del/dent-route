@@ -209,14 +209,14 @@ function InvoiceDetailPage(): JSX.Element {
   }
 
   function handleCancel(): void {
-    if (!confirm('Faturayı iptal etmek istediğinize emin misiniz? Bu işlem geri alınamaz.'))
-      return;
+    if (!confirm('Faturayı iptal etmek istediğinize emin misiniz? Bu işlem geri alınamaz.')) return;
     cancelMutation.mutate();
   }
 
   if (!id) return <div className="p-6 text-center text-muted-foreground">Fatura ID yok.</div>;
   if (isLoading) return <div className="p-6 text-center text-muted-foreground">Yükleniyor…</div>;
-  if (!invoice) return <div className="p-6 text-center text-muted-foreground">Fatura bulunamadı.</div>;
+  if (!invoice)
+    return <div className="p-6 text-center text-muted-foreground">Fatura bulunamadı.</div>;
 
   const canEdit = invoice.durum === 'taslak';
   const canCancel = invoice.durum !== 'iptal' && invoice.durum !== 'odendi';
@@ -397,8 +397,7 @@ function Row({
   bold?: boolean;
   emphasis?: 'red' | 'green';
 }): JSX.Element {
-  const color =
-    emphasis === 'red' ? 'text-red-600' : emphasis === 'green' ? 'text-green-600' : '';
+  const color = emphasis === 'red' ? 'text-red-600' : emphasis === 'green' ? 'text-green-600' : '';
   return (
     <div className="flex items-center justify-between text-sm">
       <span className={`${bold ? 'font-semibold' : 'text-muted-foreground'}`}>{label}</span>

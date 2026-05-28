@@ -206,7 +206,8 @@ function CariDetailPage(): JSX.Element {
 
   const kredi = Number(cari.kredi_limiti ?? 0);
   const kullanim = kredi > 0 ? Math.max(0, Math.min(100, (bakiye / kredi) * 100)) : 0;
-  const progressColor = kullanim >= 90 ? 'bg-red-500' : kullanim >= 70 ? 'bg-amber-500' : 'bg-green-500';
+  const progressColor =
+    kullanim >= 90 ? 'bg-red-500' : kullanim >= 70 ? 'bg-amber-500' : 'bg-green-500';
 
   return (
     <div className="flex flex-col min-h-full pb-24">
@@ -270,15 +271,13 @@ function CariDetailPage(): JSX.Element {
 
       {/* Tabs */}
       <div className="flex overflow-x-auto border-b border-border bg-background sticky top-[60px] z-[5]">
-        {(
-          [
-            { key: 'faturalar' as const, label: 'Faturalar', icon: FileText },
-            { key: 'odemeler' as const, label: 'Ödemeler', icon: Wallet },
-            { key: 'cek_senet' as const, label: 'Çek/Senet', icon: Receipt },
-            { key: 'ekstre' as const, label: 'Ekstre', icon: Download },
-            { key: 'bilgiler' as const, label: 'Bilgiler', icon: Info },
-          ]
-        ).map((t) => {
+        {[
+          { key: 'faturalar' as const, label: 'Faturalar', icon: FileText },
+          { key: 'odemeler' as const, label: 'Ödemeler', icon: Wallet },
+          { key: 'cek_senet' as const, label: 'Çek/Senet', icon: Receipt },
+          { key: 'ekstre' as const, label: 'Ekstre', icon: Download },
+          { key: 'bilgiler' as const, label: 'Bilgiler', icon: Info },
+        ].map((t) => {
           const Icon = t.icon;
           const active = activeTab === t.key;
           return (
@@ -287,9 +286,7 @@ function CariDetailPage(): JSX.Element {
               type="button"
               onClick={() => setActiveTab(t.key)}
               className={`flex items-center gap-1.5 px-3 py-3 min-h-tap-min text-xs font-medium whitespace-nowrap ${
-                active
-                  ? 'text-primary border-b-2 border-primary'
-                  : 'text-muted-foreground'
+                active ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground'
               }`}
             >
               <Icon className="h-3.5 w-3.5" />
@@ -300,9 +297,7 @@ function CariDetailPage(): JSX.Element {
       </div>
 
       <div className="flex-1 px-4 py-3">
-        {activeTab === 'faturalar' && (
-          <FaturalarTab cariId={cari.id} faturalar={faturalar ?? []} />
-        )}
+        {activeTab === 'faturalar' && <FaturalarTab cariId={cari.id} faturalar={faturalar ?? []} />}
         {activeTab === 'odemeler' && (
           <OdemelerTab cariId={cari.id} odemeler={odemeler ?? []} faturalar={faturalar ?? []} />
         )}
@@ -520,7 +515,7 @@ function EkstreTab({
       items.push({
         tarih: o.tarih,
         tip: YONTEM_LABELS[o.yontem] ?? o.yontem,
-        aciklama: o.dekont_no ?? (o.aciklama ?? '—'),
+        aciklama: o.dekont_no ?? o.aciklama ?? '—',
         borc: 0,
         alacak: Number(o.tutar),
       });
@@ -606,9 +601,7 @@ function EkstreTab({
               <tr key={i} className="border-t border-border">
                 <td className="px-2 py-1.5">{fmtDate(r.tarih)}</td>
                 <td className="px-2 py-1.5">{r.tip}</td>
-                <td className="px-2 py-1.5 text-right">
-                  {r.borc > 0 ? formatTRY(r.borc) : '—'}
-                </td>
+                <td className="px-2 py-1.5 text-right">{r.borc > 0 ? formatTRY(r.borc) : '—'}</td>
                 <td className="px-2 py-1.5 text-right">
                   {r.alacak > 0 ? formatTRY(r.alacak) : '—'}
                 </td>
@@ -721,9 +714,7 @@ function BilgilerTab({ cari }: { cari: CariFull }): JSX.Element {
             <input
               type="number"
               value={form.odeme_vadesi_gun}
-              onChange={(e) =>
-                setForm({ ...form, odeme_vadesi_gun: Number(e.target.value) || 0 })
-              }
+              onChange={(e) => setForm({ ...form, odeme_vadesi_gun: Number(e.target.value) || 0 })}
               className="w-full px-3 py-2 rounded-lg border border-border bg-card text-sm"
             />
           ) : (
@@ -736,9 +727,7 @@ function BilgilerTab({ cari }: { cari: CariFull }): JSX.Element {
             <input
               type="number"
               value={form.kredi_limiti}
-              onChange={(e) =>
-                setForm({ ...form, kredi_limiti: Number(e.target.value) || 0 })
-              }
+              onChange={(e) => setForm({ ...form, kredi_limiti: Number(e.target.value) || 0 })}
               className="w-full px-3 py-2 rounded-lg border border-border bg-card text-sm"
             />
           ) : (

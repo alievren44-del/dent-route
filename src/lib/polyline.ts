@@ -7,10 +7,7 @@
  * Lat/lng swap'i için `.map(([lng, lat]) => [lat, lng])` kullan.
  */
 
-export function decodePolyline(
-  str: string,
-  precision = 5,
-): Array<[number, number]> {
+export function decodePolyline(str: string, precision = 5): Array<[number, number]> {
   const factor = Math.pow(10, precision);
   let index = 0;
   let lat = 0;

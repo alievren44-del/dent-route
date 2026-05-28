@@ -13,10 +13,7 @@ export interface UsageStat {
   remaining: number;
 }
 
-export async function getDailyUsage(
-  endpoint: string,
-  defaultLimit = 5,
-): Promise<UsageStat> {
+export async function getDailyUsage(endpoint: string, defaultLimit = 5): Promise<UsageStat> {
   const supabase = getSupabaseClient();
   const { data: userData } = await supabase.auth.getUser();
   const userId = userData?.user?.id;

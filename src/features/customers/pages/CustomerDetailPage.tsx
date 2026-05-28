@@ -10,14 +10,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Phone,
-  MessageCircle,
-  ShoppingCart,
-  ArrowLeft,
-  CalendarPlus,
-  Receipt,
-} from 'lucide-react';
+import { Phone, MessageCircle, ShoppingCart, ArrowLeft, CalendarPlus, Receipt } from 'lucide-react';
 import { getSupabaseClient } from '@lib/supabase';
 
 import CariBalanceCard from '@features/invoicing/components/CariBalanceCard';
@@ -106,9 +99,7 @@ function CustomerDetailPage(): JSX.Element {
   const customerType = customerData?.role ?? '';
 
   if (!id) {
-    return (
-      <div className="p-6 text-center text-muted-foreground">Müşteri ID bulunamadı.</div>
-    );
+    return <div className="p-6 text-center text-muted-foreground">Müşteri ID bulunamadı.</div>;
   }
 
   return (
@@ -197,13 +188,11 @@ function CustomerDetailPage(): JSX.Element {
 
       {/* Tabs */}
       <div className="flex border-b border-border bg-background sticky top-[60px] z-[5]">
-        {(
-          [
-            { key: 'overview' as const, label: 'Özet' },
-            { key: 'visits' as const, label: 'Ziyaretler' },
-            { key: 'samples' as const, label: 'Numuneler' },
-          ]
-        ).map((t) => {
+        {[
+          { key: 'overview' as const, label: 'Özet' },
+          { key: 'visits' as const, label: 'Ziyaretler' },
+          { key: 'samples' as const, label: 'Numuneler' },
+        ].map((t) => {
           const isActive = activeTab === t.key;
           return (
             <button
@@ -211,9 +200,7 @@ function CustomerDetailPage(): JSX.Element {
               type="button"
               onClick={() => setActiveTab(t.key)}
               className={`flex-1 px-3 py-3 min-h-tap-min text-sm font-medium ${
-                isActive
-                  ? 'text-primary border-b-2 border-primary'
-                  : 'text-muted-foreground'
+                isActive ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground'
               }`}
             >
               {t.label}
@@ -228,19 +215,13 @@ function CustomerDetailPage(): JSX.Element {
           <>
             <RecentOrdersCard customerId={id} limit={5} />
             <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
-              <h3 className="text-sm font-semibold text-foreground mb-3">
-                Ziyaret Geçmişi
-              </h3>
+              <h3 className="text-sm font-semibold text-foreground mb-3">Ziyaret Geçmişi</h3>
               <CustomerVisitTimeline customerId={id} hideHeader limit={5} />
             </section>
           </>
         )}
-        {activeTab === 'visits' && (
-          <CustomerVisitTimeline customerId={id} limit={20} />
-        )}
-        {activeTab === 'samples' && (
-          <SamplesTab loading={samplesLoading} samples={samples ?? []} />
-        )}
+        {activeTab === 'visits' && <CustomerVisitTimeline customerId={id} limit={20} />}
+        {activeTab === 'samples' && <SamplesTab loading={samplesLoading} samples={samples ?? []} />}
       </div>
 
       {/* Sticky bottom CTA */}
@@ -257,13 +238,7 @@ function CustomerDetailPage(): JSX.Element {
   );
 }
 
-function SamplesTab({
-  loading,
-  samples,
-}: {
-  loading: boolean;
-  samples: SampleRow[];
-}): JSX.Element {
+function SamplesTab({ loading, samples }: { loading: boolean; samples: SampleRow[] }): JSX.Element {
   if (loading) {
     return <p className="text-sm text-muted-foreground py-6 text-center">Yükleniyor…</p>;
   }
@@ -278,13 +253,9 @@ function SamplesTab({
         return (
           <div key={s.id} className="p-3 rounded-lg border border-border bg-card">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-medium text-foreground">
-                {formatDate(s.given_at)}
-              </p>
+              <p className="text-sm font-medium text-foreground">{formatDate(s.given_at)}</p>
               {status && (
-                <span
-                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${style}`}
-                >
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${style}`}>
                   {status}
                 </span>
               )}
@@ -294,9 +265,7 @@ function SamplesTab({
                 Takip: {formatDate(s.follow_up_at)}
               </p>
             )}
-            {s.notes && (
-              <p className="text-xs text-foreground mt-1 line-clamp-2">{s.notes}</p>
-            )}
+            {s.notes && <p className="text-xs text-foreground mt-1 line-clamp-2">{s.notes}</p>}
           </div>
         );
       })}

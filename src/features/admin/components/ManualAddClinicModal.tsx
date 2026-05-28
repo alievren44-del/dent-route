@@ -20,14 +20,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { toast } from 'sonner';
-import {
-  Building2,
-  MapPin,
-  Phone,
-  RotateCcw,
-  Sparkles,
-  X,
-} from 'lucide-react';
+import { Building2, MapPin, Phone, RotateCcw, Sparkles, X } from 'lucide-react';
 
 import { getEnv } from '@config/env';
 import { getSupabaseClient } from '@/lib/supabase';
@@ -92,12 +85,8 @@ export default function ManualAddClinicModal(props: Props): JSX.Element | null {
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
   const [neighborhood, setNeighborhood] = useState('');
-  const [provinceSlug, setProvinceSlug] = useState<string>(
-    initialProvinceSlug ?? '',
-  );
-  const [districtSlug, setDistrictSlug] = useState<string>(
-    initialDistrictSlug ?? '',
-  );
+  const [provinceSlug, setProvinceSlug] = useState<string>(initialProvinceSlug ?? '');
+  const [districtSlug, setDistrictSlug] = useState<string>(initialDistrictSlug ?? '');
   const [coords, setCoords] = useState<Coords | null>(
     typeof initialLat === 'number' && typeof initialLng === 'number'
       ? { lat: initialLat, lng: initialLng }
@@ -114,8 +103,7 @@ export default function ManualAddClinicModal(props: Props): JSX.Element | null {
     [provinces, provinceSlug],
   );
   const districts = useMemo<District[]>(
-    () =>
-      selectedProvince ? getDistrictsByProvince(selectedProvince.plaka) : [],
+    () => (selectedProvince ? getDistrictsByProvince(selectedProvince.plaka) : []),
     [selectedProvince],
   );
 
@@ -254,19 +242,14 @@ export default function ManualAddClinicModal(props: Props): JSX.Element | null {
     try {
       // İl seçiliyse adresi zenginleştir + proximity ver
       const provinceName = selectedProvince?.ad;
-      const query = provinceName
-        ? `${address.trim()}, ${provinceName}`
-        : address.trim();
+      const query = provinceName ? `${address.trim()}, ${provinceName}` : address.trim();
       const proximity: [number, number] | undefined = selectedProvince
         ? [selectedProvince.lng, selectedProvince.lat]
         : coords
           ? [coords.lng, coords.lat]
           : undefined;
 
-      const results = await mapboxGeocode(
-        query,
-        proximity ? { proximity } : {},
-      );
+      const results = await mapboxGeocode(query, proximity ? { proximity } : {});
       const top = results[0];
       if (!top) {
         toast.error('Adres bulunamadı');
@@ -368,11 +351,7 @@ export default function ManualAddClinicModal(props: Props): JSX.Element | null {
 
   if (!open) return null;
 
-  const submitDisabled =
-    saving ||
-    !name.trim() ||
-    !address.trim() ||
-    !coords;
+  const submitDisabled = saving || !name.trim() || !address.trim() || !coords;
 
   return (
     <div
@@ -389,9 +368,7 @@ export default function ManualAddClinicModal(props: Props): JSX.Element | null {
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
           <div className="flex items-center gap-2">
             <Building2 className="h-5 w-5 text-emerald-600" aria-hidden="true" />
-            <h2 className="text-base font-semibold text-slate-900">
-              Manuel Klinik Ekle
-            </h2>
+            <h2 className="text-base font-semibold text-slate-900">Manuel Klinik Ekle</h2>
           </div>
           <button
             type="button"
@@ -408,10 +385,7 @@ export default function ManualAddClinicModal(props: Props): JSX.Element | null {
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
           {/* Klinik adı */}
           <div>
-            <label
-              htmlFor="mac-name"
-              className="mb-1 block text-xs font-medium text-slate-600"
-            >
+            <label htmlFor="mac-name" className="mb-1 block text-xs font-medium text-slate-600">
               Klinik adı <span className="text-rose-500">*</span>
             </label>
             <input
@@ -427,9 +401,7 @@ export default function ManualAddClinicModal(props: Props): JSX.Element | null {
 
           {/* Tip */}
           <div>
-            <span className="mb-1 block text-xs font-medium text-slate-600">
-              Tip
-            </span>
+            <span className="mb-1 block text-xs font-medium text-slate-600">Tip</span>
             <div className="flex flex-wrap gap-2">
               {CLINIC_TYPE_OPTIONS.map((opt) => (
                 <label
@@ -456,10 +428,7 @@ export default function ManualAddClinicModal(props: Props): JSX.Element | null {
 
           {/* Adres + Çöz */}
           <div>
-            <label
-              htmlFor="mac-address"
-              className="mb-1 block text-xs font-medium text-slate-600"
-            >
+            <label htmlFor="mac-address" className="mb-1 block text-xs font-medium text-slate-600">
               Adres <span className="text-rose-500">*</span>
             </label>
             <div className="flex gap-2">
@@ -492,10 +461,7 @@ export default function ManualAddClinicModal(props: Props): JSX.Element | null {
           {/* Telefon + Mahalle */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label
-                htmlFor="mac-phone"
-                className="mb-1 block text-xs font-medium text-slate-600"
-              >
+              <label htmlFor="mac-phone" className="mb-1 block text-xs font-medium text-slate-600">
                 Telefon
               </label>
               <div className="relative">
@@ -582,17 +548,11 @@ export default function ManualAddClinicModal(props: Props): JSX.Element | null {
             <div className="mb-1 flex items-center justify-between">
               <span className="text-xs font-medium text-slate-600">Konum</span>
               {!coords && (
-                <span className="text-xs text-rose-500">
-                  Adres çöz veya haritaya tıkla
-                </span>
+                <span className="text-xs text-rose-500">Adres çöz veya haritaya tıkla</span>
               )}
             </div>
             <div className="relative overflow-hidden rounded-md border border-slate-300">
-              <div
-                ref={mapContainerRef}
-                className="w-full"
-                style={{ height: '250px' }}
-              />
+              <div ref={mapContainerRef} className="w-full" style={{ height: '250px' }} />
               <button
                 type="button"
                 onClick={handleResetCoord}

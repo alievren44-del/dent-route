@@ -4,7 +4,9 @@ import { WifiOff, CloudUpload } from 'lucide-react';
 import { listPending } from '@core/offline/syncQueue';
 
 export function OfflineBanner() {
-  const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [isOnline, setIsOnline] = useState<boolean>(
+    typeof navigator !== 'undefined' ? navigator.onLine : true,
+  );
 
   useEffect(() => {
     const onOnline = () => setIsOnline(true);
@@ -26,7 +28,9 @@ export function OfflineBanner() {
   if (isOnline && (pending ?? 0) === 0) return null;
 
   return (
-    <div className={`px-4 py-2 text-sm font-medium text-white ${isOnline ? 'bg-blue-600' : 'bg-amber-600'}`}>
+    <div
+      className={`px-4 py-2 text-sm font-medium text-white ${isOnline ? 'bg-blue-600' : 'bg-amber-600'}`}
+    >
       <div className="flex items-center justify-center gap-2">
         {isOnline ? (
           <>

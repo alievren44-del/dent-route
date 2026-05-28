@@ -4,10 +4,7 @@
  */
 
 import { useMemo } from 'react';
-import {
-  getProvinces,
-  getDistrictsByProvince,
-} from '@/data/tr-locations/geo-helpers';
+import { getProvinces, getDistrictsByProvince } from '@/data/tr-locations/geo-helpers';
 
 interface Props {
   provinceSlug: string;

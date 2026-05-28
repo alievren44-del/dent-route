@@ -159,10 +159,12 @@ function SampleListView({
       const supabase = getSupabaseClient();
       let q = supabase
         .from('saha_samples')
-        .select(`
+        .select(
+          `
           id, account_id, given_at, follow_up_at, status, converted_order_id, photo_url, notes, created_at,
           saha_sample_lines (id, product_name, qty, unit, unit_cost_tl)
-        `)
+        `,
+        )
         .order('given_at', { ascending: false });
       if (effectiveRepId) q = q.eq('rep_id', effectiveRepId);
       if (activeStatuses.length > 0) q = q.in('status', activeStatuses);
@@ -553,11 +555,7 @@ const MENU_OPTIONS: SampleStatus[] = ['denendi', 'donusturuldu', 'red', 'kayip',
 function StatusMenu({ currentStatus, onPick, onClose }: StatusMenuProps): JSX.Element {
   return (
     <>
-      <div
-        className="fixed inset-0 z-10"
-        onClick={onClose}
-        aria-hidden="true"
-      />
+      <div className="fixed inset-0 z-10" onClick={onClose} aria-hidden="true" />
       <div
         role="menu"
         className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-xl border border-border bg-card shadow-lg"

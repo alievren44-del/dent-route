@@ -16,22 +16,9 @@
 
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  useQuery,
-  useMutation,
-  useQueryClient,
-} from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import {
-  UserPlus,
-  Search,
-  Key,
-  Power,
-  MapPin,
-  X,
-  User as UserIcon,
-  Copy,
-} from 'lucide-react';
+import { UserPlus, Search, Key, Power, MapPin, X, User as UserIcon, Copy } from 'lucide-react';
 
 import { getSupabaseClient } from '@/lib/supabase';
 
@@ -113,8 +100,7 @@ export default function UsersPage(): JSX.Element {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<'ALL' | Role>('ALL');
-  const [statusFilter, setStatusFilter] =
-    useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
   const [showCreate, setShowCreate] = useState(false);
 
   const usersQuery = useQuery({
@@ -197,7 +183,8 @@ export default function UsersPage(): JSX.Element {
     },
     onSuccess: () => {
       toast.success('Şifre sıfırlama e-postası gönderildi', {
-        description: 'SMTP yapılandırılmamışsa admin manuel olarak Dashboard üzerinden işlem yapmalı.',
+        description:
+          'SMTP yapılandırılmamışsa admin manuel olarak Dashboard üzerinden işlem yapmalı.',
       });
     },
     onError: (err) => {
@@ -221,8 +208,9 @@ export default function UsersPage(): JSX.Element {
         if (statusFilter === 'INACTIVE' && active) return false;
       }
       if (q) {
-        const hay = `${u.ad_soyad ?? ''} ${u.email ?? ''} ${u.telefon ?? ''}`
-          .toLocaleLowerCase('tr');
+        const hay = `${u.ad_soyad ?? ''} ${u.email ?? ''} ${u.telefon ?? ''}`.toLocaleLowerCase(
+          'tr',
+        );
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -234,11 +222,11 @@ export default function UsersPage(): JSX.Element {
       <header className="sticky top-0 z-10 space-y-2 border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h1 className="text-xl font-semibold text-slate-900">
-              Kullanıcı Yönetimi
-            </h1>
+            <h1 className="text-xl font-semibold text-slate-900">Kullanıcı Yönetimi</h1>
             <p className="text-xs text-slate-500">
-              {usersQuery.isLoading ? 'Yükleniyor…' : `${filtered.length} / ${users.length} kullanıcı`}
+              {usersQuery.isLoading
+                ? 'Yükleniyor…'
+                : `${filtered.length} / ${users.length} kullanıcı`}
             </p>
           </div>
           <button
@@ -277,9 +265,7 @@ export default function UsersPage(): JSX.Element {
           </select>
           <select
             value={statusFilter}
-            onChange={(e) =>
-              setStatusFilter(e.target.value as 'ALL' | 'ACTIVE' | 'INACTIVE')
-            }
+            onChange={(e) => setStatusFilter(e.target.value as 'ALL' | 'ACTIVE' | 'INACTIVE')}
             className="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm focus:border-emerald-500 focus:outline-none"
             aria-label="Aktiflik filtresi"
           >
@@ -330,20 +316,12 @@ export default function UsersPage(): JSX.Element {
                           </div>
                         )}
                         <div className="min-w-0">
-                          <div className="font-medium text-slate-900">
-                            {userLabel(u)}
-                          </div>
-                          {u.telefon && (
-                            <div className="text-xs text-slate-500">
-                              {u.telefon}
-                            </div>
-                          )}
+                          <div className="font-medium text-slate-900">{userLabel(u)}</div>
+                          {u.telefon && <div className="text-xs text-slate-500">{u.telefon}</div>}
                         </div>
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-slate-600">
-                      {u.email ?? '—'}
-                    </td>
+                    <td className="px-3 py-2 text-slate-600">{u.email ?? '—'}</td>
                     <td className="px-3 py-2">
                       <select
                         value={currentRole}
@@ -364,12 +342,8 @@ export default function UsersPage(): JSX.Element {
                         ))}
                       </select>
                     </td>
-                    <td className="px-3 py-2 text-slate-600">
-                      {u.region ?? '—'}
-                    </td>
-                    <td className="px-3 py-2 text-slate-500">
-                      {formatDate(u.created_at)}
-                    </td>
+                    <td className="px-3 py-2 text-slate-600">{u.region ?? '—'}</td>
+                    <td className="px-3 py-2 text-slate-500">{formatDate(u.created_at)}</td>
                     <td className="px-3 py-2">
                       <div className="flex justify-end gap-1">
                         <Link
@@ -419,10 +393,7 @@ export default function UsersPage(): JSX.Element {
               })}
               {filtered.length === 0 && !usersQuery.isLoading && (
                 <tr>
-                  <td
-                    colSpan={6}
-                    className="px-3 py-8 text-center text-sm text-slate-500"
-                  >
+                  <td colSpan={6} className="px-3 py-8 text-center text-sm text-slate-500">
                     Kullanıcı bulunamadı.
                   </td>
                 </tr>
@@ -533,9 +504,7 @@ function CreateUserModal({ onClose, onCreated }: CreateUserModalProps): JSX.Elem
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">
-            Yeni Kullanıcı
-          </h2>
+          <h2 className="text-lg font-semibold text-slate-900">Yeni Kullanıcı</h2>
           <button
             type="button"
             onClick={onClose}
@@ -549,8 +518,8 @@ function CreateUserModal({ onClose, onCreated }: CreateUserModalProps): JSX.Elem
         {inviteLink ? (
           <div className="space-y-3">
             <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-              Davet bağlantısı oluşturuldu. SMTP yapılandırılmadıysa kullanıcıya
-              bu bağlantıyı manuel ulaştırın.
+              Davet bağlantısı oluşturuldu. SMTP yapılandırılmadıysa kullanıcıya bu bağlantıyı
+              manuel ulaştırın.
             </div>
             <textarea
               readOnly
@@ -579,10 +548,7 @@ function CreateUserModal({ onClose, onCreated }: CreateUserModalProps): JSX.Elem
         ) : (
           <form onSubmit={handleSubmit} className="space-y-3">
             <div>
-              <label
-                htmlFor="cu-email"
-                className="mb-1 block text-xs font-medium text-slate-600"
-              >
+              <label htmlFor="cu-email" className="mb-1 block text-xs font-medium text-slate-600">
                 E-posta
               </label>
               <input
@@ -595,10 +561,7 @@ function CreateUserModal({ onClose, onCreated }: CreateUserModalProps): JSX.Elem
               />
             </div>
             <div>
-              <label
-                htmlFor="cu-name"
-                className="mb-1 block text-xs font-medium text-slate-600"
-              >
+              <label htmlFor="cu-name" className="mb-1 block text-xs font-medium text-slate-600">
                 Ad Soyad
               </label>
               <input
@@ -611,10 +574,7 @@ function CreateUserModal({ onClose, onCreated }: CreateUserModalProps): JSX.Elem
               />
             </div>
             <div>
-              <label
-                htmlFor="cu-phone"
-                className="mb-1 block text-xs font-medium text-slate-600"
-              >
+              <label htmlFor="cu-phone" className="mb-1 block text-xs font-medium text-slate-600">
                 Telefon (opsiyonel)
               </label>
               <input
@@ -627,10 +587,7 @@ function CreateUserModal({ onClose, onCreated }: CreateUserModalProps): JSX.Elem
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label
-                  htmlFor="cu-role"
-                  className="mb-1 block text-xs font-medium text-slate-600"
-                >
+                <label htmlFor="cu-role" className="mb-1 block text-xs font-medium text-slate-600">
                   Rol
                 </label>
                 <select
@@ -647,10 +604,7 @@ function CreateUserModal({ onClose, onCreated }: CreateUserModalProps): JSX.Elem
                 </select>
               </div>
               <div>
-                <label
-                  htmlFor="cu-pass"
-                  className="mb-1 block text-xs font-medium text-slate-600"
-                >
+                <label htmlFor="cu-pass" className="mb-1 block text-xs font-medium text-slate-600">
                   Şifre (min 8)
                 </label>
                 <input

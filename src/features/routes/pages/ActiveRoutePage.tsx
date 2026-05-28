@@ -238,8 +238,7 @@ export default function ActiveRoutePage(): JSX.Element {
 
   const totalStops = route?.account_ids.length ?? 0;
   const stopsVisited = Math.min(currentStopIndex, totalStops);
-  const progressPct =
-    totalStops > 0 ? Math.round((stopsVisited / totalStops) * 100) : 0;
+  const progressPct = totalStops > 0 ? Math.round((stopsVisited / totalStops) * 100) : 0;
 
   // Yol-üstü dinamik öneri — şu anki konum → sıradaki durak rotasındaki klinikleri öner.
   const fetchCorridor = useCallback(async () => {
@@ -260,9 +259,12 @@ export default function ActiveRoutePage(): JSX.Element {
       const supabase = getSupabaseClient();
       const a = { lat: geolocation.position.lat, lng: geolocation.position.lng };
       const b = { lat: nextStop.lat, lng: nextStop.lng };
-      const { data: dirData, error: dirErr } = await supabase.functions.invoke('mapbox-directions', {
-        body: { coords: [a, b], profile: 'driving' },
-      });
+      const { data: dirData, error: dirErr } = await supabase.functions.invoke(
+        'mapbox-directions',
+        {
+          body: { coords: [a, b], profile: 'driving' },
+        },
+      );
       if (dirErr) throw new Error(dirErr.message);
       const dir = dirData as { status: string; geometry?: string };
       if (dir.status !== 'ok' || !dir.geometry) throw new Error('Yol bulunamadı');
@@ -287,7 +289,12 @@ export default function ActiveRoutePage(): JSX.Element {
       const enriched = raw
         .filter((c) => c.id !== accountId)
         .map((c) => {
-          const { distanceKm, durationMin } = computeDetour(a, { lat: c.lat, lng: c.lng }, b, 'driving');
+          const { distanceKm, durationMin } = computeDetour(
+            a,
+            { lat: c.lat, lng: c.lng },
+            b,
+            'driving',
+          );
           return { ...c, detourKm: distanceKm, detourMin: durationMin };
         })
         .filter((c) => c.detourKm <= 7 && c.detourMin <= 15)
@@ -303,7 +310,14 @@ export default function ActiveRoutePage(): JSX.Element {
   }, [geolocation.position, stopCoordsQuery.data, route, currentStopIndex]);
 
   const addCandidateToBasket = useCallback(
-    (c: { id: string; name: string; lat: number; lng: number; address: string | null; phone: string | null }) => {
+    (c: {
+      id: string;
+      name: string;
+      lat: number;
+      lng: number;
+      address: string | null;
+      phone: string | null;
+    }) => {
       const basket = useRouteBasket.getState();
       const res = basket.add({
         id: c.id,
@@ -426,9 +440,7 @@ export default function ActiveRoutePage(): JSX.Element {
   };
 
   if (!id) {
-    return (
-      <div className="p-6 text-sm text-red-700">Geçersiz rota linki.</div>
-    );
+    return <div className="p-6 text-sm text-red-700">Geçersiz rota linki.</div>;
   }
 
   if (isLoading) {
@@ -466,14 +478,10 @@ export default function ActiveRoutePage(): JSX.Element {
       {isStale && (
         <div
           className={`px-4 py-2 text-sm font-medium ${
-            isCompleted
-              ? 'bg-emerald-100 text-emerald-900'
-              : 'bg-amber-100 text-amber-900'
+            isCompleted ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900'
           }`}
         >
-          {isCompleted
-            ? 'Bu rota tamamlandı.'
-            : 'Bu rota artık aktif değil.'}
+          {isCompleted ? 'Bu rota tamamlandı.' : 'Bu rota artık aktif değil.'}
         </div>
       )}
 
@@ -481,15 +489,11 @@ export default function ActiveRoutePage(): JSX.Element {
       <div className="grid grid-cols-3 gap-3 border-b border-border bg-card p-3 text-center">
         <div>
           <div className="text-xs text-muted-foreground">Mesafe</div>
-          <div className="text-sm font-semibold">
-            {formatKm(route.total_distance_km)}
-          </div>
+          <div className="text-sm font-semibold">{formatKm(route.total_distance_km)}</div>
         </div>
         <div>
           <div className="text-xs text-muted-foreground">Süre</div>
-          <div className="text-sm font-semibold">
-            {formatDuration(route.total_duration_min)}
-          </div>
+          <div className="text-sm font-semibold">{formatDuration(route.total_duration_min)}</div>
         </div>
         <div>
           <div className="text-xs text-muted-foreground">İlerleme</div>
@@ -500,23 +504,21 @@ export default function ActiveRoutePage(): JSX.Element {
       </div>
 
       {/* Export panel — durak koordinatları yüklendiyse + GPS aktifse */}
-      {geolocation.position &&
-        stopCoordsQuery.data &&
-        stopCoordsQuery.data.length > 0 && (
-          <div className="border-b border-border bg-slate-50 p-3">
-            <RouteExportPanel
-              start={{
-                lat: geolocation.position.lat,
-                lng: geolocation.position.lng,
-              }}
-              stops={stopCoordsQuery.data.map((s) => ({
-                lat: s.lat,
-                lng: s.lng,
-                name: s.name,
-              }))}
-            />
-          </div>
-        )}
+      {geolocation.position && stopCoordsQuery.data && stopCoordsQuery.data.length > 0 && (
+        <div className="border-b border-border bg-slate-50 p-3">
+          <RouteExportPanel
+            start={{
+              lat: geolocation.position.lat,
+              lng: geolocation.position.lng,
+            }}
+            stops={stopCoordsQuery.data.map((s) => ({
+              lat: s.lat,
+              lng: s.lng,
+              name: s.name,
+            }))}
+          />
+        </div>
+      )}
 
       {/* Map + Stops */}
       <div className="flex flex-1 flex-col md:flex-row min-h-0">
@@ -524,12 +526,8 @@ export default function ActiveRoutePage(): JSX.Element {
 
         <aside className="w-full max-h-[50vh] overflow-y-auto border-t border-border bg-background md:max-h-none md:w-80 md:border-l md:border-t-0">
           <div className="border-b border-border p-3">
-            <h2 className="text-sm font-semibold">
-              {route.name?.trim() ? route.name : 'Rota'}
-            </h2>
-            <div className="mt-1 text-xs text-muted-foreground">
-              {totalStops} durak
-            </div>
+            <h2 className="text-sm font-semibold">{route.name?.trim() ? route.name : 'Rota'}</h2>
+            <div className="mt-1 text-xs text-muted-foreground">{totalStops} durak</div>
           </div>
 
           <ol className="divide-y divide-border">
@@ -544,9 +542,7 @@ export default function ActiveRoutePage(): JSX.Element {
               return (
                 <li
                   key={`${accountId}-${idx}`}
-                  className={`flex items-start gap-3 p-3 ${
-                    isCurrent ? 'bg-blue-50' : ''
-                  }`}
+                  className={`flex items-start gap-3 p-3 ${isCurrent ? 'bg-blue-50' : ''}`}
                 >
                   <span
                     className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
@@ -566,7 +562,15 @@ export default function ActiveRoutePage(): JSX.Element {
                       </div>
                     )}
                     <div className="mt-1 flex items-center gap-2 text-[11px]">
-                      <span className={isDone ? 'text-emerald-600' : isCurrent ? 'text-blue-600 font-semibold' : 'text-muted-foreground'}>
+                      <span
+                        className={
+                          isDone
+                            ? 'text-emerald-600'
+                            : isCurrent
+                              ? 'text-blue-600 font-semibold'
+                              : 'text-muted-foreground'
+                        }
+                      >
                         {isDone ? 'Tamamlandı' : isCurrent ? '● Şu anki' : 'Bekliyor'}
                       </span>
                       {stop?.phone && (
@@ -581,7 +585,9 @@ export default function ActiveRoutePage(): JSX.Element {
                       )}
                       <button
                         type="button"
-                        onClick={() => setNotingStop(stop ?? { id: accountId, name: accountId, lat: 0, lng: 0 })}
+                        onClick={() =>
+                          setNotingStop(stop ?? { id: accountId, name: accountId, lat: 0, lng: 0 })
+                        }
                         className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-amber-800 hover:bg-amber-200"
                       >
                         <StickyNote className="h-2.5 w-2.5" />
@@ -793,9 +799,7 @@ export default function ActiveRoutePage(): JSX.Element {
               </label>
 
               <label className="block">
-                <span className="mb-1 block font-medium">
-                  Yakıt tüketimi (L) — opsiyonel
-                </span>
+                <span className="mb-1 block font-medium">Yakıt tüketimi (L) — opsiyonel</span>
                 <input
                   type="number"
                   inputMode="decimal"
@@ -808,9 +812,7 @@ export default function ActiveRoutePage(): JSX.Element {
               </label>
 
               <label className="block">
-                <span className="mb-1 block font-medium">
-                  Yakıt maliyeti (TL) — opsiyonel
-                </span>
+                <span className="mb-1 block font-medium">Yakıt maliyeti (TL) — opsiyonel</span>
                 <input
                   type="number"
                   inputMode="decimal"

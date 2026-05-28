@@ -11,7 +11,8 @@ export interface QRPayload {
  * Production'da `qrcode` paketi eklenip yerel render edilecek.
  */
 export function buildQRTargetUrl(payload: QRPayload, baseUrl?: string): string {
-  const base = baseUrl ?? (typeof window !== 'undefined' ? window.location.origin : 'https://saha.parla.com');
+  const base =
+    baseUrl ?? (typeof window !== 'undefined' ? window.location.origin : 'https://saha.parla.com');
   switch (payload.type) {
     case 'customer':
       return `${base}/clinics/${encodeURIComponent(payload.id)}`;

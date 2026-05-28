@@ -42,7 +42,9 @@ export default function LoginPage() {
   }, []);
 
   if (isAuthenticated) {
-    const next = kvkkAccepted ? ((location.state as { from?: string } | null)?.from ?? '/') : '/onboarding/kvkk';
+    const next = kvkkAccepted
+      ? ((location.state as { from?: string } | null)?.from ?? '/')
+      : '/onboarding/kvkk';
     return <Navigate to={next} replace />;
   }
 
@@ -94,10 +96,7 @@ export default function LoginPage() {
         </label>
 
         {locationHint && (
-          <div
-            role="status"
-            className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700"
-          >
+          <div role="status" className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
             {locationHint}
           </div>
         )}

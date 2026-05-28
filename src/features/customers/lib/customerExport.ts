@@ -39,10 +39,7 @@ function formatDate(iso: string | null | undefined): string {
  * @example
  *   exportToXlsx(selectedRows, 'musteriler_2026-06-04.xlsx');
  */
-export function exportToXlsx(
-  rows: AccountRow[],
-  filename = 'musteriler.xlsx',
-): void {
+export function exportToXlsx(rows: AccountRow[], filename = 'musteriler.xlsx'): void {
   const header: string[] = [
     'Ad',
     'Adres',

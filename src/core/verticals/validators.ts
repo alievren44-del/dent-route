@@ -137,30 +137,53 @@ export function validateSamplePolicy(policy: SamplePolicy | undefined): Validati
   if (typeof policy.enabled !== 'boolean') {
     errors.push({ field: 'samplePolicy.enabled', message: 'boolean olmalı' });
   }
-  if (policy.defaultBudgetTl !== undefined && (typeof policy.defaultBudgetTl !== 'number' || policy.defaultBudgetTl < 0)) {
+  if (
+    policy.defaultBudgetTl !== undefined &&
+    (typeof policy.defaultBudgetTl !== 'number' || policy.defaultBudgetTl < 0)
+  ) {
     errors.push({ field: 'samplePolicy.defaultBudgetTl', message: 'pozitif sayı olmalı' });
   }
-  if (policy.conversionWindowDays !== undefined && (typeof policy.conversionWindowDays !== 'number' || policy.conversionWindowDays < 1)) {
+  if (
+    policy.conversionWindowDays !== undefined &&
+    (typeof policy.conversionWindowDays !== 'number' || policy.conversionWindowDays < 1)
+  ) {
     errors.push({ field: 'samplePolicy.conversionWindowDays', message: 'en az 1 gün olmalı' });
   }
   if (policy.categories) {
     for (const [key, cat] of Object.entries(policy.categories)) {
-      if (typeof cat.label !== 'string') errors.push({ field: `samplePolicy.categories.${key}.label`, message: 'metin olmalı' });
+      if (typeof cat.label !== 'string')
+        errors.push({ field: `samplePolicy.categories.${key}.label`, message: 'metin olmalı' });
       if (typeof cat.maxPerAccountYearly !== 'number' || cat.maxPerAccountYearly < 0) {
-        errors.push({ field: `samplePolicy.categories.${key}.maxPerAccountYearly`, message: 'pozitif sayı olmalı' });
+        errors.push({
+          field: `samplePolicy.categories.${key}.maxPerAccountYearly`,
+          message: 'pozitif sayı olmalı',
+        });
       }
       if (typeof cat.cooldownDays !== 'number' || cat.cooldownDays < 0) {
-        errors.push({ field: `samplePolicy.categories.${key}.cooldownDays`, message: 'pozitif sayı olmalı' });
+        errors.push({
+          field: `samplePolicy.categories.${key}.cooldownDays`,
+          message: 'pozitif sayı olmalı',
+        });
       }
-      if (typeof cat.minConversionPct !== 'number' || cat.minConversionPct < 0 || cat.minConversionPct > 100) {
-        errors.push({ field: `samplePolicy.categories.${key}.minConversionPct`, message: '0-100 arası olmalı' });
+      if (
+        typeof cat.minConversionPct !== 'number' ||
+        cat.minConversionPct < 0 ||
+        cat.minConversionPct > 100
+      ) {
+        errors.push({
+          field: `samplePolicy.categories.${key}.minConversionPct`,
+          message: '0-100 arası olmalı',
+        });
       }
     }
   }
   if (policy.hunterThresholds) {
     const h = policy.hunterThresholds;
     if (!(h.warningCount < h.riskyCount && h.riskyCount < h.blacklistCount)) {
-      errors.push({ field: 'samplePolicy.hunterThresholds', message: 'warningCount < riskyCount < blacklistCount olmalı' });
+      errors.push({
+        field: 'samplePolicy.hunterThresholds',
+        message: 'warningCount < riskyCount < blacklistCount olmalı',
+      });
     }
   }
 

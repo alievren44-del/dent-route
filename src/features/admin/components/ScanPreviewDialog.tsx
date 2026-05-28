@@ -23,10 +23,7 @@ import {
   type ScanPreviewClinic,
   type ScanPreviewFilter,
 } from '@features/admin/store/scanPreviewStore';
-import {
-  useRoutePlanner,
-  type RouteClinic,
-} from '@features/admin/store/routePlannerStore';
+import { useRoutePlanner, type RouteClinic } from '@features/admin/store/routePlannerStore';
 
 interface Props {
   onCommit: (selectedPlaceIds: string[], lastScanInput: Record<string, unknown>) => Promise<void>;
@@ -51,7 +48,9 @@ function ConfidenceChip({ value }: { value: number }) {
   else if (pct >= 60) cls = 'bg-amber-100 text-amber-800';
   else cls = 'bg-red-100 text-red-800';
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}>
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}
+    >
       {pct}%
     </span>
   );
@@ -275,13 +274,9 @@ export default function ScanPreviewDialog({ onCommit, onEditClinic, onManualAdd 
               ...(c.address != null ? { address: c.address } : {}),
               ...(c.phone != null ? { phone: c.phone } : {}),
               ...(c.rating != null ? { rating: c.rating } : {}),
-              ...(c.user_ratings_total != null
-                ? { user_ratings_total: c.user_ratings_total }
-                : {}),
+              ...(c.user_ratings_total != null ? { user_ratings_total: c.user_ratings_total } : {}),
               segment:
-                (c as unknown as { segment?: string }).segment === 'kamu'
-                  ? 'kamu'
-                  : 'private',
+                (c as unknown as { segment?: string }).segment === 'kamu' ? 'kamu' : 'private',
               types: c.types,
             }));
             useRoutePlanner.getState().setClinics(mapped);

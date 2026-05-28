@@ -166,15 +166,18 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       type: r.clinic_segment ?? undefined,
       phone: r.phone ?? undefined,
       status: 'active' as const,
-      addresses: r.lat != null && r.lng != null
-        ? [{
-            addressLine: r.address ?? '',
-            district: r.district_slug ?? undefined,
-            city: r.province_slug ?? undefined,
-            location: { lat: r.lat, lng: r.lng },
-            isPrimary: true,
-          }] as Customer['addresses']
-        : [],
+      addresses:
+        r.lat != null && r.lng != null
+          ? ([
+              {
+                addressLine: r.address ?? '',
+                district: r.district_slug ?? undefined,
+                city: r.province_slug ?? undefined,
+                location: { lat: r.lat, lng: r.lng },
+                isPrimary: true,
+              },
+            ] as Customer['addresses'])
+          : [],
       customFields: {
         google_place_id: r.google_place_id,
         rating: r.rating,
@@ -503,7 +506,7 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       };
     });
 
-    const vatTotal = subtotal * 0.20;
+    const vatTotal = subtotal * 0.2;
     return {
       items: quotedItems,
       subtotal,
@@ -625,7 +628,9 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
 }
 
 function mapOrderStatus(s: string | null | undefined): OrderStatus {
-  const v = String(s ?? '').toLowerCase().trim();
+  const v = String(s ?? '')
+    .toLowerCase()
+    .trim();
   switch (v) {
     case 'draft':
     case 'taslak':

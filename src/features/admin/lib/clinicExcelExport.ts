@@ -163,10 +163,7 @@ function applyStyleToRow(
   /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any */
 }
 
-function buildSheetForSegment(
-  clinics: ExportClinic[],
-  options: ExportOptions,
-): XLSX.WorkSheet {
+function buildSheetForSegment(clinics: ExportClinic[], options: ExportOptions): XLSX.WorkSheet {
   const metaBanner = buildMetaBanner(options.routeMeta);
 
   // AOA layout:
@@ -255,10 +252,7 @@ function buildSheetForSegment(
  * @param clinics — Tüm klinik kayıtları (segment bilgisiyle).
  * @param options — Dosya adı + meta banner için bilgi.
  */
-export function exportClinicsToExcel(
-  clinics: ExportClinic[],
-  options: ExportOptions,
-): void {
+export function exportClinicsToExcel(clinics: ExportClinic[], options: ExportOptions): void {
   const wb = XLSX.utils.book_new();
 
   const privateClinics = clinics.filter((c) => c.segment === 'private');

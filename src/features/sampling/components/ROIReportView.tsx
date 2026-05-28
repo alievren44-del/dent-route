@@ -24,7 +24,9 @@ export default function ROIReportView() {
               type="button"
               onClick={() => setWindowDays(d)}
               className={`rounded-lg px-3 h-9 text-sm font-medium border ${
-                windowDays === d ? 'bg-primary text-primary-foreground border-primary' : 'bg-background border-border'
+                windowDays === d
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background border-border'
               }`}
             >
               {d}g
@@ -38,10 +40,27 @@ export default function ROIReportView() {
       {data && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Card icon={<BarChart3 className="h-4 w-4" />} label="Toplam Numune" value={data.totalSampleCount.toString()} />
-            <Card icon={<TrendingUp className="h-4 w-4" />} label="Dönüşüm" value={`%${data.conversionRatePct.toFixed(1)}`} />
-            <Card icon={<BarChart3 className="h-4 w-4" />} label="Maliyet" value={`₺${data.totalSampleCostTl.toLocaleString('tr-TR')}`} />
-            <Card icon={<TrendingUp className="h-4 w-4" />} label="ROI" value={`%${data.roiPct.toFixed(1)}`} highlight={data.roiPct > 0} />
+            <Card
+              icon={<BarChart3 className="h-4 w-4" />}
+              label="Toplam Numune"
+              value={data.totalSampleCount.toString()}
+            />
+            <Card
+              icon={<TrendingUp className="h-4 w-4" />}
+              label="Dönüşüm"
+              value={`%${data.conversionRatePct.toFixed(1)}`}
+            />
+            <Card
+              icon={<BarChart3 className="h-4 w-4" />}
+              label="Maliyet"
+              value={`₺${data.totalSampleCostTl.toLocaleString('tr-TR')}`}
+            />
+            <Card
+              icon={<TrendingUp className="h-4 w-4" />}
+              label="ROI"
+              value={`%${data.roiPct.toFixed(1)}`}
+              highlight={data.roiPct > 0}
+            />
           </div>
 
           <h2 className="text-lg font-semibold mt-4">Ürün Bazlı</h2>
@@ -73,10 +92,25 @@ export default function ROIReportView() {
   );
 }
 
-function Card({ icon, label, value, highlight }: { icon: React.ReactNode; label: string; value: string; highlight?: boolean }) {
+function Card({
+  icon,
+  label,
+  value,
+  highlight,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  highlight?: boolean;
+}) {
   return (
-    <div className={`rounded-xl border p-3 ${highlight ? 'border-green-300 bg-green-50' : 'border-border bg-card'}`}>
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">{icon}<span>{label}</span></div>
+    <div
+      className={`rounded-xl border p-3 ${highlight ? 'border-green-300 bg-green-50' : 'border-border bg-card'}`}
+    >
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        {icon}
+        <span>{label}</span>
+      </div>
       <div className="mt-1 text-xl font-bold">{value}</div>
     </div>
   );

@@ -15,10 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Plus, History, Loader2 } from 'lucide-react';
 import { getSupabaseClient } from '@lib/supabase';
 import { useVertical } from '@core/verticals/useVertical';
-import VisitCard, {
-  type OutcomeMeta,
-  type VisitCardData,
-} from './VisitCard';
+import VisitCard, { type OutcomeMeta, type VisitCardData } from './VisitCard';
 
 interface RawVisit {
   id: string;

@@ -38,15 +38,9 @@ import { format } from 'date-fns';
 import { getSupabaseClient } from '@lib/supabase';
 import { getEnv } from '@config/env';
 import { useGeolocation } from '@/features/map/hooks/useGeolocation';
-import {
-  useRoutePlanner,
-  type RouteClinic,
-} from '@features/admin/store/routePlannerStore';
+import { useRoutePlanner, type RouteClinic } from '@features/admin/store/routePlannerStore';
 import { optimizeRouteHybrid } from '@features/admin/lib/tsp';
-import {
-  exportClinicsToExcel,
-  type ExportClinic,
-} from '@features/admin/lib/clinicExcelExport';
+import { exportClinicsToExcel, type ExportClinic } from '@features/admin/lib/clinicExcelExport';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipler
@@ -143,9 +137,7 @@ function slugToReadable(slug: string | null): string {
   if (!slug) return '';
   return slug
     .split('-')
-    .map((p) =>
-      p.length === 0 ? p : p.charAt(0).toLocaleUpperCase('tr') + p.slice(1),
-    )
+    .map((p) => (p.length === 0 ? p : p.charAt(0).toLocaleUpperCase('tr') + p.slice(1)))
     .join(' ');
 }
 
@@ -166,8 +158,7 @@ export default function ScanRoutePlanner(): JSX.Element {
   // Method-selector'lar `@typescript-eslint/unbound-method` tetiklemesin diye
   // store referansı üzerinden çağırıyoruz.
   const setStartInStore = useCallback(
-    (s: { lat: number; lng: number } | null) =>
-      useRoutePlanner.getState().setStart(s),
+    (s: { lat: number; lng: number } | null) => useRoutePlanner.getState().setStart(s),
     [],
   );
   const clearStore = useCallback(() => useRoutePlanner.getState().clear(), []);
@@ -248,13 +239,7 @@ export default function ScanRoutePlanner(): JSX.Element {
       return null;
     }
     return manualPoint;
-  }, [
-    storedStart,
-    startMode,
-    geolocation.position,
-    profileHome,
-    manualPoint,
-  ]);
+  }, [storedStart, startMode, geolocation.position, profileHome, manualPoint]);
 
   // ──────────────────────────────────────────────────────────────────────────
   // Stats
@@ -264,14 +249,10 @@ export default function ScanRoutePlanner(): JSX.Element {
     () => clinics.filter((c) => c.segment === 'private').length,
     [clinics],
   );
-  const kamuCount = useMemo(
-    () => clinics.filter((c) => c.segment === 'kamu').length,
-    [clinics],
-  );
+  const kamuCount = useMemo(() => clinics.filter((c) => c.segment === 'kamu').length, [clinics]);
   const strategy = useMemo(() => recommendStrategy(clinics.length), [clinics]);
 
-  const canOptimize =
-    !optimizing && clinics.length > 0 && effectiveStart !== null;
+  const canOptimize = !optimizing && clinics.length > 0 && effectiveStart !== null;
 
   // ──────────────────────────────────────────────────────────────────────────
   // Optimize
@@ -287,9 +268,7 @@ export default function ScanRoutePlanner(): JSX.Element {
         returnHome: false,
       });
       const orderedClinics = result.order.map((idx) => clinics[idx]!);
-      const estimatedDurationMin = Math.round(
-        (result.totalDistanceKm / AVG_SPEED_KMH) * 60,
-      );
+      const estimatedDurationMin = Math.round((result.totalDistanceKm / AVG_SPEED_KMH) * 60);
       setRouteResult({
         orderedClinics,
         cumulativeKm: result.cumulativeDistancesKm,
@@ -315,19 +294,17 @@ export default function ScanRoutePlanner(): JSX.Element {
 
   const handleExportExcel = useCallback(() => {
     if (!routeResult) return;
-    const exportRows: ExportClinic[] = routeResult.orderedClinics.map(
-      (c, i) => ({
-        ordinal: i + 1,
-        name: c.name,
-        neighborhood: c.neighborhood,
-        address: c.address,
-        phone: c.phone,
-        user_ratings_total: c.user_ratings_total,
-        rating: c.rating,
-        type_label: c.types?.[0],
-        segment: c.segment,
-      }),
-    );
+    const exportRows: ExportClinic[] = routeResult.orderedClinics.map((c, i) => ({
+      ordinal: i + 1,
+      name: c.name,
+      neighborhood: c.neighborhood,
+      address: c.address,
+      phone: c.phone,
+      user_ratings_total: c.user_ratings_total,
+      rating: c.rating,
+      type_label: c.types?.[0],
+      segment: c.segment,
+    }));
     const today = format(new Date(), 'yyyy-MM-dd');
     const provincePart = provinceSlug || 'rota';
     const districtPart = districtSlug ? `-${districtSlug}` : '';
@@ -346,9 +323,7 @@ export default function ScanRoutePlanner(): JSX.Element {
       });
       toast.success('Excel indirildi');
     } catch (e) {
-      toast.error(
-        'Excel hatası: ' + (e instanceof Error ? e.message : 'Bilinmeyen'),
-      );
+      toast.error('Excel hatası: ' + (e instanceof Error ? e.message : 'Bilinmeyen'));
     }
   }, [routeResult, provinceSlug, districtSlug, repName]);
 
@@ -370,9 +345,7 @@ export default function ScanRoutePlanner(): JSX.Element {
       }
 
       if (orderedAccountIds.length === 0) {
-        toast.error(
-          'Hiçbir kliniğin DB kaydı yok — önce taramayı kaydet sonra rota planla',
-        );
+        toast.error('Hiçbir kliniğin DB kaydı yok — önce taramayı kaydet sonra rota planla');
         setSaving(false);
         return;
       }
@@ -400,9 +373,7 @@ export default function ScanRoutePlanner(): JSX.Element {
       clearStore();
       navigate(`/routes/active/${inserted.id}`);
     } catch (e) {
-      toast.error(
-        'Sakla hatası: ' + (e instanceof Error ? e.message : 'Bilinmeyen'),
-      );
+      toast.error('Sakla hatası: ' + (e instanceof Error ? e.message : 'Bilinmeyen'));
     } finally {
       setSaving(false);
     }
@@ -430,9 +401,7 @@ export default function ScanRoutePlanner(): JSX.Element {
     if (startMode !== 'manual') return;
     if (!manualMapContainer.current || manualMapRef.current) return;
     mapboxgl.accessToken = getEnv().MAPBOX_PUBLIC_TOKEN;
-    const fallback: [number, number] = clinics[0]
-      ? [clinics[0].lng, clinics[0].lat]
-      : [35.2, 39.0];
+    const fallback: [number, number] = clinics[0] ? [clinics[0].lng, clinics[0].lat] : [35.2, 39.0];
     const map = new mapboxgl.Map({
       container: manualMapContainer.current,
       style: 'mapbox://styles/mapbox/streets-v12',
@@ -521,9 +490,7 @@ export default function ScanRoutePlanner(): JSX.Element {
             d.style.boxShadow = '0 1px 2px rgba(0,0,0,0.3)';
             return d;
           })();
-      const marker = new mapboxgl.Marker({ element: el })
-        .setLngLat([c.lng, c.lat])
-        .addTo(map);
+      const marker = new mapboxgl.Marker({ element: el }).setLngLat([c.lng, c.lat]).addTo(map);
       resultMarkersRef.current.push(marker);
     });
 
@@ -540,9 +507,7 @@ export default function ScanRoutePlanner(): JSX.Element {
     if (routeResult && effectiveStart && routeResult.orderedClinics.length > 0) {
       const coords: Array<[number, number]> = [
         [effectiveStart.lng, effectiveStart.lat],
-        ...routeResult.orderedClinics.map(
-          (c) => [c.lng, c.lat] as [number, number],
-        ),
+        ...routeResult.orderedClinics.map((c) => [c.lng, c.lat] as [number, number]),
       ];
       map.addSource('scan-route-src', {
         type: 'geojson',
@@ -568,9 +533,7 @@ export default function ScanRoutePlanner(): JSX.Element {
     // Bounds fit
     const allPoints = [
       ...renderClinics.map((c) => [c.lng, c.lat] as [number, number]),
-      ...(effectiveStart
-        ? [[effectiveStart.lng, effectiveStart.lat] as [number, number]]
-        : []),
+      ...(effectiveStart ? [[effectiveStart.lng, effectiveStart.lat] as [number, number]] : []),
     ];
     if (allPoints.length >= 1) {
       const bounds = new mapboxgl.LngLatBounds();
@@ -587,12 +550,10 @@ export default function ScanRoutePlanner(): JSX.Element {
     return (
       <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-3xl flex-col items-center justify-center gap-4 px-4">
         <Navigation size={48} className="text-slate-400" />
-        <h1 className="text-xl font-bold text-slate-900">
-          Rota planlamak için klinik seçilmedi
-        </h1>
+        <h1 className="text-xl font-bold text-slate-900">Rota planlamak için klinik seçilmedi</h1>
         <p className="text-center text-sm text-slate-600">
-          Tarama sonucundan veya ilçe listesinden klinik seçip &quot;Rotaya
-          Çevir&quot; butonuna basın.
+          Tarama sonucundan veya ilçe listesinden klinik seçip &quot;Rotaya Çevir&quot; butonuna
+          basın.
         </p>
         <button
           type="button"
@@ -638,12 +599,8 @@ export default function ScanRoutePlanner(): JSX.Element {
       <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
         {/* Klinik sayısı */}
         <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="text-xs font-semibold uppercase text-slate-500">
-            Klinik Sayısı
-          </div>
-          <div className="mt-1 text-2xl font-bold text-slate-900">
-            {clinics.length}
-          </div>
+          <div className="text-xs font-semibold uppercase text-slate-500">Klinik Sayısı</div>
+          <div className="mt-1 text-2xl font-bold text-slate-900">{clinics.length}</div>
           <div className="mt-1 text-xs text-slate-600">
             <span className="inline-flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-blue-600" />
@@ -659,20 +616,14 @@ export default function ScanRoutePlanner(): JSX.Element {
 
         {/* Strateji */}
         <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="text-xs font-semibold uppercase text-slate-500">
-            Önerilen Strateji
-          </div>
-          <div className="mt-1 text-base font-semibold text-slate-900">
-            {strategy.label}
-          </div>
+          <div className="text-xs font-semibold uppercase text-slate-500">Önerilen Strateji</div>
+          <div className="mt-1 text-base font-semibold text-slate-900">{strategy.label}</div>
           <div className="mt-1 text-xs text-slate-500">{strategy.hint}</div>
         </div>
 
         {/* Başlangıç */}
         <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="text-xs font-semibold uppercase text-slate-500">
-            Başlangıç Noktası
-          </div>
+          <div className="text-xs font-semibold uppercase text-slate-500">Başlangıç Noktası</div>
           <div className="mt-2 space-y-1.5">
             <label className="flex cursor-pointer items-center gap-2 text-sm">
               <input
@@ -709,9 +660,7 @@ export default function ScanRoutePlanner(): JSX.Element {
               />
               <Home size={14} className="text-purple-600" />
               <span>Profilime kayıtlı ev/depo</span>
-              {!homeAvailable && (
-                <span className="ml-auto text-xs text-slate-400">tanımsız</span>
-              )}
+              {!homeAvailable && <span className="ml-auto text-xs text-slate-400">tanımsız</span>}
             </label>
             <label className="flex cursor-pointer items-center gap-2 text-sm">
               <input
@@ -779,20 +728,12 @@ export default function ScanRoutePlanner(): JSX.Element {
           <>
             {/* Stat row */}
             <div className="grid grid-cols-2 gap-2 border-b border-slate-200 p-3 md:grid-cols-4">
-              <Stat
-                label="Toplam"
-                value={`${routeResult.totalKm.toFixed(1)} km`}
-              />
-              <Stat
-                label="Tahmini süre"
-                value={`~${routeResult.estimatedDurationMin} dk`}
-              />
+              <Stat label="Toplam" value={`${routeResult.totalKm.toFixed(1)} km`} />
+              <Stat label="Tahmini süre" value={`~${routeResult.estimatedDurationMin} dk`} />
               <Stat
                 label="2-opt tasarrufu"
                 value={
-                  routeResult.savedKm > 0
-                    ? `-${Math.round(routeResult.savedKm * 1000)} m`
-                    : '—'
+                  routeResult.savedKm > 0 ? `-${Math.round(routeResult.savedKm * 1000)} m` : '—'
                 }
                 accent={routeResult.savedKm > 0 ? 'green' : 'gray'}
               />
@@ -825,25 +766,17 @@ export default function ScanRoutePlanner(): JSX.Element {
                   <tbody>
                     {routeResult.orderedClinics.map((c, i) => {
                       const km = routeResult.cumulativeKm[i] ?? 0;
-                      const rowBg =
-                        c.segment === 'kamu' ? 'bg-purple-50' : 'bg-white';
+                      const rowBg = c.segment === 'kamu' ? 'bg-purple-50' : 'bg-white';
                       return (
                         <tr
                           key={`${c.id ?? c.place_id ?? c.name}-${i}`}
                           className={`${rowBg} border-t border-slate-100`}
                         >
-                          <td className="px-2 py-1.5 font-mono text-slate-600">
-                            {i + 1}
-                          </td>
-                          <td
-                            className="px-2 py-1.5 font-medium text-slate-800"
-                            title={c.name}
-                          >
+                          <td className="px-2 py-1.5 font-mono text-slate-600">{i + 1}</td>
+                          <td className="px-2 py-1.5 font-medium text-slate-800" title={c.name}>
                             {truncate(c.name, 28)}
                           </td>
-                          <td className="px-2 py-1.5 text-slate-600">
-                            {c.neighborhood ?? '—'}
-                          </td>
+                          <td className="px-2 py-1.5 text-slate-600">{c.neighborhood ?? '—'}</td>
                           <td className="px-2 py-1.5 text-right font-mono text-slate-700">
                             {km.toFixed(1)}
                           </td>
@@ -872,8 +805,8 @@ export default function ScanRoutePlanner(): JSX.Element {
 
         {!optimizing && !routeResult && (
           <div className="p-6 text-center text-sm text-slate-500">
-            &quot;Optimize Et&quot; butonuna basın — {clinics.length} klinik için
-            en kısa rota hesaplanır.
+            &quot;Optimize Et&quot; butonuna basın — {clinics.length} klinik için en kısa rota
+            hesaplanır.
           </div>
         )}
       </section>
@@ -881,10 +814,7 @@ export default function ScanRoutePlanner(): JSX.Element {
       {/* Alt panel — İşlemler */}
       <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
         <div className="mb-2">
-          <label
-            htmlFor="route-planner-rep-name"
-            className="text-xs font-medium text-slate-600"
-          >
+          <label htmlFor="route-planner-rep-name" className="text-xs font-medium text-slate-600">
             Temsilci adı (Excel + DB için)
           </label>
           <input
@@ -913,11 +843,7 @@ export default function ScanRoutePlanner(): JSX.Element {
             disabled={!routeResult || saving}
             className="flex h-11 items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {saving ? (
-              <Loader2 size={16} className="animate-spin" />
-            ) : (
-              <Save size={16} />
-            )}
+            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
             {saving ? 'Saklanıyor…' : 'Rotayı Sakla'}
           </button>
         </div>

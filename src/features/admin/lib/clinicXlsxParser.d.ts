@@ -10,24 +10,24 @@
 export type TargetField = 'name' | 'address' | 'phone' | 'lat' | 'lng' | 'neighborhood' | 'type';
 export type ClinicType = 'private_clinic' | 'public_hospital' | 'polyclinic';
 export interface ClinicRow {
-    name: string;
-    address?: string;
-    phone?: string;
-    lat?: number;
-    lng?: number;
-    neighborhood?: string;
-    type?: ClinicType;
+  name: string;
+  address?: string;
+  phone?: string;
+  lat?: number;
+  lng?: number;
+  neighborhood?: string;
+  type?: ClinicType;
 }
 export interface ParsedSheet {
-    headers: string[];
-    rows: Record<string, unknown>[];
+  headers: string[];
+  rows: Record<string, unknown>[];
 }
 export interface ValidationResult {
-    valid: ClinicRow[];
-    skipped: Array<{
-        row: ClinicRow;
-        reason: string;
-    }>;
+  valid: ClinicRow[];
+  skipped: Array<{
+    row: ClinicRow;
+    reason: string;
+  }>;
 }
 /**
  * XLSX dosyasındaki tüm sheet adlarını döner.
@@ -57,7 +57,11 @@ export declare function inferClinicTypeFromSheet(sheetName: string): ClinicType;
  * Raw row dict array'ini target field'lara map eder.
  * type sheet adından infer edilir (override yok).
  */
-export declare function mapRows(rows: Record<string, unknown>[], mapping: Partial<Record<TargetField, string>>, sheetName?: string): ClinicRow[];
+export declare function mapRows(
+  rows: Record<string, unknown>[],
+  mapping: Partial<Record<TargetField, string>>,
+  sheetName?: string,
+): ClinicRow[];
 /**
  * name yoksa veya lat/lng eksik/NaN ise satır skip edilir.
  */

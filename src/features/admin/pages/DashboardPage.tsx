@@ -72,18 +72,9 @@ async function fetchDashboard(sinceIso: string): Promise<DashboardData> {
   const sinceDate = sinceIso.slice(0, 10);
 
   const [reps, visits, mileage, orders] = await Promise.all([
-    supabase
-      .from('profiles')
-      .select('id, ad_soyad, email, role')
-      .ilike('role', '%REP%'),
-    supabase
-      .from('saha_visits')
-      .select('id, rep_id')
-      .gte('check_in_at', sinceIso),
-    supabase
-      .from('saha_mileage_logs')
-      .select('profile_id, distance_km')
-      .gte('log_date', sinceDate),
+    supabase.from('profiles').select('id, ad_soyad, email, role').ilike('role', '%REP%'),
+    supabase.from('saha_visits').select('id, rep_id').gte('check_in_at', sinceIso),
+    supabase.from('saha_mileage_logs').select('profile_id, distance_km').gte('log_date', sinceDate),
     supabase
       .from('orders')
       .select('id, sales_rep_id')
@@ -121,9 +112,7 @@ async function fetchDashboard(sinceIso: string): Promise<DashboardData> {
   }>) {
     if (!m.profile_id) continue;
     const km =
-      typeof m.distance_km === 'string'
-        ? Number.parseFloat(m.distance_km)
-        : (m.distance_km ?? 0);
+      typeof m.distance_km === 'string' ? Number.parseFloat(m.distance_km) : (m.distance_km ?? 0);
     bucket(m.profile_id).km += Number.isFinite(km) ? (km as number) : 0;
   }
 
@@ -181,10 +170,7 @@ export default function DashboardPage() {
       const aScore = aa.checkIns + aa.orders + aa.km;
       const bScore = bb.checkIns + bb.orders + bb.km;
       if (bScore !== aScore) return bScore - aScore;
-      return (a.ad_soyad ?? a.email ?? '').localeCompare(
-        b.ad_soyad ?? b.email ?? '',
-        'tr',
-      );
+      return (a.ad_soyad ?? a.email ?? '').localeCompare(b.ad_soyad ?? b.email ?? '', 'tr');
     });
   }, [data, reps]);
 
@@ -192,12 +178,8 @@ export default function DashboardPage() {
     <div className="flex h-full min-h-screen flex-col bg-slate-50">
       <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">
-            Yönetici Paneli
-          </h1>
-          <p className="text-xs text-slate-500">
-            Saha rep'lerinin dönem performansı.
-          </p>
+          <h1 className="text-xl font-semibold text-slate-900">Yönetici Paneli</h1>
+          <p className="text-xs text-slate-500">Saha rep'lerinin dönem performansı.</p>
         </div>
         <div className="flex items-center gap-1 rounded-md border border-slate-200 bg-white p-1 shadow-sm">
           {RANGE_OPTIONS.map((opt) => {
@@ -222,8 +204,7 @@ export default function DashboardPage() {
 
       {dashboardQuery.isError && (
         <div className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">
-          Veri yüklenemedi:{' '}
-          {(dashboardQuery.error as Error | null)?.message ?? 'bilinmeyen hata'}
+          Veri yüklenemedi: {(dashboardQuery.error as Error | null)?.message ?? 'bilinmeyen hata'}
         </div>
       )}
 
@@ -234,16 +215,52 @@ export default function DashboardPage() {
             Yönetici Menüsü
           </h2>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-            <AdminLink to="/admin/clinic-scan" label="Klinik Tarama" icon={<Radar className="h-4 w-4" />} />
-            <AdminLink to="/admin/clinics" label="CSV / Excel İçe Aktar" icon={<FileUp className="h-4 w-4" />} />
-            <AdminLink to="/admin/heatmap" label="Heatmap" icon={<Activity className="h-4 w-4" />} />
-            <AdminLink to="/admin/regions" label="Bölge Atama" icon={<MapPinned className="h-4 w-4" />} />
-            <AdminLink to="/admin/users" label="Kullanıcı Yönetimi" icon={<UserCog className="h-4 w-4" />} />
-            <AdminLink to="/admin/audit-logs" label="Audit Log" icon={<ScrollText className="h-4 w-4" />} />
-            <AdminLink to="/orders/approval" label="Sipariş Onay" icon={<ClipboardCheck className="h-4 w-4" />} />
+            <AdminLink
+              to="/admin/clinic-scan"
+              label="Klinik Tarama"
+              icon={<Radar className="h-4 w-4" />}
+            />
+            <AdminLink
+              to="/admin/clinics"
+              label="CSV / Excel İçe Aktar"
+              icon={<FileUp className="h-4 w-4" />}
+            />
+            <AdminLink
+              to="/admin/heatmap"
+              label="Heatmap"
+              icon={<Activity className="h-4 w-4" />}
+            />
+            <AdminLink
+              to="/admin/regions"
+              label="Bölge Atama"
+              icon={<MapPinned className="h-4 w-4" />}
+            />
+            <AdminLink
+              to="/admin/users"
+              label="Kullanıcı Yönetimi"
+              icon={<UserCog className="h-4 w-4" />}
+            />
+            <AdminLink
+              to="/admin/audit-logs"
+              label="Audit Log"
+              icon={<ScrollText className="h-4 w-4" />}
+            />
+            <AdminLink
+              to="/orders/approval"
+              label="Sipariş Onay"
+              icon={<ClipboardCheck className="h-4 w-4" />}
+            />
             <AdminLink to="/invoicing/cari" label="Cariler" icon={<Wallet className="h-4 w-4" />} />
-            <AdminLink to="/invoicing/fatura/yeni" label="Yeni Fatura" icon={<Receipt className="h-4 w-4" />} />
-            <AdminLink to="/invoicing/cek-senet" label="Çek / Senet" icon={<CreditCard className="h-4 w-4" />} />
+            <AdminLink
+              to="/invoicing/fatura/yeni"
+              label="Yeni Fatura"
+              icon={<Receipt className="h-4 w-4" />}
+            />
+            <AdminLink
+              to="/invoicing/cek-senet"
+              label="Çek / Senet"
+              icon={<CreditCard className="h-4 w-4" />}
+            />
           </div>
         </section>
 
@@ -278,13 +295,9 @@ export default function DashboardPage() {
         {/* Rep tablosu */}
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-200 px-4 py-3">
-            <h2 className="text-sm font-semibold text-slate-700">
-              Rep Performansı
-            </h2>
+            <h2 className="text-sm font-semibold text-slate-700">Rep Performansı</h2>
             <p className="text-xs text-slate-500">
-              {dashboardQuery.isLoading
-                ? 'Yükleniyor...'
-                : `${reps.length} rep listeleniyor`}
+              {dashboardQuery.isLoading ? 'Yükleniyor...' : `${reps.length} rep listeleniyor`}
             </p>
           </div>
           <div className="overflow-x-auto">
@@ -301,20 +314,14 @@ export default function DashboardPage() {
               <tbody className="divide-y divide-slate-100">
                 {dashboardQuery.isLoading && (
                   <tr>
-                    <td
-                      colSpan={5}
-                      className="px-4 py-6 text-center text-slate-500"
-                    >
+                    <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
                       Yükleniyor...
                     </td>
                   </tr>
                 )}
                 {!dashboardQuery.isLoading && sortedReps.length === 0 && (
                   <tr>
-                    <td
-                      colSpan={5}
-                      className="px-4 py-6 text-center text-slate-500"
-                    >
+                    <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
                       Rep bulunamadı.
                     </td>
                   </tr>
@@ -327,12 +334,8 @@ export default function DashboardPage() {
                   };
                   return (
                     <tr key={rep.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-2 font-medium text-slate-800">
-                        {repLabel(rep)}
-                      </td>
-                      <td className="px-4 py-2 text-slate-600">
-                        {rep.email ?? '—'}
-                      </td>
+                      <td className="px-4 py-2 font-medium text-slate-800">{repLabel(rep)}</td>
+                      <td className="px-4 py-2 text-slate-600">{rep.email ?? '—'}</td>
                       <td className="px-4 py-2 text-right tabular-nums text-slate-700">
                         {agg.checkIns.toLocaleString('tr-TR')}
                       </td>
@@ -368,9 +371,7 @@ function StatCard({ label, value, icon, loading }: StatCardProps) {
         {icon}
       </div>
       <div className="min-w-0">
-        <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-          {label}
-        </div>
+        <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
         <div className="text-xl font-semibold text-slate-900 tabular-nums">
           {loading ? '...' : value}
         </div>

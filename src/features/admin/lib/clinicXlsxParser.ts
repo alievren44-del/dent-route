@@ -14,14 +14,7 @@ import * as XLSX from 'xlsx';
 // Tipler
 // ----------------------------------------------------------------------------
 
-export type TargetField =
-  | 'name'
-  | 'address'
-  | 'phone'
-  | 'lat'
-  | 'lng'
-  | 'neighborhood'
-  | 'type';
+export type TargetField = 'name' | 'address' | 'phone' | 'lat' | 'lng' | 'neighborhood' | 'type';
 
 export type ClinicType = 'private_clinic' | 'public_hospital' | 'polyclinic';
 
@@ -61,10 +54,7 @@ export function parseSheetNames(arrayBuffer: ArrayBuffer): string[] {
  * Belirli bir sheet'i okur; header array + row dict array döner.
  * Boş hücreler null olur (defval: null).
  */
-export function parseSheetRows(
-  arrayBuffer: ArrayBuffer,
-  sheetName: string,
-): ParsedSheet {
+export function parseSheetRows(arrayBuffer: ArrayBuffer, sheetName: string): ParsedSheet {
   const wb = XLSX.read(arrayBuffer, { type: 'array' });
   const ws = wb.Sheets[sheetName];
   if (!ws) return { headers: [], rows: [] };
@@ -98,9 +88,7 @@ export function parseSheetRows(
  *
  * Match case-insensitive ve "contains" mantığı; ilk eşleşen header alınır.
  */
-export function inferColumnMapping(
-  headers: string[],
-): Partial<Record<TargetField, string>> {
+export function inferColumnMapping(headers: string[]): Partial<Record<TargetField, string>> {
   const mapping: Partial<Record<TargetField, string>> = {};
 
   const rules: Array<{ target: TargetField; patterns: string[] }> = [
@@ -183,7 +171,7 @@ export function mapRows(
     const nbhCol = mapping.neighborhood;
 
     const row: ClinicRow = {
-      name: nameCol ? toStr(r[nameCol]) ?? '' : '',
+      name: nameCol ? (toStr(r[nameCol]) ?? '') : '',
     };
 
     if (addrCol) {

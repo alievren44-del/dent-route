@@ -8,15 +8,15 @@
  */
 @layer base {
   :root {
-    --color-primary: 37 99 235;          /* #2563EB */
+    --color-primary: 37 99 235; /* #2563EB */
     --color-primary-foreground: 255 255 255;
-    --color-accent: 16 185 129;          /* #10B981 */
+    --color-accent: 16 185 129; /* #10B981 */
     --color-accent-foreground: 255 255 255;
     --color-background: 255 255 255;
-    --color-foreground: 15 23 42;        /* slate-900 */
-    --color-muted: 241 245 249;          /* slate-100 */
+    --color-foreground: 15 23 42; /* slate-900 */
+    --color-muted: 241 245 249; /* slate-100 */
     --color-muted-foreground: 100 116 139; /* slate-500 */
-    --color-border: 226 232 240;         /* slate-200 */
+    --color-border: 226 232 240; /* slate-200 */
   }
 
   html {

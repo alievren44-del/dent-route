@@ -18,13 +18,7 @@
  * UI dependencies: tailwind, lucide-react, sonner — yeni npm paketi yok.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type FormEvent,
-} from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
 import { Edit, Trash2, Save, X } from 'lucide-react';
 
@@ -52,11 +46,7 @@ export interface SahaClinicRow {
   raw_payload: Record<string, unknown> | null;
 }
 
-export type ClinicType =
-  | 'private_clinic'
-  | 'public_hospital'
-  | 'polyclinic'
-  | 'other';
+export type ClinicType = 'private_clinic' | 'public_hospital' | 'polyclinic' | 'other';
 
 interface Props {
   clinic: SahaClinicRow;
@@ -87,18 +77,10 @@ function readNeighborhood(raw: Record<string, unknown> | null): string {
   return typeof n === 'string' ? n : '';
 }
 
-function readClinicType(
-  raw: Record<string, unknown> | null,
-  sources: string[] | null,
-): ClinicType {
+function readClinicType(raw: Record<string, unknown> | null, sources: string[] | null): ClinicType {
   if (raw) {
     const t = raw['clinic_type'];
-    if (
-      t === 'private_clinic' ||
-      t === 'public_hospital' ||
-      t === 'polyclinic' ||
-      t === 'other'
-    ) {
+    if (t === 'private_clinic' || t === 'public_hospital' || t === 'polyclinic' || t === 'other') {
       return t;
     }
   }
@@ -143,9 +125,7 @@ export default function EditClinicModal({
   const [name, setName] = useState<string>(clinic.name);
   const [address, setAddress] = useState<string>(clinic.address ?? '');
   const [phone, setPhone] = useState<string>(clinic.phone ?? '');
-  const [neighborhood, setNeighborhood] = useState<string>(
-    readNeighborhood(clinic.raw_payload),
-  );
+  const [neighborhood, setNeighborhood] = useState<string>(readNeighborhood(clinic.raw_payload));
   const [clinicType, setClinicType] = useState<ClinicType>(
     readClinicType(clinic.raw_payload, clinic.sources),
   );
@@ -201,9 +181,7 @@ export default function EditClinicModal({
     const before = pickAuditFields(clinic);
 
     // raw_payload'ı koru, neighborhood/clinic_type alanlarını güncelle.
-    const existingRaw = isPlainObject(clinic.raw_payload)
-      ? clinic.raw_payload
-      : {};
+    const existingRaw = isPlainObject(clinic.raw_payload) ? clinic.raw_payload : {};
     const nextRaw: Record<string, unknown> = {
       ...existingRaw,
       neighborhood: neighborhood.trim() || null,
@@ -241,9 +219,7 @@ export default function EditClinicModal({
       onSaved?.(updated);
       onClose();
     } catch (err) {
-      toast.error(
-        `Kaydedilemedi: ${(err as Error)?.message ?? 'bilinmeyen hata'}`,
-      );
+      toast.error(`Kaydedilemedi: ${(err as Error)?.message ?? 'bilinmeyen hata'}`);
     } finally {
       setSaving(false);
     }
@@ -262,10 +238,7 @@ export default function EditClinicModal({
     const before = pickAuditFields(clinic);
 
     try {
-      const { error } = await supabase
-        .from('saha_clinics')
-        .delete()
-        .eq('id', clinic.id);
+      const { error } = await supabase.from('saha_clinics').delete().eq('id', clinic.id);
       if (error) throw error;
 
       // clinic FK ON DELETE SET NULL — clinicId null geçiyoruz.
@@ -280,9 +253,7 @@ export default function EditClinicModal({
       onDeleted?.();
       onClose();
     } catch (err) {
-      toast.error(
-        `Silinemedi: ${(err as Error)?.message ?? 'bilinmeyen hata'}`,
-      );
+      toast.error(`Silinemedi: ${(err as Error)?.message ?? 'bilinmeyen hata'}`);
     } finally {
       setDeleting(false);
     }
@@ -322,16 +293,10 @@ export default function EditClinicModal({
           </button>
         </div>
 
-        <form
-          onSubmit={handleSave}
-          className="max-h-[75vh] space-y-3 overflow-y-auto px-5 py-4"
-        >
+        <form onSubmit={handleSave} className="max-h-[75vh] space-y-3 overflow-y-auto px-5 py-4">
           {/* Klinik adı */}
           <div>
-            <label
-              htmlFor="ec-name"
-              className="mb-1 block text-xs font-medium text-slate-600"
-            >
+            <label htmlFor="ec-name" className="mb-1 block text-xs font-medium text-slate-600">
               Klinik Adı <span className="text-rose-600">*</span>
             </label>
             <input
@@ -347,10 +312,7 @@ export default function EditClinicModal({
 
           {/* Adres */}
           <div>
-            <label
-              htmlFor="ec-address"
-              className="mb-1 block text-xs font-medium text-slate-600"
-            >
+            <label htmlFor="ec-address" className="mb-1 block text-xs font-medium text-slate-600">
               Adres
             </label>
             <textarea
@@ -365,10 +327,7 @@ export default function EditClinicModal({
 
           {/* Telefon */}
           <div>
-            <label
-              htmlFor="ec-phone"
-              className="mb-1 block text-xs font-medium text-slate-600"
-            >
+            <label htmlFor="ec-phone" className="mb-1 block text-xs font-medium text-slate-600">
               Telefon
             </label>
             <input
@@ -401,9 +360,7 @@ export default function EditClinicModal({
 
           {/* Tip */}
           <div>
-            <span className="mb-1 block text-xs font-medium text-slate-600">
-              Tip
-            </span>
+            <span className="mb-1 block text-xs font-medium text-slate-600">Tip</span>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {CLINIC_TYPE_OPTIONS.map((opt) => {
                 const checked = clinicType === opt.value;
@@ -435,17 +392,13 @@ export default function EditClinicModal({
           {/* Read-only: il / ilçe */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <span className="mb-1 block text-xs font-medium text-slate-600">
-                İl
-              </span>
+              <span className="mb-1 block text-xs font-medium text-slate-600">İl</span>
               <div className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-2 text-sm text-slate-600">
                 {clinic.province_slug ?? '—'}
               </div>
             </div>
             <div>
-              <span className="mb-1 block text-xs font-medium text-slate-600">
-                İlçe
-              </span>
+              <span className="mb-1 block text-xs font-medium text-slate-600">İlçe</span>
               <div className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-2 text-sm text-slate-600">
                 {clinic.district_slug ?? '—'}
               </div>
@@ -462,10 +415,7 @@ export default function EditClinicModal({
             </div>
             <p className="mt-1 text-[11px] text-slate-500">
               Konumu değiştirmek için bu kaydı silip{' '}
-              <span className="underline decoration-dotted">
-                manuel kayıt ekle
-              </span>{' '}
-              akışını kullan.
+              <span className="underline decoration-dotted">manuel kayıt ekle</span> akışını kullan.
             </p>
           </div>
 
@@ -482,11 +432,7 @@ export default function EditClinicModal({
               }`}
             >
               <Trash2 className="h-3.5 w-3.5" />
-              {deleting
-                ? 'Siliniyor…'
-                : confirmDelete
-                  ? 'Emin misin? Tekrar bas'
-                  : 'Sil'}
+              {deleting ? 'Siliniyor…' : confirmDelete ? 'Emin misin? Tekrar bas' : 'Sil'}
             </button>
 
             <div className="flex gap-2">

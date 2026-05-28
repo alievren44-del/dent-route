@@ -15,7 +15,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useNavigate } from 'react-router-dom';
-import { Loader2, MapPin, AlertCircle, BadgeCheck, Phone, Star, ShoppingCart, Crosshair } from 'lucide-react';
+import {
+  Loader2,
+  MapPin,
+  AlertCircle,
+  BadgeCheck,
+  Phone,
+  Star,
+  ShoppingCart,
+  Crosshair,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 import { useGeolocation } from '@features/map/hooks/useGeolocation';
@@ -56,9 +65,14 @@ interface DistrictInfo {
 function slugifyTr(s: string): string {
   return String(s ?? '')
     .toLocaleLowerCase('tr-TR')
-    .replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ı/g, 'i')
-    .replace(/i̇/g, 'i').replace(/ö/g, 'o').replace(/ş/g, 's')
-    .replace(/ü/g, 'u').replace(/[^a-z0-9]+/g, '-')
+    .replace(/ç/g, 'c')
+    .replace(/ğ/g, 'g')
+    .replace(/ı/g, 'i')
+    .replace(/i̇/g, 'i')
+    .replace(/ö/g, 'o')
+    .replace(/ş/g, 's')
+    .replace(/ü/g, 'u')
+    .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
 }
 
@@ -140,12 +154,22 @@ export default function SahaTaraPage() {
   // Manuel ilçe seçimi → districtInfo
   useEffect(() => {
     if (locationMode !== 'manual' || !manualProvince || !manualDistrict) return;
-    const list = districts as Array<{ il_ad: string; ad: string; slug: string; nufus_2023: number }>;
+    const list = districts as Array<{
+      il_ad: string;
+      ad: string;
+      slug: string;
+      nufus_2023: number;
+    }>;
     const found = list.find(
       (d) => slugifyTr(d.il_ad) === manualProvince && d.slug === manualDistrict,
     );
     if (found) {
-      setDistrictInfo({ slug: found.slug, ad: found.ad, il_ad: found.il_ad, nufus: found.nufus_2023 });
+      setDistrictInfo({
+        slug: found.slug,
+        ad: found.ad,
+        il_ad: found.il_ad,
+        nufus: found.nufus_2023,
+      });
     }
   }, [locationMode, manualProvince, manualDistrict]);
 
@@ -155,7 +179,13 @@ export default function SahaTaraPage() {
       return { lat: geo.position.lat, lng: geo.position.lng };
     }
     if (locationMode === 'manual' && manualProvince && manualDistrict) {
-      const list = districts as Array<{ il_ad: string; ad: string; slug: string; lat: number; lng: number }>;
+      const list = districts as Array<{
+        il_ad: string;
+        ad: string;
+        slug: string;
+        lat: number;
+        lng: number;
+      }>;
       const found = list.find(
         (d) => slugifyTr(d.il_ad) === manualProvince && d.slug === manualDistrict,
       );
@@ -242,12 +272,15 @@ export default function SahaTaraPage() {
         console.error('[triggerFreshScan] invoke error:', error);
         throw error;
       }
-      const result = (data as { status?: string; new?: number; scanned?: number; errors?: string[] }) ?? {};
+      const result =
+        (data as { status?: string; new?: number; scanned?: number; errors?: string[] }) ?? {};
       if (result.status === 'error') {
         const errMsg = result.errors?.join(', ') ?? 'tarama hatası';
         throw new Error(errMsg);
       }
-      toast.success(`${result.new ?? 0} yeni klinik bulundu (${result.scanned ?? 0} taranan toplam)`);
+      toast.success(
+        `${result.new ?? 0} yeni klinik bulundu (${result.scanned ?? 0} taranan toplam)`,
+      );
       // Refresh usage + DB list
       const newUsage = await getDailyUsage('clinic-scan-v3', FRESH_DAILY_LIMIT);
       setUsage(newUsage);
@@ -338,7 +371,10 @@ export default function SahaTaraPage() {
           <div className="flex items-center gap-2 text-sm text-blue-900">
             <MapPin size={16} />
             <span>
-              <strong>{districtInfo.il_ad} / {districtInfo.ad}</strong> — nüfus {(districtInfo.nufus / 1000).toFixed(0)}k
+              <strong>
+                {districtInfo.il_ad} / {districtInfo.ad}
+              </strong>{' '}
+              — nüfus {(districtInfo.nufus / 1000).toFixed(0)}k
             </span>
           </div>
           <p className="mt-1 text-xs text-blue-700">{describeRadius(radius)}</p>
@@ -371,8 +407,8 @@ export default function SahaTaraPage() {
         <section className="rounded-xl bg-emerald-50 p-3">
           <div className="flex items-center justify-between text-sm text-emerald-900">
             <span>
-              <strong>Yeni tarama:</strong> Google üzerinden yeni klinikler bul.
-              Günlük {usage.used}/{usage.limit} kullanıldı.
+              <strong>Yeni tarama:</strong> Google üzerinden yeni klinikler bul. Günlük {usage.used}
+              /{usage.limit} kullanıldı.
             </span>
             <button
               type="button"
@@ -406,7 +442,9 @@ export default function SahaTaraPage() {
 
       {!loading && clinics.length === 0 && geo.position && (
         <p className="text-sm text-slate-500">
-          {mode === 'db' ? 'Bu yarıçapta klinik yok. Taze tara ile Google\'a sor.' : 'Tara butonuna bas.'}
+          {mode === 'db'
+            ? "Bu yarıçapta klinik yok. Taze tara ile Google'a sor."
+            : 'Tara butonuna bas.'}
         </p>
       )}
 
@@ -430,12 +468,16 @@ export default function SahaTaraPage() {
                           )}
                         </span>
                       )}
-                      <span className={`inline-flex items-center gap-0.5 ${fresh.warn ? 'text-amber-700' : 'text-emerald-700'}`}>
+                      <span
+                        className={`inline-flex items-center gap-0.5 ${fresh.warn ? 'text-amber-700' : 'text-emerald-700'}`}
+                      >
                         <BadgeCheck size={11} />
                         {fresh.text}
                       </span>
                     </div>
-                    {c.address && <div className="mt-1 text-xs text-slate-500 truncate">{c.address}</div>}
+                    {c.address && (
+                      <div className="mt-1 text-xs text-slate-500 truncate">{c.address}</div>
+                    )}
                   </div>
                   <button
                     type="button"

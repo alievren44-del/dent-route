@@ -44,10 +44,7 @@ export class AdapterError extends Error {
   }
 
   static notFound(resource: string, id?: string): AdapterError {
-    return new AdapterError(
-      'NOT_FOUND',
-      `${resource}${id ? ` "${id}"` : ''} bulunamadı.`,
-    );
+    return new AdapterError('NOT_FOUND', `${resource}${id ? ` "${id}"` : ''} bulunamadı.`);
   }
 
   static unauthorized(message = 'Yetkisiz erişim.'): AdapterError {
@@ -70,11 +67,9 @@ export class AdapterError extends Error {
   }
 
   static schemaMismatch(adapter: string, details?: Record<string, unknown>): AdapterError {
-    return new AdapterError(
-      'SCHEMA_MISMATCH',
-      `${adapter} adapter response sözleşmeye uymuyor.`,
-      { details },
-    );
+    return new AdapterError('SCHEMA_MISMATCH', `${adapter} adapter response sözleşmeye uymuyor.`, {
+      details,
+    });
   }
 
   static notImplemented(capability: string): AdapterError {

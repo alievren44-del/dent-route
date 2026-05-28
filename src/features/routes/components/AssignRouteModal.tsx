@@ -57,7 +57,9 @@ export function AssignRouteModal({ open, onClose, payload }: Props) {
         const list = (data ?? []) as RepProfile[];
         // Sadece saha rep/admin/manager rolleri
         const filtered = list.filter((p) =>
-          ['REP', 'SALES_REP', 'ADMIN', 'MANAGER', 'sales_rep', 'admin', 'manager'].includes(p.role),
+          ['REP', 'SALES_REP', 'ADMIN', 'MANAGER', 'sales_rep', 'admin', 'manager'].includes(
+            p.role,
+          ),
         );
         setReps(filtered);
       } catch (e) {
@@ -192,7 +194,8 @@ export function AssignRouteModal({ open, onClose, payload }: Props) {
           </label>
 
           <div className="rounded-lg bg-slate-50 p-2 text-xs text-slate-600">
-            <strong>{payload.account_ids.length} durak</strong> · {payload.total_distance_km.toFixed(1)} km · {payload.total_duration_min} dk
+            <strong>{payload.account_ids.length} durak</strong> ·{' '}
+            {payload.total_distance_km.toFixed(1)} km · {payload.total_duration_min} dk
           </div>
         </div>
 

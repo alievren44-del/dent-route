@@ -85,9 +85,7 @@ function CekSenetListPage(): JSX.Element {
             type="button"
             onClick={() => setTab(t.key)}
             className={`px-3 py-3 min-h-tap-min text-xs font-medium whitespace-nowrap ${
-              tab === t.key
-                ? 'text-primary border-b-2 border-primary'
-                : 'text-muted-foreground'
+              tab === t.key ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground'
             }`}
           >
             {t.label}
@@ -108,9 +106,7 @@ function CekSenetListPage(): JSX.Element {
           </div>
         )}
 
-        {isLoading && (
-          <p className="text-center text-sm text-muted-foreground py-6">Yükleniyor…</p>
-        )}
+        {isLoading && <p className="text-center text-sm text-muted-foreground py-6">Yükleniyor…</p>}
         {!isLoading && (items ?? []).length === 0 && (
           <p className="text-center text-sm text-muted-foreground py-10">Kayıt yok.</p>
         )}
@@ -136,16 +132,12 @@ function CekSenetCard({ item }: { item: CekSenetRow }): JSX.Element {
   const today = new Date().toISOString().slice(0, 10);
   const limit7 = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
   const overdue = item.durum === 'portfoyde' && item.vade_tarihi < today;
-  const approaching =
-    item.durum === 'portfoyde' && !overdue && item.vade_tarihi <= limit7;
+  const approaching = item.durum === 'portfoyde' && !overdue && item.vade_tarihi <= limit7;
 
   const mutation = useMutation({
     mutationFn: async (patch: Partial<CekSenetRow>) => {
       const supabase = getSupabaseClient();
-      const { error } = await supabase
-        .from('saha_cek_senetler')
-        .update(patch)
-        .eq('id', item.id);
+      const { error } = await supabase.from('saha_cek_senetler').update(patch).eq('id', item.id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -175,11 +167,7 @@ function CekSenetCard({ item }: { item: CekSenetRow }): JSX.Element {
     });
   }
 
-  const borderCls = overdue
-    ? 'border-red-300'
-    : approaching
-      ? 'border-amber-300'
-      : 'border-border';
+  const borderCls = overdue ? 'border-red-300' : approaching ? 'border-amber-300' : 'border-border';
 
   return (
     <div className={`rounded-lg border ${borderCls} bg-card p-3`}>
@@ -187,14 +175,20 @@ function CekSenetCard({ item }: { item: CekSenetRow }): JSX.Element {
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold">
             {item.tip === 'cek' ? 'Çek' : 'Senet'}
-            {item.cek_no && <span className="ml-1 text-xs text-muted-foreground">#{item.cek_no}</span>}
+            {item.cek_no && (
+              <span className="ml-1 text-xs text-muted-foreground">#{item.cek_no}</span>
+            )}
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">
             {item.banka ?? '—'} • Keşideci: {item.kesideci}
           </p>
           <p
             className={`text-xs mt-1 ${
-              overdue ? 'text-red-600 font-medium' : approaching ? 'text-amber-700' : 'text-muted-foreground'
+              overdue
+                ? 'text-red-600 font-medium'
+                : approaching
+                  ? 'text-amber-700'
+                  : 'text-muted-foreground'
             }`}
           >
             Vade: {fmtDate(item.vade_tarihi)}
@@ -284,9 +278,7 @@ function CekSenetCard({ item }: { item: CekSenetRow }): JSX.Element {
           {actionOpen === 'tahsil' && (
             <>
               <p className="text-xs font-medium">Tahsil edildi olarak işaretle?</p>
-              <p className="text-[11px] text-muted-foreground">
-                Tahsil tarihi: {today}
-              </p>
+              <p className="text-[11px] text-muted-foreground">Tahsil tarihi: {today}</p>
               <div className="flex justify-end gap-1.5">
                 <button
                   type="button"

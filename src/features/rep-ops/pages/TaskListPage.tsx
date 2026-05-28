@@ -324,7 +324,9 @@ export default function TaskListPage() {
                     </span>
                     {t.scheduled_time && <span>⏰ {t.scheduled_time}</span>}
                     {t.client_id && <span>👤 {t.client_id.slice(0, 8)}</span>}
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${st.color}`}>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${st.color}`}
+                    >
                       {st.label}
                     </span>
                   </div>

@@ -14,21 +14,14 @@ interface Props {
   onClick: () => void;
 }
 
-export function ProvinceCard({
-  name,
-  distanceKm,
-  clinicCount,
-  nufus,
-  bolge,
-  onClick,
-}: Props) {
+export function ProvinceCard({ name, distanceKm, clinicCount, nufus, bolge, onClick }: Props) {
   const distanceLabel = distanceKm < 1 ? '<1 km' : `${distanceKm.toFixed(1)} km`;
   const nufusLabel =
     nufus >= 1_000_000
       ? `${(nufus / 1_000_000).toFixed(1)}M`
       : nufus >= 1_000
-      ? `${Math.round(nufus / 1_000)}k`
-      : `${nufus}`;
+        ? `${Math.round(nufus / 1_000)}k`
+        : `${nufus}`;
 
   return (
     <button

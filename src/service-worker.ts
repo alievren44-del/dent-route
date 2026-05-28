@@ -28,9 +28,7 @@ registerRoute(
 
 // ─── API responses — stale-while-revalidate ──────────────────
 registerRoute(
-  ({ url }) =>
-    url.pathname.includes('/rest/v1/') ||
-    url.pathname.includes('/functions/v1/'),
+  ({ url }) => url.pathname.includes('/rest/v1/') || url.pathname.includes('/functions/v1/'),
   new StaleWhileRevalidate({
     cacheName: API_CACHE,
     plugins: [

@@ -59,7 +59,10 @@ export function getSupabaseClient(): SupabaseClient {
   // functions.invoke wrapper — gönderilen body + dönen error/data debug panele
   const fn = cachedClient.functions;
   const origInvoke = fn.invoke.bind(fn);
-  fn.invoke = (async (fnName: string, opts?: { body?: unknown; headers?: Record<string, string> }) => {
+  fn.invoke = (async (
+    fnName: string,
+    opts?: { body?: unknown; headers?: Record<string, string> },
+  ) => {
     const t0 = performance.now();
     try {
       const res = await origInvoke(fnName, opts as never);

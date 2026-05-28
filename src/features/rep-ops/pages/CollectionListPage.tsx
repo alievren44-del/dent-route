@@ -111,7 +111,8 @@ export default function CollectionListPage() {
             Tahsilatlarım
           </h1>
           <p className="text-sm text-slate-500">
-            Bu ay onaylanan: <span className="font-bold text-emerald-600">{formatTRY(monthlyTotal)}</span>
+            Bu ay onaylanan:{' '}
+            <span className="font-bold text-emerald-600">{formatTRY(monthlyTotal)}</span>
           </p>
         </div>
         <button
@@ -240,7 +241,9 @@ export default function CollectionListPage() {
                       {formatTRY(Number(c.amount))}
                     </td>
                     <td className="px-3 py-2 text-center">
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${st.color}`}>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${st.color}`}
+                      >
                         {st.label}
                       </span>
                     </td>

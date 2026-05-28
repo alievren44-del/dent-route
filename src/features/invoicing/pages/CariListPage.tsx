@@ -84,9 +84,9 @@ async function fetchCariler(filters: {
   return (data ?? []) as CariListRow[];
 }
 
-async function fetchFaturaSums(cariIds: string[]): Promise<
-  Map<string, { kalan: number; oldestDue: string | null; updatedAt: string | null }>
-> {
+async function fetchFaturaSums(
+  cariIds: string[],
+): Promise<Map<string, { kalan: number; oldestDue: string | null; updatedAt: string | null }>> {
   const map = new Map<
     string,
     { kalan: number; oldestDue: string | null; updatedAt: string | null }
@@ -110,7 +110,7 @@ async function fetchFaturaSums(cariIds: string[]): Promise<
     const prev = map.get(row.cari_id) ?? { kalan: 0, oldestDue: null, updatedAt: null };
     const sign = row.tip === 'iade' ? -1 : 1;
     prev.kalan += sign * Number(row.kalan ?? 0);
-    if (row.vade_tarihi && (Number(row.kalan ?? 0) > 0)) {
+    if (row.vade_tarihi && Number(row.kalan ?? 0) > 0) {
       if (!prev.oldestDue || row.vade_tarihi < prev.oldestDue) prev.oldestDue = row.vade_tarihi;
     }
     if (!prev.updatedAt || row.updated_at > prev.updatedAt) prev.updatedAt = row.updated_at;
@@ -175,7 +175,8 @@ function CariListPage(): JSX.Element {
       const bakiye = Number(c.acilis_bakiyesi ?? 0) + (sums?.kalan ?? 0);
       const oldestDue = sums?.oldestDue ?? null;
       const hasOverdue = !!oldestDue && bakiye > 0 && oldestDue < today;
-      const hasApproaching = !!oldestDue && bakiye > 0 && oldestDue >= today && oldestDue <= tenDaysLater;
+      const hasApproaching =
+        !!oldestDue && bakiye > 0 && oldestDue >= today && oldestDue <= tenDaysLater;
       return {
         ...c,
         bakiye: Math.round(bakiye * 100) / 100,
@@ -307,9 +308,7 @@ function CariListPage(): JSX.Element {
 
       {/* Liste */}
       <div className="px-4 py-3 space-y-2">
-        {isLoading && (
-          <p className="text-center text-muted-foreground py-6 text-sm">Yükleniyor…</p>
-        )}
+        {isLoading && <p className="text-center text-muted-foreground py-6 text-sm">Yükleniyor…</p>}
         {!isLoading && filtered.length === 0 && (
           <p className="text-center text-muted-foreground py-10 text-sm">Cari bulunamadı.</p>
         )}
@@ -336,9 +335,7 @@ function CariListPage(): JSX.Element {
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
-                  <span
-                    className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${badge.cls}`}
-                  >
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${badge.cls}`}>
                     {badge.label}
                   </span>
                   <span
@@ -365,10 +362,7 @@ function CariListPage(): JSX.Element {
       </div>
 
       {createOpen && (
-        <NewCariModal
-          initialProfileId={initialCreateFor}
-          onClose={() => setCreateOpen(false)}
-        />
+        <NewCariModal initialProfileId={initialCreateFor} onClose={() => setCreateOpen(false)} />
       )}
     </div>
   );
@@ -624,7 +618,9 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
             disabled={mutation.isPending}
             className="flex-1 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center gap-1.5 min-h-tap-min disabled:opacity-50"
           >
-            {mutation.isPending ? 'Kaydediliyor…' : (
+            {mutation.isPending ? (
+              'Kaydediliyor…'
+            ) : (
               <>
                 <Check className="h-4 w-4" />
                 Kaydet

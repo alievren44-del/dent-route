@@ -13,7 +13,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { Sparkles, MapPin, Loader2, AlertCircle, ShoppingCart, Footprints, Car, Activity } from 'lucide-react';
+import {
+  Sparkles,
+  MapPin,
+  Loader2,
+  AlertCircle,
+  ShoppingCart,
+  Footprints,
+  Car,
+  Activity,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 import { getEnv } from '@config/env';
@@ -72,12 +81,8 @@ export default function DistrictAutoRoutePage() {
   const navigate = useNavigate();
   const geo = useGeolocation();
 
-  const [provinceSlug, setProvinceSlug] = useState(
-    params.province ?? search.get('province') ?? '',
-  );
-  const [districtSlug, setDistrictSlug] = useState(
-    params.district ?? search.get('district') ?? '',
-  );
+  const [provinceSlug, setProvinceSlug] = useState(params.province ?? search.get('province') ?? '');
+  const [districtSlug, setDistrictSlug] = useState(params.district ?? search.get('district') ?? '');
   const [profile, setProfile] = useState<RouteProfile>('driving');
 
   const [clinics, setClinics] = useState<ClinicRow[]>([]);
@@ -163,7 +168,13 @@ export default function DistrictAutoRoutePage() {
       ];
       const supabase = getSupabaseClient();
       const { data, error } = await supabase.functions.invoke('mapbox-optimize', {
-        body: { coords: coordsForFn, profile, roundtrip: false, source: 'first', destination: 'last' },
+        body: {
+          coords: coordsForFn,
+          profile,
+          roundtrip: false,
+          source: 'first',
+          destination: 'last',
+        },
       });
       if (error) throw new Error(error.message);
       // Edge fn: {status, order:number[], distanceM, durationS, geometry}
@@ -263,13 +274,20 @@ export default function DistrictAutoRoutePage() {
     if (routeState.geometryEncoded) {
       lineCoords = decodePolyline(routeState.geometryEncoded);
     } else if (start) {
-      lineCoords = [[start.lng, start.lat], ...routeState.ordered.map((c) => [c.lng, c.lat] as [number, number])];
+      lineCoords = [
+        [start.lng, start.lat],
+        ...routeState.ordered.map((c) => [c.lng, c.lat] as [number, number]),
+      ];
     } else {
       lineCoords = routeState.ordered.map((c) => [c.lng, c.lat] as [number, number]);
     }
     m.addSource('route-src', {
       type: 'geojson',
-      data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: lineCoords } },
+      data: {
+        type: 'Feature',
+        properties: {},
+        geometry: { type: 'LineString', coordinates: lineCoords },
+      },
     });
     m.addLayer({
       id: 'route-line',
@@ -283,7 +301,8 @@ export default function DistrictAutoRoutePage() {
 
     if (start) {
       const el = document.createElement('div');
-      el.style.cssText = 'width:14px;height:14px;border-radius:50%;background:#a855f7;border:3px solid white;box-shadow:0 0 0 2px #a855f7;';
+      el.style.cssText =
+        'width:14px;height:14px;border-radius:50%;background:#a855f7;border:3px solid white;box-shadow:0 0 0 2px #a855f7;';
       const sm = new mapboxgl.Marker({ element: el }).setLngLat([start.lng, start.lat]).addTo(m);
       markersRef.current.push(sm);
     }
@@ -331,11 +350,13 @@ export default function DistrictAutoRoutePage() {
       <section className="rounded-xl bg-white p-3 shadow-sm">
         <h2 className="mb-2 text-sm font-semibold text-slate-700">Rota modu</h2>
         <div className="grid grid-cols-3 gap-1.5">
-          {([
-            { key: 'driving', label: 'Araç', Icon: Car },
-            { key: 'driving-traffic', label: 'Trafik', Icon: Activity },
-            { key: 'walking', label: 'Yaya', Icon: Footprints },
-          ] as const).map(({ key, label, Icon }) => (
+          {(
+            [
+              { key: 'driving', label: 'Araç', Icon: Car },
+              { key: 'driving-traffic', label: 'Trafik', Icon: Activity },
+              { key: 'walking', label: 'Yaya', Icon: Footprints },
+            ] as const
+          ).map(({ key, label, Icon }) => (
             <button
               key={key}
               type="button"
@@ -378,7 +399,8 @@ export default function DistrictAutoRoutePage() {
           </div>
           {clinics.length > MAPBOX_MAX && (
             <p className="text-xs text-slate-500">
-              ℹ {clinics.length} klinik — Mapbox limiti {MAPBOX_MAX} üstü. Hepsi local NN+2-opt ile rotalanır (kuşbakışı km, polyline yok).
+              ℹ {clinics.length} klinik — Mapbox limiti {MAPBOX_MAX} üstü. Hepsi local NN+2-opt ile
+              rotalanır (kuşbakışı km, polyline yok).
             </p>
           )}
         </section>
@@ -393,7 +415,10 @@ export default function DistrictAutoRoutePage() {
         </div>
       )}
 
-      <section ref={containerRef} className="h-[400px] w-full overflow-hidden rounded-xl border border-slate-200" />
+      <section
+        ref={containerRef}
+        className="h-[400px] w-full overflow-hidden rounded-xl border border-slate-200"
+      />
 
       {routeState && (
         <section className="rounded-xl bg-white p-3 shadow-sm">
@@ -423,11 +448,15 @@ export default function DistrictAutoRoutePage() {
             className="mt-3 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-sm font-semibold text-white shadow-md hover:bg-emerald-700"
           >
             <ShoppingCart size={16} />
-            Sepete aktar + Rota planlayıcıya geç (ilk {Math.min(routeState.ordered.length, MAX_BASKET)})
+            Sepete aktar + Rota planlayıcıya geç (ilk{' '}
+            {Math.min(routeState.ordered.length, MAX_BASKET)})
           </button>
           <ol className="mt-3 space-y-1.5">
             {routeState.ordered.map((c, i) => (
-              <li key={c.id} className="flex items-center gap-2 rounded-lg bg-slate-50 px-2 py-1.5 text-sm">
+              <li
+                key={c.id}
+                className="flex items-center gap-2 rounded-lg bg-slate-50 px-2 py-1.5 text-sm"
+              >
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[11px] font-bold text-white">
                   {i + 1}
                 </span>
@@ -438,9 +467,13 @@ export default function DistrictAutoRoutePage() {
                     {c.phone && <span className="ml-2">📞 {c.phone}</span>}
                   </div>
                 </div>
-                <span className={`rounded px-1.5 py-0.5 text-[10px] ${
-                  c.clinic_segment === 'kamu' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
-                }`}>
+                <span
+                  className={`rounded px-1.5 py-0.5 text-[10px] ${
+                    c.clinic_segment === 'kamu'
+                      ? 'bg-purple-100 text-purple-700'
+                      : 'bg-blue-100 text-blue-700'
+                  }`}
+                >
                   {c.clinic_segment === 'kamu' ? 'KAMU' : 'Özel'}
                 </span>
               </li>

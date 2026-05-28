@@ -91,7 +91,8 @@ export async function getHunterCandidates(
 
   const severityOrder = { blacklist: 3, risky: 2, warning: 1 } as const;
   results.sort(
-    (a, b) => severityOrder[b.severity] - severityOrder[a.severity] || b.sampleCount - a.sampleCount,
+    (a, b) =>
+      severityOrder[b.severity] - severityOrder[a.severity] || b.sampleCount - a.sampleCount,
   );
 
   return results;

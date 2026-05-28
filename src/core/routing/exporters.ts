@@ -73,10 +73,7 @@ export function buildGoogleMapsUrls(
  * Apple Maps URL — saddr / daddr / waypoint zinciri.
  * Apple Maps web `https://maps.apple.com/?saddr=...&daddr=...+to:...+to:...` formatını destekler.
  */
-export function buildAppleMapsUrl(
-  start: RoutePoint,
-  stops: RoutePoint[],
-): string {
+export function buildAppleMapsUrl(start: RoutePoint, stops: RoutePoint[]): string {
   if (stops.length === 0) {
     return `https://maps.apple.com/?ll=${fmt(start)}`;
   }
@@ -93,14 +90,9 @@ export function buildAppleMapsUrl(
  * Yandex Maps URL — rtext lat1,lng1~lat2,lng2~... formatı.
  * rtt=auto = sürüş.
  */
-export function buildYandexMapsUrl(
-  start: RoutePoint,
-  stops: RoutePoint[],
-): string {
+export function buildYandexMapsUrl(start: RoutePoint, stops: RoutePoint[]): string {
   const all: RoutePoint[] = [start, ...stops];
-  const rtext = all
-    .map((p) => `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`)
-    .join('~');
+  const rtext = all.map((p) => `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`).join('~');
   const params = new URLSearchParams();
   params.set('rtext', rtext);
   params.set('rtt', 'auto');

@@ -6,8 +6,8 @@ export interface Sample {
   id: string;
   accountId: string;
   repId: string;
-  givenAt: string;          // ISO
-  followUpAt: string;       // ISO
+  givenAt: string; // ISO
+  followUpAt: string; // ISO
   status: SampleStatus;
   convertedOrderId?: string;
   photoUrl?: string;
@@ -22,7 +22,7 @@ export interface SampleLine {
   id: string;
   sampleId: string;
   productId?: string;
-  productName: string;     // snapshot
+  productName: string; // snapshot
   qty: number;
   unit: string;
   unitCostTl?: number;
@@ -45,12 +45,12 @@ export interface NewSampleLine {
   qty: number;
   unit?: string;
   unitCostTl?: number;
-  categoryKey?: string;    // policy check için (composite_adhesive, implant, ...)
+  categoryKey?: string; // policy check için (composite_adhesive, implant, ...)
 }
 
 export interface SampleQuota {
   repId: string;
-  yearMonth: string;       // 'YYYY-MM'
+  yearMonth: string; // 'YYYY-MM'
   budgetTl: number;
   spentTl: number;
 }

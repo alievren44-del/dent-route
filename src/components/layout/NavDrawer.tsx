@@ -121,17 +121,8 @@ export function NavDrawer({ open, onClose, isAdmin }: NavDrawerProps) {
   const visibleSections = SECTIONS.filter((s) => !s.adminOnly || isAdmin);
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Ana menü"
-      className="fixed inset-0 z-50 flex"
-    >
-      <div
-        className="flex-1 bg-black/40"
-        aria-hidden="true"
-        onClick={onClose}
-      />
+    <div role="dialog" aria-modal="true" aria-label="Ana menü" className="fixed inset-0 z-50 flex">
+      <div className="flex-1 bg-black/40" aria-hidden="true" onClick={onClose} />
       <aside className="flex h-full w-80 max-w-[85vw] flex-col overflow-y-auto bg-background shadow-xl">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-base font-semibold text-foreground">Menü</h2>

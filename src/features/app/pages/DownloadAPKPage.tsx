@@ -53,7 +53,8 @@ export default function DownloadAPKPage() {
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
           <AlertCircle size={16} className="shrink-0 text-amber-600" />
           <p className="text-sm text-amber-700">
-            APK henüz yüklenmemiş. Build için: <code className="rounded bg-amber-100 px-1">bash scripts/build-apk.sh</code>
+            APK henüz yüklenmemiş. Build için:{' '}
+            <code className="rounded bg-amber-100 px-1">bash scripts/build-apk.sh</code>
           </p>
         </div>
       )}
@@ -99,13 +100,19 @@ export default function DownloadAPKPage() {
           Kurulum Adımları
         </h2>
         <ol className="space-y-1.5 text-xs text-amber-900">
-          <li><strong>1.</strong> APK'yı telefonuna indir</li>
           <li>
-            <strong>2.</strong> Ayarlar → Güvenlik → <em>"Bilinmeyen Kaynaklara İzin Ver"</em> aktif et
-            (Android 8+: Chrome veya dosya yöneticisi için tek tek aktif edilir)
+            <strong>1.</strong> APK'yı telefonuna indir
           </li>
-          <li><strong>3.</strong> İndirilen APK'ya dokun → Yükle</li>
-          <li><strong>4.</strong> Uygulamayı aç → şirket e-posta hesabınla giriş yap</li>
+          <li>
+            <strong>2.</strong> Ayarlar → Güvenlik → <em>"Bilinmeyen Kaynaklara İzin Ver"</em> aktif
+            et (Android 8+: Chrome veya dosya yöneticisi için tek tek aktif edilir)
+          </li>
+          <li>
+            <strong>3.</strong> İndirilen APK'ya dokun → Yükle
+          </li>
+          <li>
+            <strong>4.</strong> Uygulamayı aç → şirket e-posta hesabınla giriş yap
+          </li>
         </ol>
       </section>
 

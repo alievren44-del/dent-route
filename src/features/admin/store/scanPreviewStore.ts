@@ -84,9 +84,7 @@ export const useScanPreview = create<ScanPreviewState>((set) => ({
         clinics
           .filter(
             (c) =>
-              c.db_status === 'new' &&
-              !c.is_suspicious &&
-              c.filter_reason !== 'district_mismatch',
+              c.db_status === 'new' && !c.is_suspicious && c.filter_reason !== 'district_mismatch',
           )
           .map((c) => c.place_id),
       ),
@@ -114,8 +112,7 @@ export const useScanPreview = create<ScanPreviewState>((set) => ({
       return { selectedIds: next };
     }),
 
-  selectAll: () =>
-    set((s) => ({ selectedIds: new Set(s.clinics.map((c) => c.place_id)) })),
+  selectAll: () => set((s) => ({ selectedIds: new Set(s.clinics.map((c) => c.place_id)) })),
 
   selectOnlyNew: () =>
     set((s) => ({

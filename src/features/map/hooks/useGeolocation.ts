@@ -12,12 +12,7 @@ export interface GeolocationPosition {
   accuracy: number;
 }
 
-export type GeolocationStatus =
-  | 'idle'
-  | 'prompting'
-  | 'granted'
-  | 'denied'
-  | 'unavailable';
+export type GeolocationStatus = 'idle' | 'prompting' | 'granted' | 'denied' | 'unavailable';
 
 export interface GeolocationState {
   position: GeolocationPosition | null;

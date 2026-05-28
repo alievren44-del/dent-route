@@ -28,9 +28,7 @@ export function haversineMeters(a: Waypoint, b: Waypoint): number {
   const dLng = toRadians(b.lng - a.lng);
   const sinDLat = Math.sin(dLat / 2);
   const sinDLng = Math.sin(dLng / 2);
-  const h =
-    sinDLat * sinDLat +
-    Math.cos(lat1) * Math.cos(lat2) * sinDLng * sinDLng;
+  const h = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLng * sinDLng;
   const c = 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
   return EARTH_RADIUS_M * c;
 }
@@ -63,10 +61,7 @@ function reverseSegment(order: number[], i: number, j: number): void {
   }
 }
 
-export function twoOpt(
-  waypoints: Waypoint[],
-  options?: TwoOptOptions,
-): TwoOptResult {
+export function twoOpt(waypoints: Waypoint[], options?: TwoOptOptions): TwoOptResult {
   const maxIterations = options?.maxIterations ?? 50;
   const startFixed = options?.startFixed ?? true;
   const endFixed = options?.endFixed ?? false;

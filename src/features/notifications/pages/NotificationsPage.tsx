@@ -6,7 +6,12 @@ import { useAuthStore } from '@core/auth/authStore';
 
 interface NotificationRow {
   id: string;
-  type: 'sample_follow_up' | 'order_approval' | 'order_status_change' | 'mileage_reminder' | 'system';
+  type:
+    | 'sample_follow_up'
+    | 'order_approval'
+    | 'order_status_change'
+    | 'mileage_reminder'
+    | 'system';
   title: string;
   body: string | null;
   payload: Record<string, unknown> | null;
@@ -206,9 +211,7 @@ export default function NotificationsPage() {
                             />
                           )}
                         </div>
-                        {n.body && (
-                          <p className="mt-1 text-xs text-muted-foreground">{n.body}</p>
-                        )}
+                        {n.body && <p className="mt-1 text-xs text-muted-foreground">{n.body}</p>}
                         <p className="mt-1 text-[10px] text-muted-foreground">
                           {new Date(n.created_at).toLocaleString('tr-TR')}
                         </p>

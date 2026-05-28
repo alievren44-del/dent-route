@@ -69,7 +69,7 @@ function newDraft(sira: number): KalemDraft {
     miktar: 1,
     birim_fiyat: 0,
     iskonto_orani: 0,
-    kdv_orani: 0.20,
+    kdv_orani: 0.2,
   };
 }
 
@@ -159,11 +159,7 @@ function InvoiceFormPage(): JSX.Element {
   }
 
   function removeKalem(key: string): void {
-    setKalemler((prev) =>
-      prev
-        .filter((k) => k.key !== key)
-        .map((k, i) => ({ ...k, sira: i + 1 })),
-    );
+    setKalemler((prev) => prev.filter((k) => k.key !== key).map((k, i) => ({ ...k, sira: i + 1 })));
   }
 
   function addKalem(): void {
@@ -396,9 +392,7 @@ function InvoiceFormPage(): JSX.Element {
 
         {/* Açıklama */}
         <section>
-          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-            Açıklama
-          </label>
+          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Açıklama</label>
           <textarea
             value={aciklama}
             onChange={(e) => setAciklama(e.target.value)}
@@ -474,12 +468,7 @@ function KalemRow({
     },
   });
 
-  const line = calcLineTotal(
-    kalem.miktar,
-    kalem.birim_fiyat,
-    kalem.iskonto_orani,
-    kalem.kdv_orani,
-  );
+  const line = calcLineTotal(kalem.miktar, kalem.birim_fiyat, kalem.iskonto_orani, kalem.kdv_orani);
 
   function pickProduct(p: ProductOption): void {
     onChange({
@@ -536,16 +525,8 @@ function KalemRow({
         )}
       </div>
       <div className="grid grid-cols-4 gap-2">
-        <NumberCell
-          label="Miktar"
-          value={kalem.miktar}
-          onChange={(v) => onChange({ miktar: v })}
-        />
-        <TextCell
-          label="Birim"
-          value={kalem.birim}
-          onChange={(v) => onChange({ birim: v })}
-        />
+        <NumberCell label="Miktar" value={kalem.miktar} onChange={(v) => onChange({ miktar: v })} />
+        <TextCell label="Birim" value={kalem.birim} onChange={(v) => onChange({ birim: v })} />
         <NumberCell
           label="Birim ₺"
           value={kalem.birim_fiyat}

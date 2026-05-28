@@ -20,10 +20,7 @@ import { getSupabaseClient } from '@/lib/supabase';
 import { getEnv } from '@config/env';
 import { useGeolocation } from '@/features/map/hooks/useGeolocation';
 import { useVertical } from '@core/verticals/useVertical';
-import {
-  resolveMarkerColor,
-  type MarkerSubjectCustomer,
-} from '@/features/map/marker-colors';
+import { resolveMarkerColor, type MarkerSubjectCustomer } from '@/features/map/marker-colors';
 import { twoOpt, type Waypoint, haversineMeters } from '@/features/routes/two-opt';
 
 /** Sıralı duraklar üstünden toplam haversine km (kuşbakışı baseline) */
@@ -41,10 +38,7 @@ function baselineSequenceKm(
   return total / 1000;
 }
 import { optimizeRouteHybrid } from '@/features/admin/lib/tsp';
-import {
-  MAX_BASKET,
-  useRouteBasket,
-} from '@/features/routes/store/routeBasketStore';
+import { MAX_BASKET, useRouteBasket } from '@/features/routes/store/routeBasketStore';
 import { RouteExportPanel } from '@/features/routes/components/RouteExportPanel';
 
 type RouteProfile = 'driving' | 'driving-traffic' | 'walking';
@@ -73,10 +67,7 @@ interface RouteResult {
   twoOptSavedM: number;
 }
 
-function decodePolyline(
-  str: string,
-  precision = 5,
-): Array<[number, number]> {
+function decodePolyline(str: string, precision = 5): Array<[number, number]> {
   const factor = Math.pow(10, precision);
   let index = 0;
   let lat = 0;
@@ -113,10 +104,7 @@ export default function RoutePlannerPage() {
   const basketItems = useRouteBasket((s) => s.items);
   // Method-selector'lar `@typescript-eslint/unbound-method` tetiklemesin diye
   // doğrudan store referansı üzerinden çağırıyoruz (store fonksiyonları stabil).
-  const basketRemove = useCallback(
-    (id: string) => useRouteBasket.getState().remove(id),
-    [],
-  );
+  const basketRemove = useCallback((id: string) => useRouteBasket.getState().remove(id), []);
   const basketClear = useCallback(() => useRouteBasket.getState().clear(), []);
 
   const basket = useMemo<BasketItem[]>(
@@ -227,18 +215,15 @@ export default function RoutePlannerPage() {
       ];
 
       const supabase = getSupabaseClient();
-      const { data, error } = await supabase.functions.invoke(
-        'mapbox-optimize',
-        {
-          body: {
-            coords: coordsForFn,
-            profile,
-            roundtrip: false,
-            source: 'first',
-            destination: 'last',
-          },
+      const { data, error } = await supabase.functions.invoke('mapbox-optimize', {
+        body: {
+          coords: coordsForFn,
+          profile,
+          roundtrip: false,
+          source: 'first',
+          destination: 'last',
         },
-      );
+      });
 
       if (error) throw new Error(error.message);
       // Edge fn döndürür: {status, order:number[], distanceM, durationS, geometry, legs}
@@ -261,20 +246,14 @@ export default function RoutePlannerPage() {
       );
 
       // Mapbox sırasına göre koord dizisi (start=0 dahil)
-      const orderedCoords: Array<[number, number]> = resp.order.map(
-        (idx) => coords[idx]!,
-      );
-      const waypointsForTwoOpt: Waypoint[] = orderedCoords.map(
-        ([lng, lat]) => ({ lat, lng }),
-      );
+      const orderedCoords: Array<[number, number]> = resp.order.map((idx) => coords[idx]!);
+      const waypointsForTwoOpt: Waypoint[] = orderedCoords.map(([lng, lat]) => ({ lat, lng }));
       const twoOptResult = twoOpt(waypointsForTwoOpt, {
         startFixed: true,
         endFixed: false,
       });
 
-      const finalOrderInOriginal = twoOptResult.order.map(
-        (i) => resp.order[i]!,
-      );
+      const finalOrderInOriginal = twoOptResult.order.map((i) => resp.order[i]!);
 
       setRouteResult({
         order: finalOrderInOriginal,
@@ -409,16 +388,12 @@ export default function RoutePlannerPage() {
         };
         const color = resolveMarkerColor(subject, vertical).hex;
         const el = buildNumberedMarker(i + 1, color);
-        const marker = new mapboxgl.Marker({ element: el })
-          .setLngLat([b.lng, b.lat])
-          .addTo(map);
+        const marker = new mapboxgl.Marker({ element: el }).setLngLat([b.lng, b.lat]).addTo(map);
         markersRef.current.push(marker);
       });
       if (startCoord) {
         const el = buildStartMarker();
-        const marker = new mapboxgl.Marker({ element: el })
-          .setLngLat(startCoord)
-          .addTo(map);
+        const marker = new mapboxgl.Marker({ element: el }).setLngLat(startCoord).addTo(map);
         markersRef.current.push(marker);
       }
       if (basket.length > 0) {
@@ -473,9 +448,7 @@ export default function RoutePlannerPage() {
 
     // Start marker
     const startEl = buildStartMarker();
-    const startMarker = new mapboxgl.Marker({ element: startEl })
-      .setLngLat(startCoord)
-      .addTo(map);
+    const startMarker = new mapboxgl.Marker({ element: startEl }).setLngLat(startCoord).addTo(map);
     markersRef.current.push(startMarker);
 
     // Stop markers in order
@@ -512,12 +485,8 @@ export default function RoutePlannerPage() {
       .filter((x): x is BasketItem => x !== undefined);
   }, [routeResult, basket]);
 
-  const distanceKm = routeResult
-    ? (routeResult.distanceM / 1000).toFixed(1)
-    : '0';
-  const durationMin = routeResult
-    ? Math.round(routeResult.durationS / 60)
-    : 0;
+  const distanceKm = routeResult ? (routeResult.distanceM / 1000).toFixed(1) : '0';
+  const durationMin = routeResult ? Math.round(routeResult.durationS / 60) : 0;
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] flex-col bg-slate-50">
@@ -566,10 +535,7 @@ export default function RoutePlannerPage() {
           {basket.length === 0 ? (
             <div className="py-4 text-center text-sm text-slate-500">
               Rota sepeti boş —{' '}
-              <Link
-                to="/clinics/discover"
-                className="font-medium text-blue-600 underline"
-              >
+              <Link to="/clinics/discover" className="font-medium text-blue-600 underline">
                 Keşif sayfasına git
               </Link>
             </div>
@@ -591,9 +557,7 @@ export default function RoutePlannerPage() {
                     >
                       {i + 1}
                     </span>
-                    <span className="flex-1 truncate text-sm text-slate-800">
-                      {b.name}
-                    </span>
+                    <span className="flex-1 truncate text-sm text-slate-800">{b.name}</span>
                     <button
                       type="button"
                       onClick={() => removeFromBasket(b.id)}
@@ -613,11 +577,13 @@ export default function RoutePlannerPage() {
         <section className="rounded-xl bg-white p-3 shadow-sm">
           <h2 className="mb-2 text-sm font-semibold text-slate-700">Rota modu</h2>
           <div className="grid grid-cols-3 gap-1.5">
-            {([
-              { key: 'driving', label: 'Araç', Icon: Car },
-              { key: 'driving-traffic', label: 'Trafik', Icon: Activity },
-              { key: 'walking', label: 'Yaya', Icon: Footprints },
-            ] as const).map(({ key, label, Icon }) => (
+            {(
+              [
+                { key: 'driving', label: 'Araç', Icon: Car },
+                { key: 'driving-traffic', label: 'Trafik', Icon: Activity },
+                { key: 'walking', label: 'Yaya', Icon: Footprints },
+              ] as const
+            ).map(({ key, label, Icon }) => (
               <button
                 key={key}
                 type="button"
@@ -635,12 +601,14 @@ export default function RoutePlannerPage() {
           </div>
           {profile === 'walking' && basket.length > WALKING_MAX_WAYPOINTS && (
             <p className="mt-2 text-xs text-amber-700">
-              Yaya modunda en fazla {WALKING_MAX_WAYPOINTS} durak optimize edilir; sepetin {basket.length} klinikten ilk {WALKING_MAX_WAYPOINTS}'sı kullanılacak.
+              Yaya modunda en fazla {WALKING_MAX_WAYPOINTS} durak optimize edilir; sepetin{' '}
+              {basket.length} klinikten ilk {WALKING_MAX_WAYPOINTS}'sı kullanılacak.
             </p>
           )}
           {profile !== 'walking' && basket.length > DRIVING_MAX_STOPS && (
             <p className="mt-2 text-xs text-amber-700">
-              Araç modunda en fazla {DRIVING_MAX_STOPS} durak (Mapbox API limiti); sepetin {basket.length} klinikten ilk {DRIVING_MAX_STOPS}'i kullanılacak.
+              Araç modunda en fazla {DRIVING_MAX_STOPS} durak (Mapbox API limiti); sepetin{' '}
+              {basket.length} klinikten ilk {DRIVING_MAX_STOPS}'i kullanılacak.
             </p>
           )}
           {profile === 'walking' && (
@@ -652,9 +620,7 @@ export default function RoutePlannerPage() {
 
         {/* 2b. Başlangıç noktası */}
         <section className="rounded-xl bg-white p-3 shadow-sm">
-          <h2 className="mb-2 text-sm font-semibold text-slate-700">
-            Başlangıç noktası
-          </h2>
+          <h2 className="mb-2 text-sm font-semibold text-slate-700">Başlangıç noktası</h2>
           <div className="space-y-2">
             <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2">
               <input
@@ -668,9 +634,7 @@ export default function RoutePlannerPage() {
               <MapPin size={16} className="text-blue-600" />
               <span className="text-sm text-slate-800">Konumum (GPS)</span>
               {geolocation.status === 'prompting' && (
-                <span className="ml-auto text-xs text-slate-500">
-                  Aranıyor…
-                </span>
+                <span className="ml-auto text-xs text-slate-500">Aranıyor…</span>
               )}
               {geolocation.status === 'denied' && (
                 <span className="ml-auto text-xs text-red-600">İzin yok</span>
@@ -690,9 +654,7 @@ export default function RoutePlannerPage() {
                 className="h-4 w-4"
               />
               <Home size={16} className="text-purple-600" />
-              <span className="text-sm text-slate-800">
-                Ev/Ofis (yakında)
-              </span>
+              <span className="text-sm text-slate-800">Ev/Ofis (yakında)</span>
             </label>
           </div>
         </section>
@@ -729,17 +691,13 @@ export default function RoutePlannerPage() {
             <div className="grid grid-cols-3 gap-2 text-center">
               <div>
                 <div className="text-xs text-slate-500">Mesafe</div>
-                <div className="text-base font-bold text-slate-900">
-                  {distanceKm} km
-                </div>
+                <div className="text-base font-bold text-slate-900">{distanceKm} km</div>
               </div>
               <div>
                 <div className="text-xs text-slate-500">
                   {profile === 'walking' ? 'Yürüyüş süresi' : 'Süre'}
                 </div>
-                <div className="text-base font-bold text-slate-900">
-                  {durationMin} dk
-                </div>
+                <div className="text-base font-bold text-slate-900">{durationMin} dk</div>
               </div>
               <div>
                 <div className="text-xs text-slate-500">
@@ -763,15 +721,11 @@ export default function RoutePlannerPage() {
                   <div className="grid grid-cols-3 gap-2">
                     <div>
                       <div className="text-slate-500">Sepet sırası</div>
-                      <div className="font-bold text-slate-700">
-                        {baselineKm.toFixed(1)} km
-                      </div>
+                      <div className="font-bold text-slate-700">{baselineKm.toFixed(1)} km</div>
                     </div>
                     <div>
                       <div className="text-slate-500">Optimize</div>
-                      <div className="font-bold text-blue-700">
-                        {optimizedKm.toFixed(1)} km
-                      </div>
+                      <div className="font-bold text-blue-700">{optimizedKm.toFixed(1)} km</div>
                     </div>
                     <div>
                       <div className="text-slate-500">Tasarruf</div>
@@ -794,17 +748,13 @@ export default function RoutePlannerPage() {
         {/* 5. Sıralı duraklar */}
         {routeResult && orderedStops.length > 0 && (
           <section className="rounded-xl bg-white p-3 shadow-sm">
-            <h2 className="mb-2 text-sm font-semibold text-slate-700">
-              Sıralı duraklar
-            </h2>
+            <h2 className="mb-2 text-sm font-semibold text-slate-700">Sıralı duraklar</h2>
             <ol className="space-y-2">
               <li className="flex items-center gap-2 rounded-lg bg-purple-50 px-3 py-2">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-purple-600 text-xs font-bold text-white">
                   ★
                 </span>
-                <span className="text-sm font-medium text-slate-800">
-                  Başlangıç (GPS)
-                </span>
+                <span className="text-sm font-medium text-slate-800">Başlangıç (GPS)</span>
               </li>
               {orderedStops.map((s, i) => {
                 const color = resolveMarkerColor(
@@ -822,9 +772,7 @@ export default function RoutePlannerPage() {
                     >
                       {i + 1}
                     </span>
-                    <span className="flex-1 truncate text-sm text-slate-800">
-                      {s.name}
-                    </span>
+                    <span className="flex-1 truncate text-sm text-slate-800">{s.name}</span>
                     <span
                       className="h-3 w-3 shrink-0 rounded-full"
                       style={{ backgroundColor: color }}
@@ -839,11 +787,7 @@ export default function RoutePlannerPage() {
 
         {/* 6. Harita */}
         <section className="overflow-hidden rounded-xl bg-white shadow-sm">
-          <div
-            ref={containerRef}
-            className="h-72 w-full"
-            aria-label="Rota haritası"
-          />
+          <div ref={containerRef} className="h-72 w-full" aria-label="Rota haritası" />
         </section>
 
         {/* 7. Dışa aktar (Google Maps / QR / Paylaş / Kopyala) */}

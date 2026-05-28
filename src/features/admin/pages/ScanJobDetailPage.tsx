@@ -13,14 +13,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  ArrowLeft,
-  RefreshCw,
-  Loader2,
-  CheckCircle2,
-  AlertCircle,
-  Clock,
-} from 'lucide-react';
+import { ArrowLeft, RefreshCw, Loader2, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 
 import { getSupabaseClient } from '@lib/supabase';
 
@@ -67,12 +60,12 @@ interface ScanJobItemRow {
 const PAGE_SIZE = 50;
 
 const STATUS_CHIPS: Array<{ key: 'all' | ScanJobItemRow['status']; label: string }> = [
-  { key: 'all',       label: 'Tümü' },
-  { key: 'pending',   label: 'Bekliyor' },
-  { key: 'running',   label: 'Çalışıyor' },
+  { key: 'all', label: 'Tümü' },
+  { key: 'pending', label: 'Bekliyor' },
+  { key: 'running', label: 'Çalışıyor' },
   { key: 'completed', label: 'Tamam' },
-  { key: 'failed',    label: 'Hata' },
-  { key: 'skipped',   label: 'Atlandı' },
+  { key: 'failed', label: 'Hata' },
+  { key: 'skipped', label: 'Atlandı' },
 ];
 
 async function fetchJob(id: string): Promise<ScanJobRow | null> {
@@ -110,11 +103,16 @@ async function fetchItems(
 
 function ItemStatusIcon({ status }: { status: ScanJobItemRow['status'] }) {
   switch (status) {
-    case 'completed': return <CheckCircle2 className="h-4 w-4 text-green-700" />;
-    case 'failed':    return <AlertCircle className="h-4 w-4 text-red-700" />;
-    case 'running':   return <Loader2 className="h-4 w-4 text-blue-700 animate-spin" />;
-    case 'pending':   return <Clock className="h-4 w-4 text-gray-500" />;
-    case 'skipped':   return <Clock className="h-4 w-4 text-gray-400" />;
+    case 'completed':
+      return <CheckCircle2 className="h-4 w-4 text-green-700" />;
+    case 'failed':
+      return <AlertCircle className="h-4 w-4 text-red-700" />;
+    case 'running':
+      return <Loader2 className="h-4 w-4 text-blue-700 animate-spin" />;
+    case 'pending':
+      return <Clock className="h-4 w-4 text-gray-500" />;
+    case 'skipped':
+      return <Clock className="h-4 w-4 text-gray-400" />;
   }
 }
 
@@ -160,7 +158,12 @@ export default function ScanJobDetailPage() {
       )
       .on(
         'postgres_changes' as never,
-        { event: '*', schema: 'public', table: 'saha_scan_job_items', filter: `job_id=eq.${jobId}` },
+        {
+          event: '*',
+          schema: 'public',
+          table: 'saha_scan_job_items',
+          filter: `job_id=eq.${jobId}`,
+        },
         () => {
           void queryClient.invalidateQueries({ queryKey: ['scan-job-items', jobId] });
         },
@@ -187,7 +190,12 @@ export default function ScanJobDetailPage() {
       if (error) throw error;
 
       // Job paused/cancelled ise running'e dön + Edge Function'ı uyandır.
-      if (jobQuery.data && (jobQuery.data.status === 'paused' || jobQuery.data.status === 'completed' || jobQuery.data.status === 'failed')) {
+      if (
+        jobQuery.data &&
+        (jobQuery.data.status === 'paused' ||
+          jobQuery.data.status === 'completed' ||
+          jobQuery.data.status === 'failed')
+      ) {
         await supabase
           .from('saha_scan_jobs')
           .update({ status: 'running', completed_at: null })
@@ -215,14 +223,16 @@ export default function ScanJobDetailPage() {
   }
 
   const job = jobQuery.data;
-  const progressPct = job && job.total_items > 0
-    ? Math.round((job.completed_items / job.total_items) * 100)
-    : 0;
+  const progressPct =
+    job && job.total_items > 0 ? Math.round((job.completed_items / job.total_items) * 100) : 0;
 
   return (
     <div className="p-4 space-y-4 max-w-5xl mx-auto">
       <div className="flex items-center gap-2">
-        <Link to="/admin/clinic-scan" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
+        <Link
+          to="/admin/clinic-scan"
+          className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
+        >
           <ArrowLeft className="h-4 w-4 mr-1" /> Geri
         </Link>
       </div>
@@ -249,11 +259,15 @@ export default function ScanJobDetailPage() {
             </div>
             <div>
               <div className="text-xs text-muted-foreground">İlerleme</div>
-              <div className="font-medium">{job.completed_items}/{job.total_items} ({progressPct}%)</div>
+              <div className="font-medium">
+                {job.completed_items}/{job.total_items} ({progressPct}%)
+              </div>
             </div>
             <div>
               <div className="text-xs text-muted-foreground">Toplam Klinik</div>
-              <div className="font-medium">{job.total_clinics_found} ({job.total_new_clinics} yeni)</div>
+              <div className="font-medium">
+                {job.total_clinics_found} ({job.total_new_clinics} yeni)
+              </div>
             </div>
             <div>
               <div className="text-xs text-muted-foreground">Yarıçap</div>
@@ -282,16 +296,19 @@ export default function ScanJobDetailPage() {
 
           <div className="text-xs text-muted-foreground">
             Oluşturma: {new Date(job.created_at).toLocaleString('tr-TR')}
-            {job.started_at ? ` · Başlangıç: ${new Date(job.started_at).toLocaleString('tr-TR')}` : ''}
-            {job.completed_at ? ` · Bitiş: ${new Date(job.completed_at).toLocaleString('tr-TR')}` : ''}
+            {job.started_at
+              ? ` · Başlangıç: ${new Date(job.started_at).toLocaleString('tr-TR')}`
+              : ''}
+            {job.completed_at
+              ? ` · Bitiş: ${new Date(job.completed_at).toLocaleString('tr-TR')}`
+              : ''}
           </div>
 
-          {job.last_error && (
-            <div className="text-xs text-red-700">Son hata: {job.last_error}</div>
-          )}
+          {job.last_error && <div className="text-xs text-red-700">Son hata: {job.last_error}</div>}
 
           <div className="text-xs text-muted-foreground">
-            scope_params: <code className="text-foreground">{JSON.stringify(job.scope_params)}</code>
+            scope_params:{' '}
+            <code className="text-foreground">{JSON.stringify(job.scope_params)}</code>
           </div>
         </div>
       )}
@@ -331,14 +348,24 @@ export default function ScanJobDetailPage() {
           </thead>
           <tbody>
             {itemsQuery.isLoading && (
-              <tr><td colSpan={8} className="p-4 text-center text-muted-foreground">Yükleniyor…</td></tr>
+              <tr>
+                <td colSpan={8} className="p-4 text-center text-muted-foreground">
+                  Yükleniyor…
+                </td>
+              </tr>
             )}
             {!itemsQuery.isLoading && (itemsQuery.data?.rows.length ?? 0) === 0 && (
-              <tr><td colSpan={8} className="p-4 text-center text-muted-foreground">Kayıt yok.</td></tr>
+              <tr>
+                <td colSpan={8} className="p-4 text-center text-muted-foreground">
+                  Kayıt yok.
+                </td>
+              </tr>
             )}
             {(itemsQuery.data?.rows ?? []).map((row) => (
               <tr key={row.id} className="border-t border-border">
-                <td className="p-2"><ItemStatusIcon status={row.status} /></td>
+                <td className="p-2">
+                  <ItemStatusIcon status={row.status} />
+                </td>
                 <td className="p-2">{row.province_slug}</td>
                 <td className="p-2">{row.district_slug ?? '—'}</td>
                 <td className="p-2 text-right">{row.scanned_count}</td>
@@ -346,7 +373,10 @@ export default function ScanJobDetailPage() {
                 <td className="p-2 text-right text-xs text-muted-foreground">
                   {row.google_count ?? '-'}/{row.osm_count ?? '-'}
                 </td>
-                <td className="p-2 text-xs text-red-700 max-w-[180px] truncate" title={row.error_message ?? ''}>
+                <td
+                  className="p-2 text-xs text-red-700 max-w-[180px] truncate"
+                  title={row.error_message ?? ''}
+                >
                   {row.error_message ?? ''}
                 </td>
                 <td className="p-2 text-right">

@@ -13,7 +13,15 @@
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, MapPin, User as UserIcon, Clock, CheckCircle2, XCircle, MessageSquare } from 'lucide-react';
+import {
+  Loader2,
+  MapPin,
+  User as UserIcon,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  MessageSquare,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 import { getSupabaseClient } from '@lib/supabase';
@@ -36,14 +44,18 @@ async function fetchAssigned(userId: string): Promise<AssignedRoute[]> {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from('saha_routes')
-    .select('id, name, account_ids, status, total_distance_km, total_duration_min, assigned_at, assignment_note, assigned_by')
+    .select(
+      'id, name, account_ids, status, total_distance_km, total_duration_min, assigned_at, assignment_note, assigned_by',
+    )
     .eq('assigned_to', userId)
     .in('status', ['assigned', 'active'])
     .order('assigned_at', { ascending: false });
   if (error) throw error;
   const list = (data ?? []) as AssignedRoute[];
   // Atayan email'i çek
-  const assignerIds = Array.from(new Set(list.map((r) => r.assigned_by).filter(Boolean) as string[]));
+  const assignerIds = Array.from(
+    new Set(list.map((r) => r.assigned_by).filter(Boolean) as string[]),
+  );
   if (assignerIds.length > 0) {
     const { data: profs } = await supabase
       .from('profiles')
@@ -124,9 +136,7 @@ export default function AssignedRoutesPage() {
         </div>
       )}
 
-      {query.isError && (
-        <p className="text-sm text-red-600">{query.error?.message ?? 'Hata'}</p>
-      )}
+      {query.isError && <p className="text-sm text-red-600">{query.error?.message ?? 'Hata'}</p>}
 
       {query.data && query.data.length === 0 && (
         <p className="text-sm text-slate-500">Atanan rota yok.</p>
@@ -145,12 +155,8 @@ export default function AssignedRoutesPage() {
                     <MapPin size={11} />
                     {r.account_ids.length} durak
                   </span>
-                  {r.total_distance_km != null && (
-                    <span>{r.total_distance_km.toFixed(1)} km</span>
-                  )}
-                  {r.total_duration_min != null && (
-                    <span>{r.total_duration_min} dk</span>
-                  )}
+                  {r.total_distance_km != null && <span>{r.total_distance_km.toFixed(1)} km</span>}
+                  {r.total_duration_min != null && <span>{r.total_duration_min} dk</span>}
                   {r.assigner_email && (
                     <span className="inline-flex items-center gap-1">
                       <UserIcon size={11} />

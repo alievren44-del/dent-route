@@ -113,7 +113,8 @@ export function CariBalanceCard({ customerId }: CariBalanceCardProps): JSX.Eleme
   const { cari, bakiye } = data;
   const kredi = Number(cari.kredi_limiti ?? 0);
   const kullanim = kredi > 0 ? Math.max(0, Math.min(100, (bakiye / kredi) * 100)) : 0;
-  const bakiyeColor = bakiye > 0 ? 'text-red-600' : bakiye < 0 ? 'text-green-600' : 'text-foreground';
+  const bakiyeColor =
+    bakiye > 0 ? 'text-red-600' : bakiye < 0 ? 'text-green-600' : 'text-foreground';
   const progressColor =
     kullanim >= 90 ? 'bg-red-500' : kullanim >= 70 ? 'bg-amber-500' : 'bg-green-500';
 

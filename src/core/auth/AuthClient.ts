@@ -68,7 +68,12 @@ export class AuthClient {
     if (!data.session || !data.user) {
       throw new AuthError('UNKNOWN', 'Oturum oluşturulamadı.');
     }
-    return this.toAuthSession(data.session.access_token, data.user.id, data.user.email, data.session.expires_at);
+    return this.toAuthSession(
+      data.session.access_token,
+      data.user.id,
+      data.user.email,
+      data.session.expires_at,
+    );
   }
 
   async signOut(): Promise<void> {
@@ -85,7 +90,9 @@ export class AuthClient {
   async fetchProfile(userId: string): Promise<SahaProfile> {
     const { data, error } = await this.supabase
       .from('profiles')
-      .select('id, email, ad_soyad, role, region, avg_fuel_consumption, kvkk_accepted_at, kvkk_version, is_approved')
+      .select(
+        'id, email, ad_soyad, role, region, avg_fuel_consumption, kvkk_accepted_at, kvkk_version, is_approved',
+      )
       .eq('id', userId)
       .single();
 
@@ -96,7 +103,10 @@ export class AuthClient {
 
     // Parla'da is_approved: yeni kullanıcı false default. Saha rep için onaylı olmalı.
     if (row.is_approved === false) {
-      throw new AuthError('INACTIVE', 'Hesabınız henüz onaylanmadı. Yöneticinizle iletişime geçin.');
+      throw new AuthError(
+        'INACTIVE',
+        'Hesabınız henüz onaylanmadı. Yöneticinizle iletişime geçin.',
+      );
     }
 
     const role = (row.role ?? 'GUEST') as ParlaUserRole;
@@ -143,16 +153,19 @@ export class AuthClient {
    * Auth state değişimlerini dinler (login/logout/token refresh).
    * App startup'ta authStore tarafından bir kez çağrılır.
    */
-  onAuthStateChange(
-    callback: (session: AuthSession | null) => void,
-  ): { unsubscribe: () => void } {
+  onAuthStateChange(callback: (session: AuthSession | null) => void): { unsubscribe: () => void } {
     const { data } = this.supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
         callback(null);
         return;
       }
       callback(
-        this.toAuthSession(session.access_token, session.user.id, session.user.email, session.expires_at),
+        this.toAuthSession(
+          session.access_token,
+          session.user.id,
+          session.user.email,
+          session.expires_at,
+        ),
       );
     });
     return { unsubscribe: () => data.subscription.unsubscribe() };

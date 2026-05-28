@@ -21,14 +21,7 @@ import {
 import { getSupabaseClient } from '@/lib/supabase';
 import ClinicXlsxImport from '@/features/admin/components/ClinicXlsxImport';
 
-const KNOWN_COLUMNS = [
-  'ad_soyad',
-  'email',
-  'telefon',
-  'klinik_adi',
-  'city',
-  'role',
-] as const;
+const KNOWN_COLUMNS = ['ad_soyad', 'email', 'telefon', 'klinik_adi', 'city', 'role'] as const;
 
 type KnownColumn = (typeof KNOWN_COLUMNS)[number];
 
@@ -70,10 +63,7 @@ function parseCsv(text: string): ParsedCsv {
   return { headers, rows };
 }
 
-function rowToRecord(
-  headers: string[],
-  row: string[],
-): Record<string, string> {
+function rowToRecord(headers: string[], row: string[]): Record<string, string> {
   const rec: Record<string, string> = {};
   headers.forEach((h, idx) => {
     rec[h] = (row[idx] ?? '').trim();
@@ -83,9 +73,7 @@ function rowToRecord(
 
 function computeWarnings(parsed: ParsedCsv): PreviewWarning[] {
   const warnings: PreviewWarning[] = [];
-  const unknown = parsed.headers.filter(
-    (h) => !KNOWN_COLUMNS.includes(h as KnownColumn),
-  );
+  const unknown = parsed.headers.filter((h) => !KNOWN_COLUMNS.includes(h as KnownColumn));
   unknown.forEach((h) =>
     warnings.push({
       kind: 'unknown-header',
@@ -152,11 +140,7 @@ async function importRow(
     is_approved: false,
   };
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .insert(payload)
-    .select('id')
-    .single();
+  const { data, error } = await supabase.from('profiles').insert(payload).select('id').single();
 
   if (error) return { status: 'error', message: error.message };
   return { status: 'created', id: (data?.id as string | undefined) ?? undefined };
@@ -174,15 +158,9 @@ function UserCsvImport() {
   });
   const [summary, setSummary] = useState<ImportSummary | null>(null);
 
-  const warnings = useMemo(
-    () => (parsed ? computeWarnings(parsed) : []),
-    [parsed],
-  );
+  const warnings = useMemo(() => (parsed ? computeWarnings(parsed) : []), [parsed]);
 
-  const previewRows = useMemo(
-    () => (parsed ? parsed.rows.slice(0, 5) : []),
-    [parsed],
-  );
+  const previewRows = useMemo(() => (parsed ? parsed.rows.slice(0, 5) : []), [parsed]);
 
   function resetState() {
     setParsed(null);
@@ -208,9 +186,7 @@ function UserCsvImport() {
       setParseError(null);
       setParsed(result);
     } catch (err) {
-      setParseError(
-        err instanceof Error ? err.message : 'CSV okunamadı.',
-      );
+      setParseError(err instanceof Error ? err.message : 'CSV okunamadı.');
       setParsed(null);
     }
   }
@@ -282,8 +258,7 @@ function UserCsvImport() {
         <div>
           <h1 className="text-xl font-semibold text-slate-900">CSV İçeri Aktarım</h1>
           <p className="text-xs text-slate-500">
-            Profiles tablosuna toplu klinik / kullanıcı kaydı (düşük güven —
-            onay bekler).
+            Profiles tablosuna toplu klinik / kullanıcı kaydı (düşük güven — onay bekler).
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -306,9 +281,7 @@ function UserCsvImport() {
             ) : (
               <Upload className="h-4 w-4" />
             )}
-            {importing
-              ? `İçeri aktarılıyor... ${progress.done}/${progress.total}`
-              : 'İçeri Aktar'}
+            {importing ? `İçeri aktarılıyor... ${progress.done}/${progress.total}` : 'İçeri Aktar'}
           </button>
         </div>
       </header>
@@ -318,9 +291,7 @@ function UserCsvImport() {
         <section className="rounded-lg border border-dashed border-slate-300 bg-white p-6 shadow-sm">
           <label className="flex cursor-pointer flex-col items-center justify-center gap-2 text-center">
             <FileUp className="h-10 w-10 text-slate-400" />
-            <span className="text-sm font-medium text-slate-700">
-              CSV dosyası seç
-            </span>
+            <span className="text-sm font-medium text-slate-700">CSV dosyası seç</span>
             <span className="text-xs text-slate-500">
               Header: ad_soyad, email, telefon, klinik_adi, city, role
             </span>
@@ -353,12 +324,10 @@ function UserCsvImport() {
           <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
               <div>
-                <h2 className="text-sm font-semibold text-slate-700">
-                  Önizleme
-                </h2>
+                <h2 className="text-sm font-semibold text-slate-700">Önizleme</h2>
                 <p className="text-xs text-slate-500">
-                  Toplam {parsed.rows.length} satır — ilk{' '}
-                  {Math.min(5, parsed.rows.length)} gösteriliyor.
+                  Toplam {parsed.rows.length} satır — ilk {Math.min(5, parsed.rows.length)}{' '}
+                  gösteriliyor.
                 </p>
               </div>
               {warnings.length > 0 && (
@@ -393,14 +362,9 @@ function UserCsvImport() {
                 <tbody className="divide-y divide-slate-100">
                   {previewRows.map((row, i) => (
                     <tr key={i} className="hover:bg-slate-50">
-                      <td className="px-3 py-2 text-xs text-slate-400">
-                        {i + 1}
-                      </td>
+                      <td className="px-3 py-2 text-xs text-slate-400">{i + 1}</td>
                       {parsed.headers.map((h, j) => (
-                        <td
-                          key={h}
-                          className="px-3 py-2 text-slate-700 whitespace-nowrap"
-                        >
+                        <td key={h} className="px-3 py-2 text-slate-700 whitespace-nowrap">
                           {row[j] ?? ''}
                         </td>
                       ))}
@@ -445,21 +409,14 @@ function UserCsvImport() {
                 İçeri aktarılıyor: {progress.done} / {progress.total}
               </span>
               <span className="text-xs">
-                %
-                {progress.total > 0
-                  ? Math.round((progress.done / progress.total) * 100)
-                  : 0}
+                %{progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0}
               </span>
             </div>
             <div className="h-2 w-full overflow-hidden rounded-full bg-emerald-100">
               <div
                 className="h-full bg-emerald-600 transition-all"
                 style={{
-                  width: `${
-                    progress.total > 0
-                      ? (progress.done / progress.total) * 100
-                      : 0
-                  }%`,
+                  width: `${progress.total > 0 ? (progress.done / progress.total) * 100 : 0}%`,
                 }}
               />
             </div>
@@ -495,8 +452,7 @@ function UserCsvImport() {
                         <XCircle className="mt-0.5 h-3 w-3 flex-shrink-0" />
                         <span>
                           Satır {e.rowIndex + 2}
-                          {e.email ? ` (${e.email})` : ''}:{' '}
-                          {e.message ?? 'bilinmeyen hata'}
+                          {e.email ? ` (${e.email})` : ''}: {e.message ?? 'bilinmeyen hata'}
                         </span>
                       </li>
                     ))}
@@ -526,9 +482,7 @@ export default function CsvImportPage() {
           type="button"
           onClick={() => setTab('user-csv')}
           className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${
-            tab === 'user-csv'
-              ? 'bg-slate-900 text-white'
-              : 'text-slate-600 hover:bg-slate-100'
+            tab === 'user-csv' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <Users className="h-4 w-4" />
@@ -538,9 +492,7 @@ export default function CsvImportPage() {
           type="button"
           onClick={() => setTab('clinic-xlsx')}
           className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${
-            tab === 'clinic-xlsx'
-              ? 'bg-slate-900 text-white'
-              : 'text-slate-600 hover:bg-slate-100'
+            tab === 'clinic-xlsx' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           <FileSpreadsheet className="h-4 w-4" />

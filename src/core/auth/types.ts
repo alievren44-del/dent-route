@@ -54,7 +54,9 @@ export interface AuthState {
  * Parla rolünü saha rolüne map'ler.
  * Saha-yetkili olmayan roller `null` döner — UI login engellemek için kullanır.
  */
-export function mapParlaToSahaRole(role: ParlaUserRole | string | null | undefined): SahaRole | null {
+export function mapParlaToSahaRole(
+  role: ParlaUserRole | string | null | undefined,
+): SahaRole | null {
   // Parla tarafında karma case var: 'REP' / 'rep' / 'sales_rep' / 'ADMIN' / 'admin'.
   // Saha defansif olarak hepsini kabul eder.
   if (!role) return null;

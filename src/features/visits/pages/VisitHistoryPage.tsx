@@ -110,11 +110,7 @@ interface DetailModalProps {
   onClose: () => void;
 }
 
-function DetailModal({
-  visitId,
-  outcomeMap,
-  onClose,
-}: DetailModalProps): JSX.Element | null {
+function DetailModal({ visitId, outcomeMap, onClose }: DetailModalProps): JSX.Element | null {
   const supabase = getSupabaseClient();
   const navigate = useNavigate();
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
@@ -144,9 +140,12 @@ function DetailModal({
         .select('id, klinik_adi, ad_soyad, email')
         .eq('id', visit.account_id)
         .maybeSingle();
-      const ar = accountRes.data as
-        | { id: string; klinik_adi: string | null; ad_soyad: string | null; email: string | null }
-        | null;
+      const ar = accountRes.data as {
+        id: string;
+        klinik_adi: string | null;
+        ad_soyad: string | null;
+        email: string | null;
+      } | null;
       const account = ar
         ? {
             id: ar.id,
@@ -169,9 +168,7 @@ function DetailModal({
   if (!visitId) return null;
 
   const detail = detailQuery.data;
-  const outcomeMeta = detail?.visit.outcome
-    ? outcomeMap.get(detail.visit.outcome)
-    : null;
+  const outcomeMeta = detail?.visit.outcome ? outcomeMap.get(detail.visit.outcome) : null;
 
   return (
     <>
@@ -191,7 +188,9 @@ function DetailModal({
         <div className="relative bg-background rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto">
           {/* Modal header */}
           <div className="sticky top-0 z-10 bg-background border-b border-border px-4 py-3 flex items-center justify-between gap-3">
-            <h2 id="visit-detail-title" className="text-base font-semibold">Ziyaret Detayı</h2>
+            <h2 id="visit-detail-title" className="text-base font-semibold">
+              Ziyaret Detayı
+            </h2>
             <button
               type="button"
               onClick={onClose}
@@ -214,9 +213,7 @@ function DetailModal({
               <>
                 <div>
                   <p className="text-xs text-muted-foreground">Müşteri</p>
-                  <p className="text-base font-semibold mt-0.5">
-                    {detail.account?.name ?? '—'}
-                  </p>
+                  <p className="text-base font-semibold mt-0.5">{detail.account?.name ?? '—'}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -232,11 +229,7 @@ function DetailModal({
                     <p className="text-xs text-muted-foreground">Check-out</p>
                     <p className="text-sm">
                       {detail.visit.check_out_at
-                        ? format(
-                            new Date(detail.visit.check_out_at),
-                            'd MMM HH:mm',
-                            { locale: tr },
-                          )
+                        ? format(new Date(detail.visit.check_out_at), 'd MMM HH:mm', { locale: tr })
                         : '—'}
                     </p>
                   </div>
@@ -269,27 +262,21 @@ function DetailModal({
                 {detail.visit.notes && (
                   <div>
                     <p className="text-xs text-muted-foreground">Notlar</p>
-                    <p className="text-sm whitespace-pre-wrap mt-0.5">
-                      {detail.visit.notes}
-                    </p>
+                    <p className="text-sm whitespace-pre-wrap mt-0.5">{detail.visit.notes}</p>
                   </div>
                 )}
 
                 {detail.visit.custom_fields &&
                   Object.keys(detail.visit.custom_fields).length > 0 && (
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1">
-                        Ek Bilgiler
-                      </p>
+                      <p className="text-xs text-muted-foreground mb-1">Ek Bilgiler</p>
                       <ul className="text-sm space-y-1">
-                        {Object.entries(detail.visit.custom_fields).map(
-                          ([k, v]) => (
-                            <li key={k} className="flex justify-between gap-2">
-                              <span className="text-muted-foreground">{k}</span>
-                              <span className="font-medium">{String(v)}</span>
-                            </li>
-                          ),
-                        )}
+                        {Object.entries(detail.visit.custom_fields).map(([k, v]) => (
+                          <li key={k} className="flex justify-between gap-2">
+                            <span className="text-muted-foreground">{k}</span>
+                            <span className="font-medium">{String(v)}</span>
+                          </li>
+                        ))}
                       </ul>
                     </div>
                   )}
@@ -437,14 +424,11 @@ function VisitHistoryPage(): JSX.Element {
     },
   });
 
-  const accountIdFilter =
-    debouncedSearch.length >= 2 ? accountSearchQuery.data ?? [] : null;
+  const accountIdFilter = debouncedSearch.length >= 2 ? (accountSearchQuery.data ?? []) : null;
 
   const listQuery = useInfiniteQuery({
     queryKey: [...queryKey, accountIdFilter?.join(',') ?? null],
-    enabled:
-      Boolean(repId) &&
-      (debouncedSearch.length < 2 || accountSearchQuery.isSuccess),
+    enabled: Boolean(repId) && (debouncedSearch.length < 2 || accountSearchQuery.isSuccess),
     initialPageParam: 0,
     getNextPageParam: (last: PageResult) => last.nextPage,
     queryFn: async ({ pageParam }): Promise<PageResult> => {
@@ -713,9 +697,7 @@ function VisitHistoryPage(): JSX.Element {
 
         {!listQuery.isLoading && visitsForCards.length === 0 && (
           <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
-            {dateTab === 'today'
-              ? 'Bugün için ziyaret yok.'
-              : 'Bu filtrelerle ziyaret bulunamadı.'}
+            {dateTab === 'today' ? 'Bugün için ziyaret yok.' : 'Bu filtrelerle ziyaret bulunamadı.'}
           </div>
         )}
 
@@ -739,9 +721,7 @@ function VisitHistoryPage(): JSX.Element {
         )}
 
         {!hasNext && visitsForCards.length > 0 && (
-          <p className="text-center text-xs text-muted-foreground py-2">
-            Liste sonu
-          </p>
+          <p className="text-center text-xs text-muted-foreground py-2">Liste sonu</p>
         )}
       </div>
 

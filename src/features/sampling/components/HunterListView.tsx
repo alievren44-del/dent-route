@@ -14,11 +14,14 @@ export default function HunterListView() {
   const blacklist = useMutation({
     mutationFn: async (payload: { accountId: string; reason: string; bannedUntil?: string }) => {
       const supabase = getSupabaseClient();
-      const { error } = await supabase.from('saha_blacklist').upsert({
-        account_id: payload.accountId,
-        reason: payload.reason,
-        banned_until: payload.bannedUntil ?? null,
-      }, { onConflict: 'account_id' });
+      const { error } = await supabase.from('saha_blacklist').upsert(
+        {
+          account_id: payload.accountId,
+          reason: payload.reason,
+          banned_until: payload.bannedUntil ?? null,
+        },
+        { onConflict: 'account_id' },
+      );
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['hunter-candidates'] }),
@@ -37,7 +40,8 @@ export default function HunterListView() {
   };
 
   if (isLoading) return <div className="p-4 text-sm text-muted-foreground">Yükleniyor...</div>;
-  if (!data || data.length === 0) return <div className="p-4 text-sm text-muted-foreground">Numune avcısı tespit edilmedi.</div>;
+  if (!data || data.length === 0)
+    return <div className="p-4 text-sm text-muted-foreground">Numune avcısı tespit edilmedi.</div>;
 
   return (
     <div className="p-4 space-y-3">

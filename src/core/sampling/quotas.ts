@@ -7,7 +7,10 @@ export function currentYearMonth(date = new Date()): string {
   return `${y}-${m}`;
 }
 
-export async function getQuota(repId: string, yearMonth = currentYearMonth()): Promise<SampleQuota | null> {
+export async function getQuota(
+  repId: string,
+  yearMonth = currentYearMonth(),
+): Promise<SampleQuota | null> {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from('saha_sample_quotas')
@@ -17,7 +20,12 @@ export async function getQuota(repId: string, yearMonth = currentYearMonth()): P
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
-  const row = data as { rep_id: string; year_month: string; budget_tl: number | string; spent_tl: number | string };
+  const row = data as {
+    rep_id: string;
+    year_month: string;
+    budget_tl: number | string;
+    spent_tl: number | string;
+  };
   return {
     repId: row.rep_id,
     yearMonth: row.year_month,
@@ -31,7 +39,11 @@ export function getRemainingBudget(quota: SampleQuota | null): number {
   return Math.max(0, quota.budgetTl - quota.spentTl);
 }
 
-export async function ensureQuota(repId: string, yearMonth: string, defaultBudgetTl: number): Promise<SampleQuota> {
+export async function ensureQuota(
+  repId: string,
+  yearMonth: string,
+  defaultBudgetTl: number,
+): Promise<SampleQuota> {
   const existing = await getQuota(repId, yearMonth);
   if (existing) return existing;
   const supabase = getSupabaseClient();
@@ -41,7 +53,12 @@ export async function ensureQuota(repId: string, yearMonth: string, defaultBudge
     .select('rep_id, year_month, budget_tl, spent_tl')
     .single();
   if (error || !data) throw error ?? new Error('quota_insert_failed');
-  const row = data as { rep_id: string; year_month: string; budget_tl: number | string; spent_tl: number | string };
+  const row = data as {
+    rep_id: string;
+    year_month: string;
+    budget_tl: number | string;
+    spent_tl: number | string;
+  };
   return {
     repId: row.rep_id,
     yearMonth: row.year_month,
@@ -50,7 +67,11 @@ export async function ensureQuota(repId: string, yearMonth: string, defaultBudge
   };
 }
 
-export async function incrementSpent(repId: string, amountTl: number, yearMonth = currentYearMonth()): Promise<void> {
+export async function incrementSpent(
+  repId: string,
+  amountTl: number,
+  yearMonth = currentYearMonth(),
+): Promise<void> {
   const supabase = getSupabaseClient();
   const { error } = await supabase.rpc('saha_increment_sample_spent', {
     _rep_id: repId,

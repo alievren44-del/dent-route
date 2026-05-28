@@ -41,10 +41,7 @@ async function fetchReps(): Promise<RepRow[]> {
     .ilike('role', '%REP%');
   if (error) throw error;
   return (data ?? ([] as RepRow[])).sort((a, b) =>
-    (a.ad_soyad ?? a.email ?? '').localeCompare(
-      b.ad_soyad ?? b.email ?? '',
-      'tr',
-    ),
+    (a.ad_soyad ?? a.email ?? '').localeCompare(b.ad_soyad ?? b.email ?? '', 'tr'),
   );
 }
 
@@ -91,9 +88,7 @@ export default function RegionAssignmentPage() {
   const [selectedRepId, setSelectedRepId] = useState<string | null>(null);
   const [draftProvinces, setDraftProvinces] = useState<string[]>([]);
   const [draftDistricts, setDraftDistricts] = useState<string[]>([]);
-  const [expandedProvinces, setExpandedProvinces] = useState<Set<string>>(
-    new Set(),
-  );
+  const [expandedProvinces, setExpandedProvinces] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
 
   const provinces = useMemo<Province[]>(() => getProvinces(), []);
@@ -130,32 +125,19 @@ export default function RegionAssignmentPage() {
     onSuccess: () => {
       if (selectedRepId) {
         queryClient.invalidateQueries({
-          queryKey: [
-            'admin',
-            'region-assignment',
-            'assignment',
-            selectedRepId,
-          ],
+          queryKey: ['admin', 'region-assignment', 'assignment', selectedRepId],
         });
       }
     },
   });
 
-  const provinceSet = useMemo(
-    () => new Set(draftProvinces),
-    [draftProvinces],
-  );
-  const districtSet = useMemo(
-    () => new Set(draftDistricts),
-    [draftDistricts],
-  );
+  const provinceSet = useMemo(() => new Set(draftProvinces), [draftProvinces]);
+  const districtSet = useMemo(() => new Set(draftDistricts), [draftDistricts]);
 
   const filteredProvinces = useMemo(() => {
     const q = search.trim().toLocaleLowerCase('tr');
     if (!q) return provinces;
-    return provinces.filter((p) =>
-      p.ad.toLocaleLowerCase('tr').includes(q),
-    );
+    return provinces.filter((p) => p.ad.toLocaleLowerCase('tr').includes(q));
   }, [provinces, search]);
 
   function toggleExpand(provinceAd: string) {
@@ -172,9 +154,7 @@ export default function RegionAssignmentPage() {
     const districtKeys = districts.map((d) => `${provinceAd}|${d.ad}`);
     if (provinceSet.has(provinceAd)) {
       setDraftProvinces((prev) => prev.filter((p) => p !== provinceAd));
-      setDraftDistricts((prev) =>
-        prev.filter((d) => !districtKeys.includes(d)),
-      );
+      setDraftDistricts((prev) => prev.filter((d) => !districtKeys.includes(d)));
     } else {
       setDraftProvinces((prev) => [...prev, provinceAd]);
       setDraftDistricts((prev) => {
@@ -193,9 +173,9 @@ export default function RegionAssignmentPage() {
     // İl checkbox sync — en az 1 ilçe seçili ise il'i ekle
     setDraftProvinces((prev) => {
       const willHaveAny = districtSet.has(key)
-        ? Array.from(districtSet).filter((k) => k !== key).some((k) =>
-            k.startsWith(`${provinceAd}|`),
-          )
+        ? Array.from(districtSet)
+            .filter((k) => k !== key)
+            .some((k) => k.startsWith(`${provinceAd}|`))
         : true;
       if (willHaveAny && !prev.includes(provinceAd)) {
         return [...prev, provinceAd];
@@ -227,9 +207,7 @@ export default function RegionAssignmentPage() {
       <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Bölge Atama</h1>
-          <p className="text-xs text-slate-500">
-            Rep başına il / ilçe bölgesi tanımla.
-          </p>
+          <p className="text-xs text-slate-500">Rep başına il / ilçe bölgesi tanımla.</p>
         </div>
         <div className="flex items-center gap-2">
           {selectedRep && (
@@ -242,9 +220,7 @@ export default function RegionAssignmentPage() {
           )}
           <button
             type="button"
-            disabled={
-              !selectedRepId || saveMutation.isPending || !isDirty
-            }
+            disabled={!selectedRepId || saveMutation.isPending || !isDirty}
             onClick={() => saveMutation.mutate()}
             className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
@@ -256,8 +232,7 @@ export default function RegionAssignmentPage() {
 
       {saveMutation.isError && (
         <div className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">
-          Kayıt başarısız:{' '}
-          {(saveMutation.error as Error | null)?.message ?? 'bilinmeyen hata'}
+          Kayıt başarısız: {(saveMutation.error as Error | null)?.message ?? 'bilinmeyen hata'}
         </div>
       )}
       {saveMutation.isSuccess && !isDirty && (
@@ -270,25 +245,17 @@ export default function RegionAssignmentPage() {
         {/* Sol panel — Rep listesi */}
         <aside className="md:w-80 flex-shrink-0 rounded-lg border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-200 px-3 py-2">
-            <h2 className="text-sm font-semibold text-slate-700">
-              Saha Rep'leri
-            </h2>
+            <h2 className="text-sm font-semibold text-slate-700">Saha Rep'leri</h2>
             <p className="text-xs text-slate-500">
-              {repsQuery.isLoading
-                ? 'Yükleniyor...'
-                : `${reps.length} rep`}
+              {repsQuery.isLoading ? 'Yükleniyor...' : `${reps.length} rep`}
             </p>
           </div>
           <ul className="max-h-[70vh] overflow-y-auto">
             {repsQuery.isError && (
-              <li className="px-3 py-4 text-sm text-rose-600">
-                Rep listesi yüklenemedi.
-              </li>
+              <li className="px-3 py-4 text-sm text-rose-600">Rep listesi yüklenemedi.</li>
             )}
             {!repsQuery.isLoading && reps.length === 0 && (
-              <li className="px-3 py-4 text-sm text-slate-500">
-                Rep bulunamadı.
-              </li>
+              <li className="px-3 py-4 text-sm text-slate-500">Rep bulunamadı.</li>
             )}
             {reps.map((rep) => {
               const isSelected = rep.id === selectedRepId;
@@ -304,17 +271,11 @@ export default function RegionAssignmentPage() {
                     }`}
                   >
                     <User
-                      className={`h-4 w-4 ${
-                        isSelected ? 'text-emerald-600' : 'text-slate-400'
-                      }`}
+                      className={`h-4 w-4 ${isSelected ? 'text-emerald-600' : 'text-slate-400'}`}
                     />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate font-medium">
-                        {repLabel(rep)}
-                      </div>
-                      <div className="truncate text-xs text-slate-500">
-                        {rep.email ?? '—'}
-                      </div>
+                      <div className="truncate font-medium">{repLabel(rep)}</div>
+                      <div className="truncate text-xs text-slate-500">{rep.email ?? '—'}</div>
                     </div>
                   </button>
                 </li>
@@ -333,9 +294,7 @@ export default function RegionAssignmentPage() {
           {selectedRepId && (
             <>
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2">
-                <h2 className="text-sm font-semibold text-slate-700">
-                  İl / İlçe Seçimi
-                </h2>
+                <h2 className="text-sm font-semibold text-slate-700">İl / İlçe Seçimi</h2>
                 <input
                   type="search"
                   value={search}
@@ -345,35 +304,24 @@ export default function RegionAssignmentPage() {
                 />
               </div>
               {assignmentQuery.isLoading ? (
-                <div className="px-3 py-6 text-sm text-slate-500">
-                  Yükleniyor...
-                </div>
+                <div className="px-3 py-6 text-sm text-slate-500">Yükleniyor...</div>
               ) : (
                 <ul className="max-h-[70vh] overflow-y-auto">
                   {filteredProvinces.map((province) => {
                     const expanded = expandedProvinces.has(province.ad);
                     const provinceChecked = provinceSet.has(province.ad);
-                    const districts = expanded
-                      ? getDistrictsByProvince(province.ad)
-                      : [];
-                    const selectedDistrictCount = Array.from(
-                      districtSet,
-                    ).filter((k) =>
+                    const districts = expanded ? getDistrictsByProvince(province.ad) : [];
+                    const selectedDistrictCount = Array.from(districtSet).filter((k) =>
                       k.startsWith(`${province.ad}|`),
                     ).length;
                     return (
-                      <li
-                        key={province.plaka}
-                        className="border-b border-slate-100"
-                      >
+                      <li key={province.plaka} className="border-b border-slate-100">
                         <div className="flex items-center gap-2 px-3 py-2">
                           <button
                             type="button"
                             onClick={() => toggleExpand(province.ad)}
                             className="flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100"
-                            aria-label={
-                              expanded ? 'Daralt' : 'İlçeleri göster'
-                            }
+                            aria-label={expanded ? 'Daralt' : 'İlçeleri göster'}
                           >
                             {expanded ? (
                               <ChevronDown className="h-4 w-4" />
@@ -396,9 +344,7 @@ export default function RegionAssignmentPage() {
                                 {selectedDistrictCount} ilçe
                               </span>
                             )}
-                            <span className="ml-auto text-xs text-slate-400">
-                              {province.bolge}
-                            </span>
+                            <span className="ml-auto text-xs text-slate-400">{province.bolge}</span>
                           </label>
                         </div>
                         {expanded && (
@@ -412,12 +358,7 @@ export default function RegionAssignmentPage() {
                                     <input
                                       type="checkbox"
                                       checked={checked}
-                                      onChange={() =>
-                                        toggleDistrict(
-                                          province.ad,
-                                          district.ad,
-                                        )
-                                      }
+                                      onChange={() => toggleDistrict(province.ad, district.ad)}
                                       className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                                     />
                                     <span>{district.ad}</span>
@@ -426,9 +367,7 @@ export default function RegionAssignmentPage() {
                               );
                             })}
                             {districts.length === 0 && (
-                              <li className="px-2 py-1 text-xs text-slate-400">
-                                İlçe bulunamadı.
-                              </li>
+                              <li className="px-2 py-1 text-xs text-slate-400">İlçe bulunamadı.</li>
                             )}
                           </ul>
                         )}

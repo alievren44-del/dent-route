@@ -49,13 +49,7 @@ export interface VerticalCustomFields {
   visit?: CustomField[];
 }
 
-export type CustomFieldType =
-  | 'text'
-  | 'number'
-  | 'boolean'
-  | 'select'
-  | 'multiselect'
-  | 'date';
+export type CustomFieldType = 'text' | 'number' | 'boolean' | 'select' | 'multiselect' | 'date';
 
 export interface CustomField {
   key: string;

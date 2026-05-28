@@ -56,7 +56,11 @@ async function copyToClipboard(text: string): Promise<boolean> {
  * Capacitor modülünü dinamik import ile yüklüyoruz ki web build'de
  * Capacitor olmasa bile bundle bozulmasın.
  */
-async function tryShare(title: string, text: string, url: string): Promise<'native' | 'web' | 'copy'> {
+async function tryShare(
+  title: string,
+  text: string,
+  url: string,
+): Promise<'native' | 'web' | 'copy'> {
   // 1. Capacitor native
   try {
     const cap = await import('@capacitor/core');
@@ -95,10 +99,7 @@ export function RouteExportPanel({ start, stops }: RouteExportPanelProps): JSX.E
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrLoading, setQrLoading] = useState<boolean>(false);
 
-  const googleUrls = useMemo(
-    () => buildGoogleMapsUrls(start, stops),
-    [start, stops],
-  );
+  const googleUrls = useMemo(() => buildGoogleMapsUrls(start, stops), [start, stops]);
   const appleUrl = useMemo(() => buildAppleMapsUrl(start, stops), [start, stops]);
   const yandexUrl = useMemo(() => buildYandexMapsUrl(start, stops), [start, stops]);
 
@@ -160,11 +161,7 @@ export function RouteExportPanel({ start, stops }: RouteExportPanelProps): JSX.E
     <section className="rounded-xl bg-white p-3 shadow-sm">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-slate-700">Dışa aktar</h2>
-        {isChunked && (
-          <span className="text-[11px] text-amber-700">
-            {googleUrls.length} parça
-          </span>
-        )}
+        {isChunked && <span className="text-[11px] text-amber-700">{googleUrls.length} parça</span>}
       </div>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

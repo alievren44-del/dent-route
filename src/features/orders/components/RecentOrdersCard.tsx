@@ -65,10 +65,7 @@ function formatDate(iso: string | null): string {
   });
 }
 
-async function fetchRecentOrders(
-  customerId: string,
-  limit: number,
-): Promise<OrderRow[]> {
+async function fetchRecentOrders(customerId: string, limit: number): Promise<OrderRow[]> {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from('orders')
@@ -80,10 +77,7 @@ async function fetchRecentOrders(
   return (data ?? []) as OrderRow[];
 }
 
-export function RecentOrdersCard({
-  customerId,
-  limit = 5,
-}: RecentOrdersCardProps): JSX.Element {
+export function RecentOrdersCard({ customerId, limit = 5 }: RecentOrdersCardProps): JSX.Element {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['recent-orders', customerId, limit],
     enabled: Boolean(customerId),
@@ -109,24 +103,15 @@ export function RecentOrdersCard({
       {isLoading && (
         <div className="space-y-2" aria-label="Yükleniyor">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-12 rounded-lg bg-muted/40 animate-pulse"
-            />
+            <div key={i} className="h-12 rounded-lg bg-muted/40 animate-pulse" />
           ))}
         </div>
       )}
 
-      {isError && (
-        <p className="text-sm text-red-600 py-3 text-center">
-          Siparişler yüklenemedi.
-        </p>
-      )}
+      {isError && <p className="text-sm text-red-600 py-3 text-center">Siparişler yüklenemedi.</p>}
 
       {!isLoading && !isError && (data ?? []).length === 0 && (
-        <p className="text-sm text-muted-foreground py-4 text-center">
-          Henüz sipariş yok.
-        </p>
+        <p className="text-sm text-muted-foreground py-4 text-center">Henüz sipariş yok.</p>
       )}
 
       {!isLoading && !isError && (data ?? []).length > 0 && (
@@ -141,9 +126,7 @@ export function RecentOrdersCard({
                     <p className="text-sm font-medium text-foreground truncate">
                       {o.order_number ?? `#${o.id.slice(0, 8)}`}
                     </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {formatDate(o.created_at)}
-                    </p>
+                    <p className="text-[11px] text-muted-foreground">{formatDate(o.created_at)}</p>
                   </div>
                   <div className="flex flex-col items-end gap-0.5 shrink-0">
                     <span className="text-sm font-semibold text-foreground">

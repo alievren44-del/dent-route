@@ -11,10 +11,10 @@ import type {
 export interface PolicyCheckInput {
   line: NewSampleLine;
   verticalKey: string;
-  policy: SamplePolicy | undefined;        // verticals/*.json'dan
-  overrides: SamplePolicyOverride[];       // DB'den (saha_sample_policies)
-  isBlacklisted: boolean;                  // saha_blacklist'ten
-  previousSamplesThisAccount: Sample[];    // son 1 yıl
+  policy: SamplePolicy | undefined; // verticals/*.json'dan
+  overrides: SamplePolicyOverride[]; // DB'den (saha_sample_policies)
+  isBlacklisted: boolean; // saha_blacklist'ten
+  previousSamplesThisAccount: Sample[]; // son 1 yıl
   remainingBudgetTl: number;
   estimatedLineCostTl: number;
 }
@@ -29,9 +29,10 @@ interface ResolvedPolicy {
   minConversionPct: number;
 }
 
-function resolvePolicy(
-  input: PolicyCheckInput,
-): { resolved: ResolvedPolicy | undefined; missing: boolean } {
+function resolvePolicy(input: PolicyCheckInput): {
+  resolved: ResolvedPolicy | undefined;
+  missing: boolean;
+} {
   const { line, verticalKey, policy, overrides } = input;
   const categoryKey = line.categoryKey;
 

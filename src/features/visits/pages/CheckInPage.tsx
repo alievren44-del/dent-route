@@ -155,8 +155,7 @@ function CheckInPage(): JSX.Element {
   });
 
   const account = accountQuery.data;
-  const accountName =
-    account?.klinik_adi ?? account?.ad_soyad ?? account?.email ?? customerLabel;
+  const accountName = account?.klinik_adi ?? account?.ad_soyad ?? account?.email ?? customerLabel;
 
   // Mesafe
   const distanceM = useMemo<number | null>(() => {
@@ -217,8 +216,7 @@ function CheckInPage(): JSX.Element {
       toast.success('Check-in başarılı');
       navigate(`/visits/${visitId}`, { replace: true });
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : 'Check-in sırasında hata oluştu.';
+      const msg = err instanceof Error ? err.message : 'Check-in sırasında hata oluştu.';
       toast.error(msg);
     } finally {
       setSubmitting(false);
@@ -229,9 +227,7 @@ function CheckInPage(): JSX.Element {
   const accountLoading = accountQuery.isLoading;
 
   if (!id) {
-    return (
-      <div className="p-6 text-center text-muted-foreground">Müşteri ID bulunamadı.</div>
-    );
+    return <div className="p-6 text-center text-muted-foreground">Müşteri ID bulunamadı.</div>;
   }
 
   return (
@@ -248,9 +244,7 @@ function CheckInPage(): JSX.Element {
             <ArrowLeft className="h-5 w-5" />
           </button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-lg font-semibold text-foreground truncate">
-              Check-in
-            </h1>
+            <h1 className="text-lg font-semibold text-foreground truncate">Check-in</h1>
             <p className="text-xs text-muted-foreground truncate">
               {accountLoading ? 'Yükleniyor…' : accountName}
             </p>
@@ -274,10 +268,7 @@ function CheckInPage(): JSX.Element {
         </section>
 
         {/* Konum durum banner */}
-        <section
-          className={`rounded-2xl border p-4 ${toneClasses(tier.tone)}`}
-          role="status"
-        >
+        <section className={`rounded-2xl border p-4 ${toneClasses(tier.tone)}`} role="status">
           <div className="flex items-start gap-3">
             <Navigation className="h-5 w-5 mt-0.5 shrink-0" aria-hidden="true" />
             <div className="flex-1 min-w-0">

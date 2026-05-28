@@ -45,9 +45,7 @@ export function haversineKm(a: TspPoint, b: TspPoint): number {
   const dLng = toRadians(b.lng - a.lng);
   const lat1 = toRadians(a.lat);
   const lat2 = toRadians(b.lat);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
   return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(h));
 }
 
@@ -140,9 +138,7 @@ export async function optimizeRouteHybrid(
   points: TspPoint[],
   start: TspPoint,
   options: { returnHome?: boolean } = {},
-): Promise<
-  TspResult & { initialKm: number; savedKm: number; method: 'nn' | 'nn+2opt' }
-> {
+): Promise<TspResult & { initialKm: number; savedKm: number; method: 'nn' | 'nn+2opt' }> {
   const returnHome = options.returnHome ?? false;
   const nnResult = nearestNeighborGreedy(points, start, { returnHome });
 
@@ -180,10 +176,7 @@ export async function optimizeRouteHybrid(
     }
 
     // Kümülatif km'i baştan hesapla (2-opt sonrası optimal sıraya göre)
-    const finalWaypoints: TspPoint[] = [
-      start,
-      ...finalIndicesInOriginal.map((i) => points[i]!),
-    ];
+    const finalWaypoints: TspPoint[] = [start, ...finalIndicesInOriginal.map((i) => points[i]!)];
     const cumulativeKm: number[] = [];
     let running = 0;
     for (let i = 1; i < finalWaypoints.length; i++) {

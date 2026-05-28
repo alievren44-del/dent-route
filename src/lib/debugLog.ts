@@ -58,12 +58,7 @@ function formatArgs(args: unknown[]): { message: string; detail?: string } {
   return { message: first, detail: rest };
 }
 
-export function pushDebug(
-  level: DebugLevel,
-  source: string,
-  message: string,
-  detail?: string,
-) {
+export function pushDebug(level: DebugLevel, source: string, message: string, detail?: string) {
   const entry: DebugEntry = {
     id: STORE.nextId++,
     ts: Date.now(),
@@ -134,9 +129,10 @@ function installCapture() {
   // window error
   window.addEventListener('error', (ev) => {
     const msg = ev.message || 'window.error';
-    const detail = ev.error instanceof Error
-      ? `${ev.error.stack ?? ev.error.message}`
-      : `${ev.filename}:${ev.lineno}:${ev.colno}`;
+    const detail =
+      ev.error instanceof Error
+        ? `${ev.error.stack ?? ev.error.message}`
+        : `${ev.filename}:${ev.lineno}:${ev.colno}`;
     pushDebug('error', 'window.error', msg, detail);
   });
 
@@ -155,10 +151,10 @@ function installCapture() {
       typeof input === 'string'
         ? input
         : input instanceof URL
-        ? input.toString()
-        : input instanceof Request
-        ? input.url
-        : '';
+          ? input.toString()
+          : input instanceof Request
+            ? input.url
+            : '';
     const isEdgeFn = url.includes('/functions/v1/');
     try {
       const res = await origFetch(...args);
@@ -181,12 +177,7 @@ function installCapture() {
     } catch (err) {
       if (isEdgeFn) {
         const fnName = url.split('/functions/v1/')[1]?.split(/[/?]/)[0] ?? '?';
-        pushDebug(
-          'error',
-          'edge-function',
-          `${fnName} → network error`,
-          safeStringify(err),
-        );
+        pushDebug('error', 'edge-function', `${fnName} → network error`, safeStringify(err));
       }
       throw err;
     }

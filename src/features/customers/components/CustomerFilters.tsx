@@ -15,13 +15,7 @@ import {
 } from '@/data/tr-locations/geo-helpers';
 import type { CustomerTypeOption } from '@core/verticals/types';
 
-export type CustomerStatusFilter =
-  | 'all'
-  | 'visited'
-  | 'not_visited'
-  | 'hot'
-  | 'cold'
-  | 'due';
+export type CustomerStatusFilter = 'all' | 'visited' | 'not_visited' | 'hot' | 'cold' | 'due';
 
 export interface CustomerFiltersValue {
   types: string[];
@@ -167,9 +161,7 @@ function CustomerFilters({
               <select
                 id="filter-province"
                 value={value.province}
-                onChange={(e) =>
-                  patch({ province: e.target.value, district: '' })
-                }
+                onChange={(e) => patch({ province: e.target.value, district: '' })}
                 className="w-full rounded-md border border-border bg-background px-2 py-2 text-sm focus:border-primary focus:outline-none"
               >
                 <option value="">Hepsi</option>
@@ -215,9 +207,7 @@ function CustomerFilters({
             <select
               id="filter-status"
               value={value.status}
-              onChange={(e) =>
-                patch({ status: e.target.value as CustomerStatusFilter })
-              }
+              onChange={(e) => patch({ status: e.target.value as CustomerStatusFilter })}
               className="w-full rounded-md border border-border bg-background px-2 py-2 text-sm focus:border-primary focus:outline-none"
             >
               {STATUS_OPTIONS.map((s) => (
@@ -235,9 +225,7 @@ function CustomerFilters({
               className="mb-1 block text-xs font-medium text-muted-foreground"
             >
               Min Değerlendirme:{' '}
-              <span className="font-semibold text-foreground">
-                {value.minReviewCount}
-              </span>
+              <span className="font-semibold text-foreground">{value.minReviewCount}</span>
             </label>
             <input
               id="filter-reviews"
@@ -246,9 +234,7 @@ function CustomerFilters({
               max={500}
               step={10}
               value={value.minReviewCount}
-              onChange={(e) =>
-                patch({ minReviewCount: Number(e.target.value) })
-              }
+              onChange={(e) => patch({ minReviewCount: Number(e.target.value) })}
               className="w-full"
             />
           </div>
@@ -321,9 +307,7 @@ function CustomerFilters({
                 onChange={(e) => patch({ hasBalance: e.target.checked })}
                 className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
               />
-              <span className="text-sm text-foreground">
-                Sadece bakiyesi olanlar
-              </span>
+              <span className="text-sm text-foreground">Sadece bakiyesi olanlar</span>
             </label>
           )}
 

@@ -149,11 +149,13 @@ function SampleFormMobile({
         .eq('status', 'active')
         .limit(10);
       if (error) throw error;
-      return ((data ?? []) as Array<{
-        id: string;
-        name: string;
-        types: string[] | null;
-      }>).map((r) => ({ id: r.id, name: r.name, type: r.types?.[0] ?? null }));
+      return (
+        (data ?? []) as Array<{
+          id: string;
+          name: string;
+          types: string[] | null;
+        }>
+      ).map((r) => ({ id: r.id, name: r.name, type: r.types?.[0] ?? null }));
     },
   });
 
@@ -214,9 +216,7 @@ function SampleFormMobile({
     return ctx;
   }
 
-  function pointerPos(
-    e: ReactPointerEvent<HTMLCanvasElement>,
-  ): { x: number; y: number } {
+  function pointerPos(e: ReactPointerEvent<HTMLCanvasElement>): { x: number; y: number } {
     const c = canvasRef.current;
     if (!c) return { x: 0, y: 0 };
     const rect = c.getBoundingClientRect();
@@ -326,7 +326,11 @@ function SampleFormMobile({
     (l) => l.showProductResults && l.productQuery.trim().length >= 2,
   );
   const productSearchQuery = useQuery({
-    queryKey: ['product-search', activeProductLine?.uid ?? null, activeProductLine?.productQuery ?? ''],
+    queryKey: [
+      'product-search',
+      activeProductLine?.uid ?? null,
+      activeProductLine?.productQuery ?? '',
+    ],
     enabled: Boolean(activeProductLine && activeProductLine.productQuery.trim().length >= 2),
     queryFn: async (): Promise<ProductRow[]> => {
       if (!activeProductLine) return [];
@@ -369,9 +373,7 @@ function SampleFormMobile({
       let photoUrl: string | undefined;
       if (photoFile) {
         const path = `${repId}/${Date.now()}-${photoFile.name}`;
-        const { data, error } = await supabase.storage
-          .from('saha-samples')
-          .upload(path, photoFile);
+        const { data, error } = await supabase.storage.from('saha-samples').upload(path, photoFile);
         if (!error && data) {
           const row = data as { path: string };
           photoUrl = row.path;
@@ -425,9 +427,7 @@ function SampleFormMobile({
         unit: l.unit ?? 'adet',
         unit_cost_tl: l.unitCostTl ?? null,
       }));
-      const { error: linesErr } = await supabase
-        .from('saha_sample_lines')
-        .insert(linesPayload);
+      const { error: linesErr } = await supabase.from('saha_sample_lines').insert(linesPayload);
       if (linesErr) throw linesErr;
 
       // 5. Increment quota
@@ -484,7 +484,10 @@ function SampleFormMobile({
         ) : (
           <div className="relative">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+                aria-hidden="true"
+              />
               <input
                 type="text"
                 value={accountQuery}
@@ -535,7 +538,9 @@ function SampleFormMobile({
       {/* 2. Tarihler */}
       <section className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium" htmlFor="given-at">Teslim Tarihi</label>
+          <label className="text-sm font-medium" htmlFor="given-at">
+            Teslim Tarihi
+          </label>
           <input
             id="given-at"
             type="date"
@@ -545,7 +550,9 @@ function SampleFormMobile({
           />
         </div>
         <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium" htmlFor="follow-up-at">Takip Tarihi</label>
+          <label className="text-sm font-medium" htmlFor="follow-up-at">
+            Takip Tarihi
+          </label>
           <input
             id="follow-up-at"
             type="date"
@@ -657,9 +664,7 @@ function SampleFormMobile({
                   <label className="text-xs text-muted-foreground">Birim</label>
                   <select
                     value={line.unit ?? 'adet'}
-                    onChange={(e) =>
-                      updateLine(line.uid, { unit: e.target.value as UnitOption })
-                    }
+                    onChange={(e) => updateLine(line.uid, { unit: e.target.value as UnitOption })}
                     className="w-full rounded-xl border border-border bg-background px-3 h-12 min-h-tap-min text-base"
                   >
                     {UNIT_OPTIONS.map((u) => (
@@ -753,9 +758,7 @@ function SampleFormMobile({
         <h3 className="text-sm font-semibold">Bütçe & Politika</h3>
         <div
           className={`flex items-center justify-between text-sm rounded-lg px-2 py-1.5 ${
-            budgetExceeded
-              ? 'bg-red-50 text-red-700'
-              : 'bg-green-50 text-green-700'
+            budgetExceeded ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
           }`}
         >
           <span>Bu ay kalan bütçe</span>
@@ -795,7 +798,9 @@ function SampleFormMobile({
 
       {/* 6. Notlar */}
       <section className="flex flex-col gap-2">
-        <label className="text-sm font-medium" htmlFor="notes">Notlar</label>
+        <label className="text-sm font-medium" htmlFor="notes">
+          Notlar
+        </label>
         <textarea
           id="notes"
           value={notes}
@@ -811,7 +816,9 @@ function SampleFormMobile({
         <label className="text-sm font-medium">Teslim Fotoğrafı</label>
         <label className="inline-flex items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-background h-12 min-h-tap-min cursor-pointer">
           <Camera className="h-5 w-5" aria-hidden="true" />
-          <span className="text-sm">{photoFile ? 'Fotoğrafı değiştir' : 'Fotoğraf çek / yükle'}</span>
+          <span className="text-sm">
+            {photoFile ? 'Fotoğrafı değiştir' : 'Fotoğraf çek / yükle'}
+          </span>
           <input
             type="file"
             accept="image/*"

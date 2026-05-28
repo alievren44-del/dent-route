@@ -58,11 +58,12 @@ export const COLLECTION_METHOD_LABELS: Record<CollectionMethod, string> = {
   CARD: 'Kredi Kartı',
 };
 
-export const COLLECTION_STATUS_LABELS: Record<CollectionStatus, { label: string; color: string }> = {
-  PENDING: { label: 'Beklemede', color: 'bg-yellow-100 text-yellow-700' },
-  CONFIRMED: { label: 'Onaylandı', color: 'bg-green-100 text-green-700' },
-  BOUNCED: { label: 'İade', color: 'bg-red-100 text-red-700' },
-};
+export const COLLECTION_STATUS_LABELS: Record<CollectionStatus, { label: string; color: string }> =
+  {
+    PENDING: { label: 'Beklemede', color: 'bg-yellow-100 text-yellow-700' },
+    CONFIRMED: { label: 'Onaylandı', color: 'bg-green-100 text-green-700' },
+    BOUNCED: { label: 'İade', color: 'bg-red-100 text-red-700' },
+  };
 
 export const TASK_TYPE_LABELS: Record<RepTaskType, string> = {
   visit: 'Ziyaret',

@@ -1,8 +1,8 @@
 import { getSupabaseClient } from '@lib/supabase';
 
 export interface ROIQuery {
-  startDate: string;            // ISO
-  endDate: string;              // ISO
+  startDate: string; // ISO
+  endDate: string; // ISO
   conversionWindowDays?: number; // default 90
   filterRepId?: string;
   filterAccountId?: string;
@@ -13,9 +13,9 @@ export interface ROIMetrics {
   totalSampleCount: number;
   totalSampleCostTl: number;
   convertedSampleCount: number;
-  conversionRatePct: number;          // converted / total * 100
-  totalOrderRevenueTl: number;        // sipariş tutarları (eşleşmiş)
-  roiPct: number;                     // (revenue - cost) / cost * 100  (cost=0 → 0)
+  conversionRatePct: number; // converted / total * 100
+  totalOrderRevenueTl: number; // sipariş tutarları (eşleşmiş)
+  roiPct: number; // (revenue - cost) / cost * 100  (cost=0 → 0)
   byProduct: ProductROI[];
   byRep: RepROI[];
 }
@@ -145,7 +145,7 @@ export async function computeROI(query: ROIQuery): Promise<ROIMetrics> {
     totalSampleCostTl += sampleCost;
 
     const converted = !!s.converted_order_id;
-    const revenue = converted ? revenueById.get(s.converted_order_id as string) ?? 0 : 0;
+    const revenue = converted ? (revenueById.get(s.converted_order_id as string) ?? 0) : 0;
 
     if (converted) {
       convertedSampleCount += 1;
@@ -175,8 +175,7 @@ export async function computeROI(query: ROIQuery): Promise<ROIMetrics> {
     for (const l of lines) {
       const pKey = l.product_id ?? `name:${l.product_name}`;
       const c = lineCost(l);
-      const proRataRevenue =
-        converted && lineCostSum > 0 ? revenue * (c / lineCostSum) : 0;
+      const proRataRevenue = converted && lineCostSum > 0 ? revenue * (c / lineCostSum) : 0;
 
       const pEntry = productAcc.get(pKey) ?? {
         productId: l.product_id ?? undefined,

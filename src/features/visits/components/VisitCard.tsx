@@ -75,9 +75,7 @@ function VisitCard({ visit, outcomeMeta, onClick }: VisitCardProps): JSX.Element
   const dateLabel = Number.isFinite(checkIn.getTime())
     ? format(checkIn, 'd MMM yyyy', { locale: tr })
     : '—';
-  const timeLabel = Number.isFinite(checkIn.getTime())
-    ? format(checkIn, 'HH:mm')
-    : '—';
+  const timeLabel = Number.isFinite(checkIn.getTime()) ? format(checkIn, 'HH:mm') : '—';
   const truncatedNotes =
     visit.notes && visit.notes.length > NOTES_LIMIT
       ? `${visit.notes.slice(0, NOTES_LIMIT)}…`
@@ -101,10 +99,7 @@ function VisitCard({ visit, outcomeMeta, onClick }: VisitCardProps): JSX.Element
               </span>
             )}
             {visit.status === 'completed' && (
-              <CheckCircle2
-                className="h-3 w-3 text-green-600"
-                aria-hidden="true"
-              />
+              <CheckCircle2 className="h-3 w-3 text-green-600" aria-hidden="true" />
             )}
           </div>
           {visit.customerName && (
@@ -147,11 +142,7 @@ function VisitCard({ visit, outcomeMeta, onClick }: VisitCardProps): JSX.Element
               key={`${visit.id}-thumb-${i}`}
               className="w-12 h-12 rounded-lg overflow-hidden border border-border bg-muted shrink-0"
             >
-              <img
-                src={url}
-                alt={`foto ${i + 1}`}
-                className="w-full h-full object-cover"
-              />
+              <img src={url} alt={`foto ${i + 1}`} className="w-full h-full object-cover" />
             </div>
           ))}
           {thumbs.length === 0 && (
@@ -161,9 +152,7 @@ function VisitCard({ visit, outcomeMeta, onClick }: VisitCardProps): JSX.Element
             </div>
           )}
           {photoCount > 3 && thumbs.length > 0 && (
-            <span className="text-xs text-muted-foreground">
-              +{photoCount - 3} foto
-            </span>
+            <span className="text-xs text-muted-foreground">+{photoCount - 3} foto</span>
           )}
         </div>
       )}

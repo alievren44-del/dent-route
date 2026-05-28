@@ -14,14 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import {
-  Sparkles,
-  AlertCircle,
-  ShoppingCart,
-  Crosshair,
-  Footprints,
-  Car,
-} from 'lucide-react';
+import { Sparkles, AlertCircle, ShoppingCart, Crosshair, Footprints, Car } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { getEnv } from '@config/env';
@@ -100,9 +93,12 @@ export default function CorridorRoutePage() {
       const supabase = getSupabaseClient();
 
       // 1. mapbox-directions
-      const { data: dirData, error: dirErr } = await supabase.functions.invoke('mapbox-directions', {
-        body: { coords: [aCoord, bCoord], profile },
-      });
+      const { data: dirData, error: dirErr } = await supabase.functions.invoke(
+        'mapbox-directions',
+        {
+          body: { coords: [aCoord, bCoord], profile },
+        },
+      );
       if (dirErr) throw new Error(dirErr.message);
       const dir = dirData as DirectionsResp;
       if (dir.status !== 'ok' || !dir.geometry) {
@@ -144,7 +140,12 @@ export default function CorridorRoutePage() {
       // 4. detour hesapla + filtre
       const enriched: Candidate[] = [];
       for (const c of rawList) {
-        const { distanceKm, durationMin } = computeDetour(aCoord, { lat: c.lat, lng: c.lng }, bCoord, profile);
+        const { distanceKm, durationMin } = computeDetour(
+          aCoord,
+          { lat: c.lat, lng: c.lng },
+          bCoord,
+          profile,
+        );
         if (distanceKm > DETOUR_KM_MAX) continue;
         if (durationMin > DETOUR_MIN_MAX) continue;
         enriched.push({
@@ -216,7 +217,11 @@ export default function CorridorRoutePage() {
       const coords = decodePolyline(routeGeom);
       m.addSource('corridor-src', {
         type: 'geojson',
-        data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } },
+        data: {
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'LineString', coordinates: coords },
+        },
       });
       m.addLayer({
         id: 'corridor-line',
@@ -231,14 +236,16 @@ export default function CorridorRoutePage() {
 
     if (aCoord) {
       const el = document.createElement('div');
-      el.style.cssText = 'width:14px;height:14px;border-radius:50%;background:#10b981;border:3px solid white;box-shadow:0 0 0 2px #10b981;';
+      el.style.cssText =
+        'width:14px;height:14px;border-radius:50%;background:#10b981;border:3px solid white;box-shadow:0 0 0 2px #10b981;';
       el.title = 'A';
       const mk = new mapboxgl.Marker({ element: el }).setLngLat([aCoord.lng, aCoord.lat]).addTo(m);
       markersRef.current.push(mk);
     }
     if (bCoord) {
       const el = document.createElement('div');
-      el.style.cssText = 'width:14px;height:14px;border-radius:50%;background:#ef4444;border:3px solid white;box-shadow:0 0 0 2px #ef4444;';
+      el.style.cssText =
+        'width:14px;height:14px;border-radius:50%;background:#ef4444;border:3px solid white;box-shadow:0 0 0 2px #ef4444;';
       el.title = 'B';
       const mk = new mapboxgl.Marker({ element: el }).setLngLat([bCoord.lng, bCoord.lat]).addTo(m);
       markersRef.current.push(mk);
@@ -278,7 +285,8 @@ export default function CorridorRoutePage() {
       <header>
         <h1 className="text-2xl font-semibold">Yol Üstü Klinik Önerileri</h1>
         <p className="text-sm text-slate-600">
-          A → B rotanı çiz, yolda uğrayabileceğin klinikleri ({DETOUR_MIN_MAX} dk içinde uzatma) gör.
+          A → B rotanı çiz, yolda uğrayabileceğin klinikleri ({DETOUR_MIN_MAX} dk içinde uzatma)
+          gör.
         </p>
       </header>
 
@@ -326,10 +334,12 @@ export default function CorridorRoutePage() {
       <section className="rounded-xl bg-white p-3 shadow-sm">
         <h2 className="mb-2 text-sm font-semibold text-slate-700">Rota modu</h2>
         <div className="grid grid-cols-2 gap-1.5">
-          {([
-            { key: 'driving', label: 'Araç', Icon: Car },
-            { key: 'walking', label: 'Yaya', Icon: Footprints },
-          ] as const).map(({ key, label, Icon }) => (
+          {(
+            [
+              { key: 'driving', label: 'Araç', Icon: Car },
+              { key: 'walking', label: 'Yaya', Icon: Footprints },
+            ] as const
+          ).map(({ key, label, Icon }) => (
             <button
               key={key}
               type="button"
@@ -364,7 +374,10 @@ export default function CorridorRoutePage() {
         </div>
       )}
 
-      <section ref={containerRef} className="h-[360px] w-full overflow-hidden rounded-xl border border-slate-200" />
+      <section
+        ref={containerRef}
+        className="h-[360px] w-full overflow-hidden rounded-xl border border-slate-200"
+      />
 
       {baseline && (
         <section className="rounded-xl bg-slate-50 p-3">
@@ -372,8 +385,12 @@ export default function CorridorRoutePage() {
             A → B baseline
           </h2>
           <div className="flex gap-4 text-sm">
-            <span><strong>{baseline.km.toFixed(1)} km</strong></span>
-            <span><strong>{Math.round(baseline.min)} dk</strong></span>
+            <span>
+              <strong>{baseline.km.toFixed(1)} km</strong>
+            </span>
+            <span>
+              <strong>{Math.round(baseline.min)} dk</strong>
+            </span>
             {candidates.length > 0 && (
               <span className="ml-auto text-slate-600">{candidates.length} aday klinik</span>
             )}
@@ -401,9 +418,13 @@ export default function CorridorRoutePage() {
                     {c.address && <span className="ml-2 truncate text-slate-500">{c.address}</span>}
                   </div>
                 </div>
-                <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${
-                  c.clinic_segment === 'kamu' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
-                }`}>
+                <span
+                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${
+                    c.clinic_segment === 'kamu'
+                      ? 'bg-purple-100 text-purple-700'
+                      : 'bg-blue-100 text-blue-700'
+                  }`}
+                >
                   {c.clinic_segment === 'kamu' ? 'KAMU' : 'Özel'}
                 </span>
                 <button
@@ -429,7 +450,8 @@ export default function CorridorRoutePage() {
 
       {!candidates.length && baseline && (
         <p className="text-sm text-slate-500">
-          Yol üstünde uygun klinik bulunamadı. Detour limiti {DETOUR_MIN_MAX} dk / {DETOUR_KM_MAX} km'yi geçmeyen klinik yok.
+          Yol üstünde uygun klinik bulunamadı. Detour limiti {DETOUR_MIN_MAX} dk / {DETOUR_KM_MAX}{' '}
+          km'yi geçmeyen klinik yok.
         </p>
       )}
 

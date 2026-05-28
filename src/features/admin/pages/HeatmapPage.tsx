@@ -52,8 +52,7 @@ export default function HeatmapPage() {
         const features = rows
           .filter(
             (v): v is { check_in_lat: number; check_in_lng: number; check_in_at: string } =>
-              typeof v.check_in_lat === 'number' &&
-              typeof v.check_in_lng === 'number',
+              typeof v.check_in_lat === 'number' && typeof v.check_in_lng === 'number',
           )
           .map((v) => ({
             type: 'Feature' as const,
@@ -80,24 +79,8 @@ export default function HeatmapPage() {
             type: 'heatmap',
             source: 'visits',
             paint: {
-              'heatmap-weight': [
-                'interpolate',
-                ['linear'],
-                ['get', 'intensity'],
-                0,
-                0,
-                1,
-                1,
-              ],
-              'heatmap-intensity': [
-                'interpolate',
-                ['linear'],
-                ['zoom'],
-                0,
-                1,
-                15,
-                3,
-              ],
+              'heatmap-weight': ['interpolate', ['linear'], ['get', 'intensity'], 0, 0, 1, 1],
+              'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 0, 1, 15, 3],
               'heatmap-color': [
                 'interpolate',
                 ['linear'],
@@ -115,15 +98,7 @@ export default function HeatmapPage() {
                 1,
                 'rgb(178,24,43)',
               ],
-              'heatmap-radius': [
-                'interpolate',
-                ['linear'],
-                ['zoom'],
-                0,
-                10,
-                15,
-                40,
-              ],
+              'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 0, 10, 15, 40],
               'heatmap-opacity': 0.7,
             },
           });
@@ -143,8 +118,7 @@ export default function HeatmapPage() {
           });
         }
       } catch (err) {
-        const msg =
-          err instanceof Error ? err.message : 'Veri yüklenemedi.';
+        const msg = err instanceof Error ? err.message : 'Veri yüklenemedi.';
         setErrorMsg(msg);
       }
     });
@@ -175,9 +149,7 @@ export default function HeatmapPage() {
     >
       <div className="pointer-events-none absolute left-3 top-3 z-10">
         <div className="pointer-events-auto rounded-lg bg-white/90 px-3 py-2 shadow-md backdrop-blur">
-          <h1 className="text-sm font-semibold text-slate-800">
-            Ziyaret Isı Haritası
-          </h1>
+          <h1 className="text-sm font-semibold text-slate-800">Ziyaret Isı Haritası</h1>
           <p className="text-xs text-slate-500">
             {pointCount === null
               ? 'Yükleniyor...'

@@ -63,7 +63,13 @@
         "key": "project_size_band",
         "label": "Proje Büyüklük Bandı",
         "type": "select",
-        "options": ["Konut (1-2 daire)", "Site (10-50 daire)", "Büyük Site (50+)", "Ticari/AVM", "Endüstriyel"]
+        "options": [
+          "Konut (1-2 daire)",
+          "Site (10-50 daire)",
+          "Büyük Site (50+)",
+          "Ticari/AVM",
+          "Endüstriyel"
+        ]
       },
       {
         "key": "has_yard",

@@ -109,7 +109,9 @@ export default function ClinicXlsxImport() {
   const [arrayBuffer, setArrayBuffer] = useState<ArrayBuffer | null>(null);
   const [sheets, setSheets] = useState<SheetState[]>([]);
   const [selectedSheets, setSelectedSheets] = useState<Set<string>>(new Set());
-  const [mapping, setMapping] = useState<Record<TargetField, string>>({} as Record<TargetField, string>);
+  const [mapping, setMapping] = useState<Record<TargetField, string>>(
+    {} as Record<TargetField, string>,
+  );
   const [parseError, setParseError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number }>({
@@ -309,9 +311,7 @@ export default function ClinicXlsxImport() {
       {/* Üst aksiyon barı */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
         <div>
-          <h2 className="text-base font-semibold text-slate-900">
-            Klinik Excel (Sivas Legacy)
-          </h2>
+          <h2 className="text-base font-semibold text-slate-900">Klinik Excel (Sivas Legacy)</h2>
           <p className="text-xs text-slate-500">
             XLSX → saha_clinics (low-confidence; source=legacy_import_sivas).
           </p>
@@ -336,9 +336,7 @@ export default function ClinicXlsxImport() {
             ) : (
               <Upload className="h-4 w-4" />
             )}
-            {importing
-              ? `İçeri aktarılıyor... ${progress.done}/${progress.total}`
-              : 'İçeri Aktar'}
+            {importing ? `İçeri aktarılıyor... ${progress.done}/${progress.total}` : 'İçeri Aktar'}
           </button>
         </div>
       </div>
@@ -347,9 +345,7 @@ export default function ClinicXlsxImport() {
       <section className="rounded-lg border border-dashed border-slate-300 bg-white p-6 shadow-sm">
         <label className="flex cursor-pointer flex-col items-center justify-center gap-2 text-center">
           <FileSpreadsheet className="h-10 w-10 text-slate-400" />
-          <span className="text-sm font-medium text-slate-700">
-            XLSX dosyası seç
-          </span>
+          <span className="text-sm font-medium text-slate-700">XLSX dosyası seç</span>
           <span className="text-xs text-slate-500">
             Sivas_GENELI_Birlesik_Dis_Hekimi_Rotasi_v3.xlsx (.xlsx / .xls)
           </span>
@@ -387,8 +383,7 @@ export default function ClinicXlsxImport() {
             </h3>
             <p className="text-xs text-slate-500">
               Birden fazla sheet seçebilirsin (örn. &quot;Ana liste&quot; +
-              &quot;KAMU+Hastane&quot;). &quot;Özet&quot; gibi yardımcı sheet&apos;leri
-              seçme.
+              &quot;KAMU+Hastane&quot;). &quot;Özet&quot; gibi yardımcı sheet&apos;leri seçme.
             </p>
           </div>
           <ul className="divide-y divide-slate-100">
@@ -445,9 +440,7 @@ export default function ClinicXlsxImport() {
                   <tr key={tf.key}>
                     <td className="px-3 py-2 text-slate-700">
                       {tf.label}
-                      {tf.required && (
-                        <span className="ml-1 text-xs text-rose-600">*</span>
-                      )}
+                      {tf.required && <span className="ml-1 text-xs text-rose-600">*</span>}
                     </td>
                     <td className="px-3 py-2">
                       <select
@@ -536,19 +529,14 @@ export default function ClinicXlsxImport() {
               İçeri aktarılıyor: {progress.done} / {progress.total}
             </span>
             <span className="text-xs">
-              %
-              {progress.total > 0
-                ? Math.round((progress.done / progress.total) * 100)
-                : 0}
+              %{progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0}
             </span>
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-emerald-100">
             <div
               className="h-full bg-emerald-600 transition-all"
               style={{
-                width: `${
-                  progress.total > 0 ? (progress.done / progress.total) * 100 : 0
-                }%`,
+                width: `${progress.total > 0 ? (progress.done / progress.total) * 100 : 0}%`,
               }}
             />
           </div>
@@ -580,8 +568,8 @@ export default function ClinicXlsxImport() {
             <ul className="space-y-1 text-xs text-slate-600">
               {Object.entries(result.bySheet).map(([name, s]) => (
                 <li key={name}>
-                  <span className="font-medium text-slate-700">{name}</span> —
-                  işlenen {s.processed}, geçerli {s.valid}, atlanan {s.skipped}
+                  <span className="font-medium text-slate-700">{name}</span> — işlenen {s.processed}
+                  , geçerli {s.valid}, atlanan {s.skipped}
                 </li>
               ))}
             </ul>
@@ -602,9 +590,7 @@ export default function ClinicXlsxImport() {
                   </li>
                 ))}
                 {result.skippedReasons.length > 100 && (
-                  <li className="text-slate-500">
-                    … +{result.skippedReasons.length - 100} daha
-                  </li>
+                  <li className="text-slate-500">… +{result.skippedReasons.length - 100} daha</li>
                 )}
               </ul>
             </div>

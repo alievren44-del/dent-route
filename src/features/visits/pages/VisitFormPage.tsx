@@ -27,15 +27,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import {
-  ArrowLeft,
-  Camera,
-  CheckCircle2,
-  Clock,
-  Loader2,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { ArrowLeft, Camera, CheckCircle2, Clock, Loader2, Trash2, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { getSupabaseClient } from '@lib/supabase';
@@ -91,10 +83,7 @@ const FALLBACK_OUTCOMES: VisitOutcomeOption[] = [
   { key: 'sample_given', label: 'Numune Verildi', color: 'purple' },
 ];
 
-function outcomeColorClasses(
-  color: string | undefined,
-  selected: boolean,
-): string {
+function outcomeColorClasses(color: string | undefined, selected: boolean): string {
   const base = 'border';
   if (!selected) {
     return `${base} bg-background border-border text-foreground hover:bg-muted`;
@@ -180,8 +169,7 @@ function VisitFormPage(): JSX.Element {
     },
   });
   const account = accountQuery.data;
-  const accountName =
-    account?.klinik_adi ?? account?.ad_soyad ?? account?.email ?? customerLabel;
+  const accountName = account?.klinik_adi ?? account?.ad_soyad ?? account?.email ?? customerLabel;
 
   // ---- Form state
   const [metPerson, setMetPerson] = useState<string>('');
@@ -240,9 +228,7 @@ function VisitFormPage(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handlePhotoChange(
-    e: React.ChangeEvent<HTMLInputElement>,
-  ): Promise<void> {
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>): Promise<void> {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     setProcessingFile(true);
@@ -284,9 +270,7 @@ function VisitFormPage(): JSX.Element {
   }
 
   function updatePhotoCategory(uid: string, category: PhotoCategory): void {
-    setPhotos((prev) =>
-      prev.map((p) => (p.uid === uid ? { ...p, category } : p)),
-    );
+    setPhotos((prev) => prev.map((p) => (p.uid === uid ? { ...p, category } : p)));
   }
 
   function removePhoto(uid: string): void {
@@ -305,10 +289,7 @@ function VisitFormPage(): JSX.Element {
   const [submitting, setSubmitting] = useState<boolean>(false);
 
   const canSubmit = Boolean(
-    !submitting &&
-      visit &&
-      visit.status === 'in_progress' &&
-      outcome.length > 0,
+    !submitting && visit && visit.status === 'in_progress' && outcome.length > 0,
   );
 
   async function handleSubmit(): Promise<void> {
@@ -353,9 +334,7 @@ function VisitFormPage(): JSX.Element {
           storage_path: u.storage_path,
           category: u.category,
         }));
-        const { error: photoErr } = await supabase
-          .from('saha_visit_photos')
-          .insert(photoRows);
+        const { error: photoErr } = await supabase.from('saha_visit_photos').insert(photoRows);
         if (photoErr) {
           console.warn('Foto satır insert hatası', photoErr);
         }
@@ -405,8 +384,7 @@ function VisitFormPage(): JSX.Element {
         navigate('/history', { replace: true });
       }
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : 'Ziyaret kaydedilirken hata oluştu.';
+      const msg = err instanceof Error ? err.message : 'Ziyaret kaydedilirken hata oluştu.';
       toast.error(msg);
     } finally {
       setSubmitting(false);
@@ -414,9 +392,7 @@ function VisitFormPage(): JSX.Element {
   }
 
   if (!id) {
-    return (
-      <div className="p-6 text-center text-muted-foreground">Ziyaret ID bulunamadı.</div>
-    );
+    return <div className="p-6 text-center text-muted-foreground">Ziyaret ID bulunamadı.</div>;
   }
 
   if (visitQuery.isLoading) {
@@ -429,9 +405,7 @@ function VisitFormPage(): JSX.Element {
   }
 
   if (!visit) {
-    return (
-      <div className="p-6 text-center text-muted-foreground">Ziyaret bulunamadı.</div>
-    );
+    return <div className="p-6 text-center text-muted-foreground">Ziyaret bulunamadı.</div>;
   }
 
   const alreadyCompleted = visit.status === 'completed';
@@ -450,9 +424,7 @@ function VisitFormPage(): JSX.Element {
             <ArrowLeft className="h-5 w-5" />
           </button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-lg font-semibold text-foreground truncate">
-              {accountName}
-            </h1>
+            <h1 className="text-lg font-semibold text-foreground truncate">{accountName}</h1>
             <p className="text-xs text-muted-foreground flex items-center gap-1.5">
               <Clock className="h-3 w-3" aria-hidden="true" />
               <span>Check-in: {formatTime(visit.check_in_at)}</span>
@@ -472,10 +444,7 @@ function VisitFormPage(): JSX.Element {
 
         {/* 1. Görüşülen kişi */}
         <section className="space-y-2">
-          <label
-            htmlFor="met-person"
-            className="text-sm font-medium text-foreground"
-          >
+          <label htmlFor="met-person" className="text-sm font-medium text-foreground">
             Görüşülen Kişi
           </label>
           <input
@@ -508,9 +477,7 @@ function VisitFormPage(): JSX.Element {
                 >
                   <div className="flex items-center justify-between">
                     <span>{o.label}</span>
-                    {selected && (
-                      <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
-                    )}
+                    {selected && <CheckCircle2 className="h-5 w-5" aria-hidden="true" />}
                   </div>
                 </button>
               );
@@ -520,10 +487,7 @@ function VisitFormPage(): JSX.Element {
 
         {/* 3. Notes */}
         <section className="space-y-2">
-          <label
-            htmlFor="visit-notes"
-            className="text-sm font-medium text-foreground"
-          >
+          <label htmlFor="visit-notes" className="text-sm font-medium text-foreground">
             Notlar
           </label>
           <textarea
@@ -538,7 +502,9 @@ function VisitFormPage(): JSX.Element {
 
         {/* 4. Photos */}
         <section className="space-y-2" aria-labelledby="photos-heading">
-          <div id="photos-heading" className="text-sm font-medium text-foreground">Fotoğraflar</div>
+          <div id="photos-heading" className="text-sm font-medium text-foreground">
+            Fotoğraflar
+          </div>
           <label className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-background h-12 min-h-tap-min cursor-pointer">
             {processingFile ? (
               <>
@@ -586,9 +552,7 @@ function VisitFormPage(): JSX.Element {
                   </div>
                   <select
                     value={p.category}
-                    onChange={(e) =>
-                      updatePhotoCategory(p.uid, e.target.value as PhotoCategory)
-                    }
+                    onChange={(e) => updatePhotoCategory(p.uid, e.target.value as PhotoCategory)}
                     className="border-t border-border bg-background h-11 min-h-tap-min text-sm px-2"
                   >
                     {PHOTO_CATEGORY_OPTIONS.map((opt) => (
@@ -606,14 +570,13 @@ function VisitFormPage(): JSX.Element {
         {/* 5. Custom fields */}
         {visitCustomFields.length > 0 && (
           <section className="space-y-2" aria-labelledby="extra-heading">
-            <div id="extra-heading" className="text-sm font-medium text-foreground">Ek Bilgiler</div>
+            <div id="extra-heading" className="text-sm font-medium text-foreground">
+              Ek Bilgiler
+            </div>
             <div className="space-y-3">
               {visitCustomFields.map((f) => (
                 <div key={f.key} className="space-y-1">
-                  <label
-                    htmlFor={`cf-${f.key}`}
-                    className="text-xs text-muted-foreground"
-                  >
+                  <label htmlFor={`cf-${f.key}`} className="text-xs text-muted-foreground">
                     {f.label}
                     {f.required && <span className="text-red-600 ml-1">*</span>}
                   </label>
@@ -638,9 +601,7 @@ function VisitFormPage(): JSX.Element {
                     />
                   )}
                   {f.helperText && (
-                    <p className="text-[11px] text-muted-foreground">
-                      {f.helperText}
-                    </p>
+                    <p className="text-[11px] text-muted-foreground">{f.helperText}</p>
                   )}
                 </div>
               ))}
@@ -650,10 +611,7 @@ function VisitFormPage(): JSX.Element {
 
         {/* 6. Next visit date */}
         <section className="space-y-2">
-          <label
-            htmlFor="next-visit"
-            className="text-sm font-medium text-foreground"
-          >
+          <label htmlFor="next-visit" className="text-sm font-medium text-foreground">
             Sonraki Ziyaret Tarihi
           </label>
           <input

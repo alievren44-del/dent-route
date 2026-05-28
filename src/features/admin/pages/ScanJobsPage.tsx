@@ -76,16 +76,42 @@ function scopeLabel(row: ScanJobRow): string {
 
 function StatusBadge({ status }: { status: ScanJobRow['status'] }) {
   const map: Record<ScanJobRow['status'], { label: string; cls: string; icon: React.ReactNode }> = {
-    pending:   { label: 'Bekliyor',  cls: 'bg-gray-100 text-gray-700',     icon: <Clock className="h-3 w-3" /> },
-    running:   { label: 'Çalışıyor', cls: 'bg-blue-100 text-blue-800',     icon: <Loader2 className="h-3 w-3 animate-spin" /> },
-    paused:    { label: 'Duraklatıldı', cls: 'bg-amber-100 text-amber-800', icon: <Pause className="h-3 w-3" /> },
-    completed: { label: 'Tamamlandı', cls: 'bg-green-100 text-green-800',  icon: <CheckCircle2 className="h-3 w-3" /> },
-    failed:    { label: 'Hata',       cls: 'bg-red-100 text-red-800',      icon: <AlertCircle className="h-3 w-3" /> },
-    cancelled: { label: 'İptal',      cls: 'bg-gray-200 text-gray-600',    icon: <X className="h-3 w-3" /> },
+    pending: {
+      label: 'Bekliyor',
+      cls: 'bg-gray-100 text-gray-700',
+      icon: <Clock className="h-3 w-3" />,
+    },
+    running: {
+      label: 'Çalışıyor',
+      cls: 'bg-blue-100 text-blue-800',
+      icon: <Loader2 className="h-3 w-3 animate-spin" />,
+    },
+    paused: {
+      label: 'Duraklatıldı',
+      cls: 'bg-amber-100 text-amber-800',
+      icon: <Pause className="h-3 w-3" />,
+    },
+    completed: {
+      label: 'Tamamlandı',
+      cls: 'bg-green-100 text-green-800',
+      icon: <CheckCircle2 className="h-3 w-3" />,
+    },
+    failed: {
+      label: 'Hata',
+      cls: 'bg-red-100 text-red-800',
+      icon: <AlertCircle className="h-3 w-3" />,
+    },
+    cancelled: {
+      label: 'İptal',
+      cls: 'bg-gray-200 text-gray-600',
+      icon: <X className="h-3 w-3" />,
+    },
   };
   const meta = map[status];
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${meta.cls}`}>
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${meta.cls}`}
+    >
       {meta.icon}
       {meta.label}
     </span>
@@ -152,10 +178,7 @@ export default function ScanJobsPage({ embedded = false }: ScanJobsPageProps = {
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: ScanJobRow['status'] }) => {
       const supabase = getSupabaseClient();
-      const { error } = await supabase
-        .from('saha_scan_jobs')
-        .update({ status })
-        .eq('id', id);
+      const { error } = await supabase.from('saha_scan_jobs').update({ status }).eq('id', id);
       if (error) throw error;
       // Devam Et durumunda batch-scan'i tekrar uyandır.
       if (status === 'running') {
@@ -181,9 +204,7 @@ export default function ScanJobsPage({ embedded = false }: ScanJobsPageProps = {
         </h1>
       )}
 
-      {jobsQuery.isLoading && (
-        <div className="text-sm text-muted-foreground">Yükleniyor…</div>
-      )}
+      {jobsQuery.isLoading && <div className="text-sm text-muted-foreground">Yükleniyor…</div>}
 
       {jobsQuery.isError && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
@@ -199,12 +220,12 @@ export default function ScanJobsPage({ embedded = false }: ScanJobsPageProps = {
 
       <div className="space-y-2">
         {jobs.map((row) => {
-          const progressPct = row.total_items > 0
-            ? Math.round((row.completed_items / row.total_items) * 100)
-            : 0;
-          const canPause  = row.status === 'running';
+          const progressPct =
+            row.total_items > 0 ? Math.round((row.completed_items / row.total_items) * 100) : 0;
+          const canPause = row.status === 'running';
           const canResume = row.status === 'paused';
-          const canCancel = row.status === 'pending' || row.status === 'running' || row.status === 'paused';
+          const canCancel =
+            row.status === 'pending' || row.status === 'running' || row.status === 'paused';
 
           return (
             <div key={row.id} className="rounded-xl border border-border bg-card p-3 space-y-2">
@@ -215,12 +236,12 @@ export default function ScanJobsPage({ embedded = false }: ScanJobsPageProps = {
                     <span className="text-sm font-medium truncate">{scopeLabel(row)}</span>
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
-                    {row.completed_items}/{row.total_items} ilçe ·
-                    {' '}Toplam {row.total_clinics_found} klinik ({row.total_new_clinics} yeni)
+                    {row.completed_items}/{row.total_items} ilçe · Toplam {row.total_clinics_found}{' '}
+                    klinik ({row.total_new_clinics} yeni)
                     {row.failed_items > 0 && (
                       <span className="text-red-700"> · {row.failed_items} hata</span>
-                    )}
-                    {' '}· ETA {estimateEta(row)}
+                    )}{' '}
+                    · ETA {estimateEta(row)}
                   </div>
                   <div className="text-[11px] text-muted-foreground mt-0.5">
                     {row.started_at

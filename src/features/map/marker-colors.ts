@@ -1,25 +1,25 @@
 import type { VisitOutcomeOption } from '@core/verticals/types';
 
 export const MARKER_COLORS = {
-  visited_hot:        '#16a34a',
-  follow_up_due:      '#eab308',
-  pending:            '#ef4444',
-  declined:           '#6b7280',
+  visited_hot: '#16a34a',
+  follow_up_due: '#eab308',
+  pending: '#ef4444',
+  declined: '#6b7280',
   public_institution: '#2563eb',
-  home_office:        '#a855f7',
-  unknown:            '#94a3b8',
+  home_office: '#a855f7',
+  unknown: '#94a3b8',
 } as const;
 
 export type MarkerColorKey = keyof typeof MARKER_COLORS;
 
 const LABELS: Record<MarkerColorKey, string> = {
-  visited_hot:        'Ziyaret edildi',
-  follow_up_due:      'Tekrar zamanı',
-  pending:            'Bekleyen',
-  declined:           'Kapalı',
+  visited_hot: 'Ziyaret edildi',
+  follow_up_due: 'Tekrar zamanı',
+  pending: 'Bekleyen',
+  declined: 'Kapalı',
   public_institution: 'Kamu kurumu',
-  home_office:        'Başlangıç noktası',
-  unknown:            'Bilinmiyor',
+  home_office: 'Başlangıç noktası',
+  unknown: 'Bilinmiyor',
 };
 
 export interface MarkerSubjectVisit {
@@ -40,10 +40,7 @@ export interface MarkerSubjectFixed {
   role: 'home' | 'office' | 'start' | 'end';
 }
 
-export type MarkerSubject =
-  | MarkerSubjectVisit
-  | MarkerSubjectCustomer
-  | MarkerSubjectFixed;
+export type MarkerSubject = MarkerSubjectVisit | MarkerSubjectCustomer | MarkerSubjectFixed;
 
 export interface MarkerColorResult {
   hex: string;
@@ -109,8 +106,7 @@ export function resolveMarkerColor(
   vertical?: { visitOutcomes: VisitOutcomeOption[] },
   config?: { followUpThresholdDays?: number },
 ): MarkerColorResult {
-  const threshold =
-    config?.followUpThresholdDays ?? DEFAULT_FOLLOW_UP_THRESHOLD_DAYS;
+  const threshold = config?.followUpThresholdDays ?? DEFAULT_FOLLOW_UP_THRESHOLD_DAYS;
 
   if (subject.kind === 'fixed') {
     return buildResult('home_office');
@@ -123,10 +119,7 @@ export function resolveMarkerColor(
     if (subject.isPending) {
       return buildResult('pending');
     }
-    if (
-      typeof subject.lastVisitDaysAgo === 'number' &&
-      Number.isFinite(subject.lastVisitDaysAgo)
-    ) {
+    if (typeof subject.lastVisitDaysAgo === 'number' && Number.isFinite(subject.lastVisitDaysAgo)) {
       if (followUpDays(subject.lastVisitDaysAgo, threshold)) {
         return buildResult('follow_up_due');
       }

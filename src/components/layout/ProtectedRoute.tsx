@@ -37,9 +37,7 @@ export function ProtectedRoute({ children, requireRole }: ProtectedRouteProps) {
         <div className="flex min-h-screen items-center justify-center p-8 text-center">
           <div>
             <h1 className="text-xl font-semibold text-foreground">Erişim engellendi</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Bu sayfa için yetkiniz yok.
-            </p>
+            <p className="mt-2 text-sm text-muted-foreground">Bu sayfa için yetkiniz yok.</p>
           </div>
         </div>
       );

@@ -155,10 +155,7 @@ function mergeFieldArray(
 /**
  * Tam yükleme — base + override + validation.
  */
-export function loadVertical(
-  id: string,
-  overrides?: VerticalOverride,
-): VerticalConfig {
+export function loadVertical(id: string, overrides?: VerticalOverride): VerticalConfig {
   const base = loadBaseVertical(id);
   return mergeVerticalOverrides(base, overrides);
 }

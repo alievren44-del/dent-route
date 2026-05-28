@@ -20,18 +20,8 @@
  * Bağımlılıklar: TanStack Query, sonner, lucide-react, date-fns — yeni dep yok.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ChangeEvent,
-} from 'react';
-import {
-  useQuery,
-  useQueryClient,
-  type QueryKey,
-} from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { tr as trLocale } from 'date-fns/locale';
@@ -49,10 +39,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { getSupabaseClient } from '@lib/supabase';
 import { logClinicEdit } from '@lib/clinicEditAudit';
-import {
-  useRoutePlanner,
-  type RouteClinic,
-} from '@features/admin/store/routePlannerStore';
+import { useRoutePlanner, type RouteClinic } from '@features/admin/store/routePlannerStore';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipler
@@ -228,9 +215,7 @@ export default function DistrictClinicsDialog({
         )
         .eq('province_slug', provinceSlug);
       if (districtSlug) q = q.eq('district_slug', districtSlug);
-      const { data: rows, error: qErr } = await q
-        .order('name', { ascending: true })
-        .limit(2000);
+      const { data: rows, error: qErr } = await q.order('name', { ascending: true }).limit(2000);
       if (qErr) throw qErr;
       return (rows ?? []) as SahaClinicRow[];
     },
@@ -302,10 +287,7 @@ export default function DistrictClinicsDialog({
     setDeletingId(clinic.id);
     const supabase = getSupabaseClient();
     try {
-      const { error: delErr } = await supabase
-        .from('saha_clinics')
-        .delete()
-        .eq('id', clinic.id);
+      const { error: delErr } = await supabase.from('saha_clinics').delete().eq('id', clinic.id);
       if (delErr) throw delErr;
 
       // Audit log — best effort
@@ -394,9 +376,7 @@ export default function DistrictClinicsDialog({
       ...(r.address != null ? { address: r.address } : {}),
       ...(r.phone != null ? { phone: r.phone } : {}),
       ...(r.rating != null ? { rating: r.rating } : {}),
-      ...(r.user_ratings_total != null
-        ? { user_ratings_total: r.user_ratings_total }
-        : {}),
+      ...(r.user_ratings_total != null ? { user_ratings_total: r.user_ratings_total } : {}),
       segment:
         (r as unknown as { clinic_segment?: string }).clinic_segment === 'kamu'
           ? 'kamu'
@@ -553,10 +533,7 @@ export default function DistrictClinicsDialog({
                   <th className="px-3 py-2 text-left font-medium">
                     <input
                       type="checkbox"
-                      checked={
-                        pageRows.length > 0 &&
-                        pageRows.every((r) => selectedIds.has(r.id))
-                      }
+                      checked={pageRows.length > 0 && pageRows.every((r) => selectedIds.has(r.id))}
                       onChange={toggleAllVisible}
                       aria-label="Sayfadaki klinikleri seç"
                       className="h-3.5 w-3.5 cursor-pointer"
@@ -575,10 +552,7 @@ export default function DistrictClinicsDialog({
                   const isDeleting = deletingId === c.id;
                   const isChecked = selectedIds.has(c.id);
                   return (
-                    <tr
-                      key={c.id}
-                      className={isDeleting ? 'opacity-50' : 'hover:bg-slate-50'}
-                    >
+                    <tr key={c.id} className={isDeleting ? 'opacity-50' : 'hover:bg-slate-50'}>
                       <td className="px-3 py-2">
                         <input
                           type="checkbox"
@@ -589,21 +563,13 @@ export default function DistrictClinicsDialog({
                           className="h-3.5 w-3.5 cursor-pointer"
                         />
                       </td>
-                      <td className="px-3 py-2 font-medium text-slate-900">
-                        {c.name}
-                      </td>
-                      <td
-                        className="px-3 py-2 text-slate-600"
-                        title={c.address ?? ''}
-                      >
+                      <td className="px-3 py-2 font-medium text-slate-900">{c.name}</td>
+                      <td className="px-3 py-2 text-slate-600" title={c.address ?? ''}>
                         {truncate(c.address, 50)}
                       </td>
                       <td className="px-3 py-2 text-slate-600">
                         {c.phone ? (
-                          <a
-                            href={`tel:${c.phone}`}
-                            className="text-emerald-700 hover:underline"
-                          >
+                          <a href={`tel:${c.phone}`} className="text-emerald-700 hover:underline">
                             {c.phone}
                           </a>
                         ) : (

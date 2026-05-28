@@ -15,14 +15,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import {
-  ArrowLeft,
-  Check,
-  ChevronDown,
-  ChevronUp,
-  Inbox,
-  X,
-} from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, ChevronUp, Inbox, X } from 'lucide-react';
 
 import { getSupabaseClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
@@ -115,13 +108,9 @@ function OrderApprovalPage(): JSX.Element {
     const supabase = getSupabaseClient();
     const channel = supabase
       .channel('order-approval-list')
-      .on(
-        'postgres_changes' as never,
-        { event: '*', schema: 'public', table: 'orders' },
-        () => {
-          void queryClient.invalidateQueries({ queryKey: ['order-approval-list'] });
-        },
-      )
+      .on('postgres_changes' as never, { event: '*', schema: 'public', table: 'orders' }, () => {
+        void queryClient.invalidateQueries({ queryKey: ['order-approval-list'] });
+      })
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
@@ -203,9 +192,7 @@ function OrderApprovalPage(): JSX.Element {
           </button>
           <div className="flex-1">
             <h1 className="text-lg font-semibold text-foreground">Onay Bekleyen Siparişler</h1>
-            <p className="text-xs text-muted-foreground">
-              {orders.length} sipariş onay bekliyor
-            </p>
+            <p className="text-xs text-muted-foreground">{orders.length} sipariş onay bekliyor</p>
           </div>
         </div>
       </div>
@@ -239,10 +226,7 @@ function OrderApprovalPage(): JSX.Element {
           const isOpen = expanded.has(o.id);
           const total = Number(o.total ?? o.total_amount ?? 0);
           return (
-            <div
-              key={o.id}
-              className="rounded-xl border border-border bg-card overflow-hidden"
-            >
+            <div key={o.id} className="rounded-xl border border-border bg-card overflow-hidden">
               <button
                 type="button"
                 onClick={() => toggle(o.id)}
@@ -316,9 +300,7 @@ function OrderApprovalPage(): JSX.Element {
       {rejectFor && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-3">
           <div className="w-full max-w-sm rounded-2xl bg-background p-4 shadow-xl">
-            <h2 className="text-base font-semibold text-foreground mb-2">
-              Siparişi reddet
-            </h2>
+            <h2 className="text-base font-semibold text-foreground mb-2">Siparişi reddet</h2>
             <p className="text-xs text-muted-foreground mb-3">
               Red sebebini yazın. Temsilci bu mesajı görecek.
             </p>

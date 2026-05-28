@@ -17,11 +17,7 @@ import { SupabaseCRMAdapter } from '@core/adapters/builtin/SupabaseCRMAdapter';
 import { getSupabaseClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 import type { NewOrderItem, Product } from '@core/adapters/types';
-import {
-  needsApproval,
-  nextApproverRole,
-  thresholdFor,
-} from '@features/orders/lib/approvalRules';
+import { needsApproval, nextApproverRole, thresholdFor } from '@features/orders/lib/approvalRules';
 
 const adapter = new SupabaseCRMAdapter();
 
@@ -58,8 +54,7 @@ function useDebounced<T>(value: T, ms: number): T {
 function OrderFormPage(): JSX.Element {
   const [searchParams] = useSearchParams();
   // Hem ?customerId hem ?customer_id desteklenir (diğer feature'lar customer_id kullanıyor).
-  const initialCustomerId =
-    searchParams.get('customerId') ?? searchParams.get('customer_id') ?? '';
+  const initialCustomerId = searchParams.get('customerId') ?? searchParams.get('customer_id') ?? '';
   const navigate = useNavigate();
   const profile = useAuthStore((s) => s.profile);
   const userRole = String(profile?.role ?? 'USER').toUpperCase();
@@ -166,9 +161,7 @@ function OrderFormPage(): JSX.Element {
     setCart((prev) => {
       const next = prev
         .map((it) =>
-          it.productId === productId
-            ? { ...it, quantity: Math.max(0, it.quantity + delta) }
-            : it,
+          it.productId === productId ? { ...it, quantity: Math.max(0, it.quantity + delta) } : it,
         )
         .filter((it) => it.quantity > 0);
       return next;
@@ -272,9 +265,7 @@ function OrderFormPage(): JSX.Element {
       <div className="px-4 py-4 space-y-4">
         {/* Müşteri seçici */}
         <section>
-          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-            Müşteri
-          </label>
+          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Müşteri</label>
           {customerId && !customerPickerOpen ? (
             <div className="flex items-center justify-between gap-2 p-3 rounded-lg border border-border bg-card">
               <p className="text-sm font-medium text-foreground truncate">
@@ -308,32 +299,29 @@ function OrderFormPage(): JSX.Element {
                   className="flex-1 bg-transparent text-sm outline-none"
                 />
               </div>
-              {customerPickerOpen &&
-                debouncedCustomerSearch.trim().length >= 2 && (
-                  <div className="mt-1 rounded-lg border border-border bg-card shadow-lg max-h-72 overflow-y-auto">
-                    {customerSearching && (
-                      <p className="px-3 py-2 text-xs text-muted-foreground">Aranıyor…</p>
-                    )}
-                    {!customerSearching && (customerOptions ?? []).length === 0 && (
-                      <p className="px-3 py-2 text-xs text-muted-foreground">Sonuç yok.</p>
-                    )}
-                    {(customerOptions ?? []).map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => pickCustomer(c)}
-                        className="w-full text-left px-3 py-2.5 min-h-tap-min hover:bg-muted/60 border-b border-border last:border-b-0"
-                      >
-                        <p className="text-sm font-medium text-foreground truncate">
-                          {c.klinik_adi ?? c.ad_soyad ?? c.email ?? c.id}
-                        </p>
-                        {c.city && (
-                          <p className="text-xs text-muted-foreground truncate">{c.city}</p>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
+              {customerPickerOpen && debouncedCustomerSearch.trim().length >= 2 && (
+                <div className="mt-1 rounded-lg border border-border bg-card shadow-lg max-h-72 overflow-y-auto">
+                  {customerSearching && (
+                    <p className="px-3 py-2 text-xs text-muted-foreground">Aranıyor…</p>
+                  )}
+                  {!customerSearching && (customerOptions ?? []).length === 0 && (
+                    <p className="px-3 py-2 text-xs text-muted-foreground">Sonuç yok.</p>
+                  )}
+                  {(customerOptions ?? []).map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => pickCustomer(c)}
+                      className="w-full text-left px-3 py-2.5 min-h-tap-min hover:bg-muted/60 border-b border-border last:border-b-0"
+                    >
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {c.klinik_adi ?? c.ad_soyad ?? c.email ?? c.id}
+                      </p>
+                      {c.city && <p className="text-xs text-muted-foreground truncate">{c.city}</p>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </section>
@@ -407,9 +395,7 @@ function OrderFormPage(): JSX.Element {
 
         {/* Sepet */}
         <section>
-          <h2 className="text-sm font-semibold text-foreground mb-2">
-            Sepet ({cart.length})
-          </h2>
+          <h2 className="text-sm font-semibold text-foreground mb-2">Sepet ({cart.length})</h2>
           {cart.length === 0 ? (
             <p className="text-sm text-muted-foreground p-4 text-center border border-dashed border-border rounded-lg">
               Henüz ürün yok.
@@ -421,10 +407,7 @@ function OrderFormPage(): JSX.Element {
                 const unitPrice = quoted?.unitPrice ?? it.unitPriceSnapshot;
                 const lineTotal = quoted?.lineTotal ?? unitPrice * it.quantity;
                 return (
-                  <div
-                    key={it.productId}
-                    className="p-3 rounded-lg border border-border bg-card"
-                  >
+                  <div key={it.productId} className="p-3 rounded-lg border border-border bg-card">
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <p className="text-sm font-medium text-foreground flex-1 min-w-0 truncate">
                         {it.productName}
@@ -501,20 +484,13 @@ function OrderFormPage(): JSX.Element {
             <div className="min-w-0 text-amber-900">
               <p className="text-sm font-semibold">Bu sipariş onay bekleyecek</p>
               <p className="text-xs mt-0.5">
-                Toplam {formatTL(grandTotal)} {Number.isFinite(approvalLimit) ? (
-                  <>
-                    {' '}
-                    senin {formatTL(approvalLimit)} TL eşiğini aşıyor.
-                  </>
+                Toplam {formatTL(grandTotal)}{' '}
+                {Number.isFinite(approvalLimit) ? (
+                  <> senin {formatTL(approvalLimit)} TL eşiğini aşıyor.</>
                 ) : (
                   <> onay gerektiriyor.</>
                 )}
-                {approverRole && (
-                  <>
-                    {' '}
-                    {approverRole} onayına gönderilecek.
-                  </>
-                )}
+                {approverRole && <> {approverRole} onayına gönderilecek.</>}
               </p>
             </div>
           </div>
@@ -522,9 +498,7 @@ function OrderFormPage(): JSX.Element {
 
         {/* Notlar */}
         <section>
-          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-            Notlar
-          </label>
+          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Notlar</label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -562,9 +536,7 @@ function OrderFormPage(): JSX.Element {
               )}
             </>
           )}
-          {cart.length === 0 && !submitting && (
-            <ShoppingCart className="h-5 w-5 hidden" />
-          )}
+          {cart.length === 0 && !submitting && <ShoppingCart className="h-5 w-5 hidden" />}
         </button>
       </div>
     </div>

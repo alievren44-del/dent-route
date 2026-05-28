@@ -173,7 +173,7 @@ function PaymentFormPage(): JSX.Element {
     mutationFn: async () => {
       const supabase = getSupabaseClient();
       if (!cariId) throw new Error('Cari seçin.');
-      if (tutar <= 0) throw new Error('Tutar 0\'dan büyük olmalı.');
+      if (tutar <= 0) throw new Error("Tutar 0'dan büyük olmalı.");
 
       let cekSenetId: string | null = null;
       if (yontem === 'cek' || yontem === 'senet') {
@@ -334,7 +334,9 @@ function PaymentFormPage(): JSX.Element {
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {fmtDate(f.tarih)}
-                          {f.vade_tarihi && <span className="ml-2">Vade: {fmtDate(f.vade_tarihi)}</span>}
+                          {f.vade_tarihi && (
+                            <span className="ml-2">Vade: {fmtDate(f.vade_tarihi)}</span>
+                          )}
                         </p>
                       </div>
                       <div className="text-right">
@@ -356,9 +358,7 @@ function PaymentFormPage(): JSX.Element {
         {/* Tutar + tarih */}
         <section className="grid grid-cols-2 gap-2">
           <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-              Tarih
-            </label>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Tarih</label>
             <input
               type="date"
               value={tarih}
@@ -441,9 +441,7 @@ function PaymentFormPage(): JSX.Element {
                 />
               </div>
               <div className="col-span-2">
-                <label className="text-[10px] text-muted-foreground block mb-0.5">
-                  Keşideci *
-                </label>
+                <label className="text-[10px] text-muted-foreground block mb-0.5">Keşideci *</label>
                 <input
                   type="text"
                   value={csKesideci}
@@ -479,9 +477,7 @@ function PaymentFormPage(): JSX.Element {
           />
         </section>
         <section>
-          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-            Açıklama
-          </label>
+          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Açıklama</label>
           <textarea
             value={aciklama}
             onChange={(e) => setAciklama(e.target.value)}

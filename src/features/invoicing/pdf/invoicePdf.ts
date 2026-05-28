@@ -241,7 +241,7 @@ export function generateInvoicePdfHtml(
         ${cari.vergi_no ? `<div class="row">VKN: ${escapeHtml(cari.vergi_no)}</div>` : ''}
         ${cari.vergi_dairesi ? `<div class="row">Vergi Dairesi: ${escapeHtml(cari.vergi_dairesi)}</div>` : ''}
         ${cari.fatura_adresi ? `<div class="row">${escapeHtml(cari.fatura_adresi)}</div>` : ''}
-        ${(cari.il || cari.ilce) ? `<div class="row">${escapeHtml(cari.ilce ?? '')} ${escapeHtml(cari.il ?? '')}</div>` : ''}
+        ${cari.il || cari.ilce ? `<div class="row">${escapeHtml(cari.ilce ?? '')} ${escapeHtml(cari.il ?? '')}</div>` : ''}
       </div>
     </div>
 
@@ -326,7 +326,14 @@ export function generateExtractPdfHtml(
   cari: PdfCari,
   dateFrom: string,
   dateTo: string,
-  rows: Array<{ tarih: string; tip: string; aciklama: string; borc: number; alacak: number; bakiye: number }>,
+  rows: Array<{
+    tarih: string;
+    tip: string;
+    aciklama: string;
+    borc: number;
+    alacak: number;
+    bakiye: number;
+  }>,
 ): string {
   const rowsHtml = rows
     .map(

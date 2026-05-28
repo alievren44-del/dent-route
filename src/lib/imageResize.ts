@@ -54,11 +54,7 @@ async function loadBitmap(source: Blob | File): Promise<ImageBitmap> {
   return await createImageBitmap(source);
 }
 
-function canvasToBlob(
-  canvas: HTMLCanvasElement,
-  mimeType: string,
-  quality: number,
-): Promise<Blob> {
+function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality: number): Promise<Blob> {
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (blob) => {
@@ -85,19 +81,13 @@ function canvasToBlob(
  * @example
  * const small = await resizeImage(file, { maxDimension: 1600, quality: 0.8 });
  */
-export async function resizeImage(
-  source: Blob | File,
-  options?: ResizeOptions,
-): Promise<Blob> {
+export async function resizeImage(source: Blob | File, options?: ResizeOptions): Promise<Blob> {
   const opts = { ...DEFAULTS, ...(options ?? {}) };
 
   const bitmap = await loadBitmap(source);
   try {
     const target = computeTargetSize(bitmap.width, bitmap.height, opts.maxDimension);
-    const canvas =
-      typeof document !== 'undefined'
-        ? document.createElement('canvas')
-        : null;
+    const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
     if (!canvas) {
       throw new Error('Canvas oluşturulamadı (DOM yok).');
     }

@@ -72,9 +72,7 @@ export default function MapPage() {
     if (markerRef.current) {
       markerRef.current.setLngLat(lngLat);
     } else {
-      markerRef.current = new mapboxgl.Marker({ color: '#2563eb' })
-        .setLngLat(lngLat)
-        .addTo(map);
+      markerRef.current = new mapboxgl.Marker({ color: '#2563eb' }).setLngLat(lngLat).addTo(map);
     }
 
     map.flyTo({ center: lngLat, zoom: 14, essential: true });
@@ -89,12 +87,9 @@ export default function MapPage() {
       className="relative w-full"
       style={{ height: 'calc(100dvh - 4rem - 5rem)', minHeight: '400px' }}
     >
-
       <div className="pointer-events-none absolute right-3 top-3 z-10">
         <div className="pointer-events-auto rounded-lg bg-white/90 px-3 py-2 shadow-md backdrop-blur">
-          <h1 className="text-sm font-semibold text-foreground">
-            {vertical.labels.discovery}
-          </h1>
+          <h1 className="text-sm font-semibold text-foreground">{vertical.labels.discovery}</h1>
         </div>
       </div>
 

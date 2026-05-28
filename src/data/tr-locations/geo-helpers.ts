@@ -23,9 +23,7 @@ export interface District {
 
 const COLLATOR = new Intl.Collator('tr-TR');
 
-const PROVINCES = [...(provinces as Province[])].sort((a, b) =>
-  COLLATOR.compare(a.ad, b.ad),
-);
+const PROVINCES = [...(provinces as Province[])].sort((a, b) => COLLATOR.compare(a.ad, b.ad));
 const DISTRICTS = [...(districts as District[])].sort((a, b) => {
   const byProv = COLLATOR.compare(a.il_ad, b.il_ad);
   if (byProv !== 0) return byProv;
@@ -33,12 +31,18 @@ const DISTRICTS = [...(districts as District[])].sort((a, b) => {
 });
 
 const TR_MAP: Record<string, string> = {
-  'ç': 'c', 'Ç': 'C',
-  'ğ': 'g', 'Ğ': 'G',
-  'ı': 'i', 'İ': 'I',
-  'ö': 'o', 'Ö': 'O',
-  'ş': 's', 'Ş': 'S',
-  'ü': 'u', 'Ü': 'U',
+  ç: 'c',
+  Ç: 'C',
+  ğ: 'g',
+  Ğ: 'G',
+  ı: 'i',
+  İ: 'I',
+  ö: 'o',
+  Ö: 'O',
+  ş: 's',
+  Ş: 'S',
+  ü: 'u',
+  Ü: 'U',
 };
 
 export function slugify(text: string): string {
@@ -80,17 +84,13 @@ export function getProvince(adOrPlaka: string | number): Province | undefined {
 export function getDistrict(provinceAd: string, districtAd: string): District | undefined {
   const pq = normalize(provinceAd);
   const dq = normalize(districtAd);
-  return DISTRICTS.find(
-    (d) => normalize(d.il_ad) === pq && normalize(d.ad) === dq,
-  );
+  return DISTRICTS.find((d) => normalize(d.il_ad) === pq && normalize(d.ad) === dq);
 }
 
 export function searchProvinces(query: string): Province[] {
   const q = normalize(query);
   if (!q) return [];
-  return PROVINCES.filter(
-    (p) => normalize(p.ad).includes(q) || p.slug.includes(slugify(query)),
-  );
+  return PROVINCES.filter((p) => normalize(p.ad).includes(q) || p.slug.includes(slugify(query)));
 }
 
 export function searchDistricts(query: string, provinceAd?: string): District[] {
@@ -108,9 +108,7 @@ export function getDistrictBbox(
   provinceAd: string,
   districtAd: string,
   radiusKm = 5,
-):
-  | { minLat: number; maxLat: number; minLng: number; maxLng: number }
-  | undefined {
+): { minLat: number; maxLat: number; minLng: number; maxLng: number } | undefined {
   const d = getDistrict(provinceAd, districtAd);
   if (!d) return undefined;
   const latDelta = radiusKm / 111;

@@ -45,10 +45,7 @@ import CustomerFilters, {
   type CustomerFiltersValue,
   type RepOption,
 } from '@features/customers/components/CustomerFilters';
-import {
-  exportToXlsx,
-  type AccountRow as ExportRow,
-} from '@features/customers/lib/customerExport';
+import { exportToXlsx, type AccountRow as ExportRow } from '@features/customers/lib/customerExport';
 
 type SortKey = 'name' | 'distance' | 'last_visit' | 'reviews' | 'balance';
 
@@ -97,12 +94,7 @@ interface CustomerListRow {
 
 const PAGE_SIZE = 50;
 
-function haversineMeters(
-  lat1: number,
-  lng1: number,
-  lat2: number,
-  lng2: number,
-): number {
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
   const toRad = (d: number) => (d * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
@@ -127,9 +119,7 @@ function useDebounced<T>(value: T, delayMs: number): T {
  * ile distance + 50km radius; yoksa düz saha_clinics query.
  * saha_visits varsa son ziyareti ayrı sorguda alır; yoksa boş geçer.
  */
-async function fetchAccounts(
-  geo: { lat: number; lng: number } | null,
-): Promise<CustomerListRow[]> {
+async function fetchAccounts(geo: { lat: number; lng: number } | null): Promise<CustomerListRow[]> {
   const supabase = getSupabaseClient();
 
   type RpcRow = {
@@ -174,8 +164,7 @@ async function fetchAccounts(
         : typeof cf['mahalle'] === 'string'
           ? (cf['mahalle'] as string)
           : null;
-    const balance =
-      typeof cf['balance'] === 'number' ? (cf['balance'] as number) : null;
+    const balance = typeof cf['balance'] === 'number' ? (cf['balance'] as number) : null;
     const ratingNum =
       typeof c.rating === 'number'
         ? c.rating
@@ -203,23 +192,18 @@ async function fetchAccounts(
   }
 
   if (geo) {
-    const { data: rpcData, error: rpcErr } = await supabase.rpc(
-      'saha_search_nearby_clinics',
-      {
-        _lat: geo.lat,
-        _lng: geo.lng,
-        _radius_m: 50_000,
-        _vertical_key: 'dental',
-        _limit: 1000,
-      },
-    );
+    const { data: rpcData, error: rpcErr } = await supabase.rpc('saha_search_nearby_clinics', {
+      _lat: geo.lat,
+      _lng: geo.lng,
+      _radius_m: 50_000,
+      _vertical_key: 'dental',
+      _limit: 1000,
+    });
     if (!rpcErr && rpcData) {
       const rows = rpcData as RpcRow[];
       const ids = rows.map((r) => r.id);
       const lastVisit = await fetchLastVisitMap(ids);
-      return rows.map<CustomerListRow>((r) =>
-        rowToCustomerListRow(r, lastVisit.get(r.id)),
-      );
+      return rows.map<CustomerListRow>((r) => rowToCustomerListRow(r, lastVisit.get(r.id)));
     }
     if (rpcErr) {
       console.warn('saha_search_nearby_clinics başarısız, fallback:', rpcErr.message);
@@ -243,9 +227,7 @@ async function fetchAccounts(
   const ids = clinics.map((c) => c.id);
   const lastVisitByClinic = await fetchLastVisitMap(ids);
 
-  return clinics.map<CustomerListRow>((c) =>
-    rowToCustomerListRow(c, lastVisitByClinic.get(c.id)),
-  );
+  return clinics.map<CustomerListRow>((c) => rowToCustomerListRow(c, lastVisitByClinic.get(c.id)));
 }
 
 /**
@@ -287,12 +269,14 @@ async function fetchReps(): Promise<RepOption[]> {
     console.warn('reps fetch failed:', error.message);
     return [];
   }
-  return ((data ?? []) as Array<{
-    id: string;
-    ad_soyad: string | null;
-    email: string | null;
-    role: string | null;
-  }>)
+  return (
+    (data ?? []) as Array<{
+      id: string;
+      ad_soyad: string | null;
+      email: string | null;
+      role: string | null;
+    }>
+  )
     .map((r) => ({
       id: r.id,
       label: r.ad_soyad ?? r.email ?? r.id.slice(0, 8),
@@ -360,8 +344,7 @@ function CustomerListPage(): JSX.Element {
   const geoKey = position ? `${position.lat.toFixed(3)}|${position.lng.toFixed(3)}` : 'no-geo';
   const accountsQuery = useQuery({
     queryKey: ['customers', 'list', geoKey],
-    queryFn: () =>
-      fetchAccounts(position ? { lat: position.lat, lng: position.lng } : null),
+    queryFn: () => fetchAccounts(position ? { lat: position.lat, lng: position.lng } : null),
     staleTime: 60_000,
   });
 
@@ -381,9 +364,7 @@ function CustomerListPage(): JSX.Element {
     const all = accountsQuery.data ?? [];
     const q = debouncedSearch.trim().toLocaleLowerCase('tr');
 
-    const fromTs = filters.lastVisitFrom
-      ? new Date(filters.lastVisitFrom).getTime()
-      : null;
+    const fromTs = filters.lastVisitFrom ? new Date(filters.lastVisitFrom).getTime() : null;
     const toTs = filters.lastVisitTo
       ? new Date(filters.lastVisitTo).getTime() + 24 * 60 * 60 * 1000 - 1
       : null;
@@ -391,8 +372,7 @@ function CustomerListPage(): JSX.Element {
     const result = all.filter((r) => {
       // Arama
       if (q) {
-        const hay = `${r.name ?? ''} ${r.phone ?? ''} ${r.address ?? ''}`
-          .toLocaleLowerCase('tr');
+        const hay = `${r.name ?? ''} ${r.phone ?? ''} ${r.address ?? ''}`.toLocaleLowerCase('tr');
         if (!hay.includes(q)) return false;
       }
       // Tipler
@@ -402,16 +382,14 @@ function CustomerListPage(): JSX.Element {
       // İl
       if (
         filters.province &&
-        (r.city ?? '').toLocaleLowerCase('tr') !==
-          filters.province.toLocaleLowerCase('tr')
+        (r.city ?? '').toLocaleLowerCase('tr') !== filters.province.toLocaleLowerCase('tr')
       ) {
         return false;
       }
       // İlçe
       if (
         filters.district &&
-        (r.district ?? '').toLocaleLowerCase('tr') !==
-          filters.district.toLocaleLowerCase('tr')
+        (r.district ?? '').toLocaleLowerCase('tr') !== filters.district.toLocaleLowerCase('tr')
       ) {
         return false;
       }
@@ -428,9 +406,7 @@ function CustomerListPage(): JSX.Element {
       if (filters.status === 'due') {
         // basit kural: lastVisit > 90 gün önce veya hiç ziyaret yok
         if (!r.lastVisitAt) return true;
-        const days =
-          (Date.now() - new Date(r.lastVisitAt).getTime()) /
-          (1000 * 60 * 60 * 24);
+        const days = (Date.now() - new Date(r.lastVisitAt).getTime()) / (1000 * 60 * 60 * 24);
         if (days < 90) return false;
       }
       // Min review
@@ -488,10 +464,7 @@ function CustomerListPage(): JSX.Element {
     setPage(1);
   }, [debouncedSearch, filters, sortKey]);
 
-  const visible = useMemo(
-    () => filtered.slice(0, page * PAGE_SIZE),
-    [filtered, page],
-  );
+  const visible = useMemo(() => filtered.slice(0, page * PAGE_SIZE), [filtered, page]);
 
   function toggleSelected(id: string): void {
     setSelectedIds((prev) => {
@@ -555,9 +528,8 @@ function CustomerListPage(): JSX.Element {
   }
 
   function exportSelected(): void {
-    const rows: ExportRow[] = (selectedIds.size > 0
-      ? filtered.filter((r) => selectedIds.has(r.id))
-      : filtered
+    const rows: ExportRow[] = (
+      selectedIds.size > 0 ? filtered.filter((r) => selectedIds.has(r.id)) : filtered
     ).map<ExportRow>((r) => ({
       id: r.id,
       name: r.name,
@@ -641,10 +613,7 @@ function CustomerListPage(): JSX.Element {
 
         {/* Sort */}
         <div className="flex items-center gap-2">
-          <ArrowUpDown
-            className="h-4 w-4 text-muted-foreground"
-            aria-hidden="true"
-          />
+          <ArrowUpDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <label className="sr-only" htmlFor="sort-key">
             Sırala
           </label>
@@ -672,15 +641,13 @@ function CustomerListPage(): JSX.Element {
           value={filters}
           onChange={setFilters}
           customerTypes={vertical.customerTypes}
-          reps={canSeeRepFilter ? repsQuery.data ?? [] : []}
+          reps={canSeeRepFilter ? (repsQuery.data ?? []) : []}
           enableHasBalance={false}
           onClear={clearFilters}
         />
 
         <p className="text-xs text-muted-foreground">
-          {isLoading
-            ? 'Yükleniyor…'
-            : `${totalFiltered} kayıt — ${visible.length} gösteriliyor`}
+          {isLoading ? 'Yükleniyor…' : `${totalFiltered} kayıt — ${visible.length} gösteriliyor`}
         </p>
       </div>
 
@@ -688,17 +655,13 @@ function CustomerListPage(): JSX.Element {
       <div className="flex-1 space-y-3 px-4 py-3 pb-32">
         {isError && (
           <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            Veri yüklenemedi:{' '}
-            {(accountsQuery.error as Error | null)?.message ?? 'bilinmiyor'}
+            Veri yüklenemedi: {(accountsQuery.error as Error | null)?.message ?? 'bilinmiyor'}
           </div>
         )}
 
         {!isLoading && totalFiltered === 0 && (
           <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
-            <MapPin
-              className="mx-auto mb-2 h-6 w-6 text-muted-foreground"
-              aria-hidden="true"
-            />
+            <MapPin className="mx-auto mb-2 h-6 w-6 text-muted-foreground" aria-hidden="true" />
             <p className="font-medium text-foreground">Kayıt bulunamadı.</p>
             <p className="mt-1">
               Filtreleri temizle veya{' '}
@@ -796,10 +759,8 @@ function CustomerListPage(): JSX.Element {
         <div className="fixed bottom-16 left-0 right-0 z-20 border-t border-border bg-background/95 px-4 py-3 backdrop-blur">
           <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
             <span>
-              <span className="font-semibold text-foreground">
-                {selectedIds.size}
-              </span>{' '}
-              seçili (sepet: {basketCount}/{MAX_BASKET})
+              <span className="font-semibold text-foreground">{selectedIds.size}</span> seçili
+              (sepet: {basketCount}/{MAX_BASKET})
             </span>
             {selectedIds.size > 0 && (
               <button

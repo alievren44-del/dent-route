@@ -59,21 +59,17 @@ interface MapboxResponse {
   features?: MapboxFeature[];
 }
 
-function pickContext(
-  ctx: MapboxContextEntry[],
-  prefix: string,
-): string | undefined {
-  const hit = ctx.find(
-    (c) => typeof c?.id === 'string' && c.id.startsWith(prefix),
-  );
+function pickContext(ctx: MapboxContextEntry[], prefix: string): string | undefined {
+  const hit = ctx.find((c) => typeof c?.id === 'string' && c.id.startsWith(prefix));
   return hit?.text;
 }
 
 function featureToResult(f: MapboxFeature): GeocodeResult {
   const ctx: MapboxContextEntry[] = Array.isArray(f.context) ? f.context : [];
-  const center = (Array.isArray(f.center) && f.center.length === 2
-    ? f.center
-    : [0, 0]) as [number, number];
+  const center = (Array.isArray(f.center) && f.center.length === 2 ? f.center : [0, 0]) as [
+    number,
+    number,
+  ];
   const [lng, lat] = center;
   return {
     id: String(f.id ?? ''),
@@ -102,10 +98,7 @@ export async function mapboxGeocode(
   params.set('limit', String(options.limit ?? 5));
   params.set('language', 'tr');
   if (options.proximity) {
-    params.set(
-      'proximity',
-      `${options.proximity[0]},${options.proximity[1]}`,
-    );
+    params.set('proximity', `${options.proximity[0]},${options.proximity[1]}`);
   }
 
   const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
@@ -114,9 +107,7 @@ export async function mapboxGeocode(
   const resp = await fetch(url);
   if (!resp.ok) throw new Error(`mapbox_geocode_http_${resp.status}`);
   const json = (await resp.json()) as MapboxResponse;
-  const features: MapboxFeature[] = Array.isArray(json?.features)
-    ? json.features
-    : [];
+  const features: MapboxFeature[] = Array.isArray(json?.features) ? json.features : [];
 
   return features.map(featureToResult);
 }
