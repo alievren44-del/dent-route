@@ -79,37 +79,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v1
-        with:
-          version: latest
-
-      - name: Link project
+      # Saha migration'ları idempotent yazılmış (CREATE TABLE IF NOT EXISTS,
+      # CREATE OR REPLACE FUNCTION, DROP POLICY IF EXISTS). Parla shared DB
+      # geçmişine dokunmamak için supabase CLI yerine direkt psql kullanıyoruz.
+      # Sadece bu sprint'te değişen 2 dosyayı apply ediyoruz.
+      - name: Apply migrations via psql
         env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-        run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-
-      # Parla web tarafının deploy ettiği migration'ları lokal repoda yok ama
-      # remote'ta var. CLI bunları "history out of sync" diye reddediyor.
-      # repair --status applied = remote'taki Parla migration'larını lokal
-      # geçmişe "applied" olarak ekle (silmez, dokunmaz).
-      - name: Repair remote migration history
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGHOST: db.${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co
+          PGUSER: postgres
+          PGDATABASE: postgres
+          PGPORT: '5432'
         run: |
-          supabase migration repair --status applied \
-            20260527151734 \
-            20260527152323 \
-            20260527154557 \
-            20260527154659 \
-            20260527164629 \
-            20260527171218 \
-            --password "${SUPABASE_DB_PASSWORD}"
-
-      - name: Push migrations
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-        run: supabase db push --include-all --password "${SUPABASE_DB_PASSWORD}"
+          set -euo pipefail
+          for f in \
+            supabase/migrations/20260528000007_saha_route_assignment.sql \
+            supabase/migrations/20260528000008_saha_auth_trigger.sql; do
+              echo "::group::Apply $f"
+              psql --set ON_ERROR_STOP=on -v ON_ERROR_STOP=1 -f "$f"
+              echo "::endgroup::"
+          done
