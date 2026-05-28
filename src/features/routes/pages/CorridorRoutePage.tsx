@@ -29,8 +29,6 @@ import {
 } from '@features/routes/lib/detour-calc';
 import {
   computeRouteAlternatives,
-  getStoredProvider,
-  setStoredProvider,
   type RouteOption as AdapterRoute,
   type RouteProvider,
 } from '@features/routes/lib/routing-adapter';
@@ -77,7 +75,8 @@ export default function CorridorRoutePage() {
   const [b, setB] = useState<GeocodeResult | null>(null);
   const [useGpsForA, setUseGpsForA] = useState(true);
   const [profile, setProfile] = useState<Profile>('driving');
-  const [provider, setProvider] = useState<RouteProvider>(() => getStoredProvider());
+  // Google Routes API kaldırıldı (ücretsiz mod). Hardcoded Mapbox.
+  const [provider] = useState<RouteProvider>('mapbox');
   const [manualWaypoints, setManualWaypoints] = useState<CityVariation[]>([]);
   const [routes, setRoutes] = useState<RouteWithCandidates[]>([]);
   const [selectedRouteIdx, setSelectedRouteIdx] = useState<number>(0);
@@ -108,11 +107,6 @@ export default function CorridorRoutePage() {
     if (!aCoord || !bCoord) return [];
     return selectVariationCities(aCoord, bCoord, { maxCities: 4 });
   }, [aCoord, bCoord]);
-
-  const handleProviderSwitch = (next: RouteProvider): void => {
-    setProvider(next);
-    setStoredProvider(next);
-  };
 
   const addManualWaypoint = (city: CityVariation): void => {
     setManualWaypoints((prev) => {
@@ -441,25 +435,6 @@ export default function CorridorRoutePage() {
         </p>
       </header>
 
-      {/* Provider switch */}
-      <section className="rounded-xl bg-white p-2 shadow-sm flex items-center gap-1">
-        <span className="text-xs text-slate-600 px-1">Sağlayıcı:</span>
-        {(['mapbox', 'google'] as const).map((p) => (
-          <button
-            key={p}
-            type="button"
-            onClick={() => handleProviderSwitch(p)}
-            className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition ${
-              provider === p
-                ? 'bg-blue-600 text-white'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            {p === 'mapbox' ? 'Mapbox (önerilen)' : 'Google Maps'}
-          </button>
-        ))}
-      </section>
-
       <section className="rounded-xl bg-white p-3 shadow-sm">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-xs font-medium text-slate-600">Başlangıç (A)</span>
@@ -641,8 +616,11 @@ export default function CorridorRoutePage() {
             <>
               <p className="mt-3 text-xs text-slate-600">
                 <strong>{enrichmentCandidates.length}</strong> ilçe taranmaya değer (yeni veya
-                eski). Tek seferde max 5 tarayabilir (Google rate limit). Tarama sırası: rotaya
-                yakın + büyük şehir.
+                eski). Tek seferde max 5 tarayabilir.
+              </p>
+              <p className="mt-1 text-[10px] text-amber-700 bg-amber-50 rounded px-2 py-1">
+                ⚠️ Bu işlem Google Places API kullanır. 5 ilçe ≈ $5 ($200 aylık free credit
+                içinde). Bütçe ayırmadıysan tıklama.
               </p>
               {enrichProgress && enriching && (
                 <div className="mt-2 rounded bg-purple-50 p-2 text-[11px] text-purple-900">
