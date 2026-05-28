@@ -103,18 +103,21 @@ export async function computeRouteAlternatives(opts: {
   //    Auto variations ek olarak devam (Mapbox provider only)
   if (manual.length >= 2) {
     try {
-      const coords: LatLng[] = [
-        opts.a,
-        ...manual.map((w) => ({ lat: w.lat, lng: w.lng })),
-        opts.b,
-      ];
+      const coords: LatLng[] = [opts.a, ...manual.map((w) => ({ lat: w.lat, lng: w.lng })), opts.b];
       const routes = await invokeMapbox(supabase, coords, profile, false);
       if (routes.length > 0) {
         const label = manual.map((w) => w.name).join(' → ');
         collected.push({
           ...routes[0]!,
           provider: 'mapbox',
-          viaCity: { slug: 'combined', name: label, lat: manual[0]!.lat, lng: manual[0]!.lng, nufus: 0, approxExtraKm: 0 },
+          viaCity: {
+            slug: 'combined',
+            name: label,
+            lat: manual[0]!.lat,
+            lng: manual[0]!.lng,
+            nufus: 0,
+            approxExtraKm: 0,
+          },
         });
       }
     } catch {
