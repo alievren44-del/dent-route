@@ -39,7 +39,7 @@ const DAILY_LIMIT = 50;
 
 type Profile = 'driving' | 'driving-traffic' | 'walking';
 interface Coord { lat: number; lng: number; }
-interface DirBody { coords: Coord[]; profile?: Profile; }
+interface DirBody { coords: Coord[]; profile?: Profile; alternatives?: boolean; }
 
 function jsonResponse(body: unknown, status: number, cors: Record<string, string>): Response {
   return new Response(JSON.stringify(body), {
@@ -118,6 +118,9 @@ Deno.serve(async (req) => {
     params.set('overview', 'full');
     params.set('steps', 'false');
     params.set('annotations', 'distance,duration');
+    if (body.alternatives === true) {
+      params.set('alternatives', 'true');
+    }
 
     const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordStr}?${params.toString()}`;
     const resp = await fetch(url);
@@ -134,6 +137,12 @@ Deno.serve(async (req) => {
       return jsonResponse({ status: 'error', error: `mapbox_${json?.code ?? 'unknown'}` }, 500, cors);
     }
     const route = json.routes[0];
+    // Alternatif rotalar varsa hepsini topla
+    const allRoutes = (json.routes as any[]).map((r) => ({
+      geometry: r.geometry,
+      distanceM: r.distance,
+      durationS: r.duration,
+    }));
 
     // Usage track
     try {
@@ -156,6 +165,7 @@ Deno.serve(async (req) => {
         legs: Array.isArray(route.legs)
           ? route.legs.map((l: any) => ({ distanceM: l.distance, durationS: l.duration }))
           : [],
+        routes: allRoutes,
       },
       200,
       cors,

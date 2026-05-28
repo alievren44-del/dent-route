@@ -51,7 +51,18 @@ interface DirectionsResp {
   geometry?: string;
   distanceM?: number;
   durationS?: number;
+  routes?: Array<{ geometry: string; distanceM: number; durationS: number }>;
 }
+
+/** Tek bir rota seçeneği — Mapbox alternatif rotalarından biri */
+interface RouteOption {
+  geometry: string;
+  distanceM: number;
+  durationS: number;
+  candidates: Candidate[];
+}
+
+const ROUTE_COLORS = ['#2563eb', '#10b981', '#f59e0b'] as const;
 
 export default function CorridorRoutePage() {
   const navigate = useNavigate();
@@ -61,11 +72,16 @@ export default function CorridorRoutePage() {
   const [b, setB] = useState<GeocodeResult | null>(null);
   const [useGpsForA, setUseGpsForA] = useState(true);
   const [profile, setProfile] = useState<Profile>('driving');
-  const [routeGeom, setRouteGeom] = useState<string | null>(null);
-  const [baseline, setBaseline] = useState<{ km: number; min: number } | null>(null);
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [routes, setRoutes] = useState<RouteOption[]>([]);
+  const [selectedRouteIdx, setSelectedRouteIdx] = useState<number>(0);
   const [computing, setComputing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const selectedRoute = routes[selectedRouteIdx] ?? null;
+  const baseline = selectedRoute
+    ? { km: selectedRoute.distanceM / 1000, min: selectedRoute.durationS / 60 }
+    : null;
+  const candidates = selectedRoute?.candidates ?? [];
 
   useEffect(() => {
     if (useGpsForA && geo.status === 'idle') geo.request();
@@ -88,87 +104,104 @@ export default function CorridorRoutePage() {
     }
     setComputing(true);
     setErr(null);
-    setCandidates([]);
-    setRouteGeom(null);
+    setRoutes([]);
+    setSelectedRouteIdx(0);
     try {
       const supabase = getSupabaseClient();
 
-      // 1. mapbox-directions
+      // 1. mapbox-directions — alternatives=true ile 1-3 rota dön
       const { data: dirData, error: dirErr } = await supabase.functions.invoke(
         'mapbox-directions',
         {
-          body: { coords: [aCoord, bCoord], profile },
+          body: { coords: [aCoord, bCoord], profile, alternatives: true },
         },
       );
       if (dirErr) throw new Error(dirErr.message);
       const dir = dirData as DirectionsResp;
-      if (dir.status !== 'ok' || !dir.geometry) {
+      if (dir.status !== 'ok' || (!dir.routes && !dir.geometry)) {
         throw new Error('Yol bulunamadı');
       }
-      setRouteGeom(dir.geometry);
-      const distKm = (dir.distanceM ?? 0) / 1000;
-      const durMin = (dir.durationS ?? 0) / 60;
-      setBaseline({ km: distKm, min: durMin });
 
-      // Adaptive eşikler: rota uzun ise buffer + detour limiti büyür.
-      const params = adaptiveCorridorParams(distKm);
+      // Yeni format `routes` array; eski format tek `geometry` — geriye uyumluluk.
+      const rawRoutes: Array<{ geometry: string; distanceM: number; durationS: number }> =
+        dir.routes && dir.routes.length > 0
+          ? dir.routes
+          : [
+              {
+                geometry: dir.geometry!,
+                distanceM: dir.distanceM ?? 0,
+                durationS: dir.durationS ?? 0,
+              },
+            ];
 
-      // 2. polyline → GeoJSON LineString (frontend decode + GeoJSON)
-      const decoded = decodePolyline(dir.geometry);
-      const lineGeojson = JSON.stringify({
-        type: 'LineString',
-        coordinates: decoded,
-      });
+      // Her rota için ayrı candidate listesi hesapla
+      const resolved: RouteOption[] = [];
+      for (const r of rawRoutes) {
+        const distKm = r.distanceM / 1000;
+        const params = adaptiveCorridorParams(distKm);
+        const decoded = decodePolyline(r.geometry);
+        const lineGeojson = JSON.stringify({
+          type: 'LineString',
+          coordinates: decoded,
+        });
 
-      // 3. saha_clinics_near_polyline RPC — adaptive buffer
-      const { data: nearData, error: nearErr } = await supabase.rpc('saha_clinics_near_polyline', {
-        _line_geojson: lineGeojson,
-        _buffer_m: params.bufferM,
-        _vertical_key: 'dental',
-        _limit: params.limit,
-      });
-      if (nearErr) throw nearErr;
-
-      const rawList = (nearData ?? []) as Array<{
-        id: string;
-        google_place_id: string | null;
-        name: string;
-        lat: number;
-        lng: number;
-        address: string | null;
-        phone: string | null;
-        clinic_segment: 'private' | 'kamu';
-        province_slug: string | null;
-        district_slug: string | null;
-      }>;
-
-      // 4. detour: gerçek polyline'a dik mesafe × 2 (haversine via-C'den
-      //    çok daha doğru — Mapbox rotası zaten gerçek yolu izliyor).
-      const enriched: Candidate[] = [];
-      for (const c of rawList) {
-        const { distanceKm, durationMin } = computeDetourFromPolyline(
-          { lat: c.lat, lng: c.lng },
-          decoded,
-          profile,
+        const { data: nearData, error: nearErr } = await supabase.rpc(
+          'saha_clinics_near_polyline',
+          {
+            _line_geojson: lineGeojson,
+            _buffer_m: params.bufferM,
+            _vertical_key: 'dental',
+            _limit: params.limit,
+          },
         );
-        if (distanceKm > params.detourKmMax) continue;
-        if (durationMin > params.detourMinMax) continue;
-        enriched.push({
-          ...c,
-          detourKm: distanceKm,
-          detourMin: durationMin,
+        if (nearErr) throw nearErr;
+
+        const rawList = (nearData ?? []) as Array<{
+          id: string;
+          google_place_id: string | null;
+          name: string;
+          lat: number;
+          lng: number;
+          address: string | null;
+          phone: string | null;
+          clinic_segment: 'private' | 'kamu';
+          province_slug: string | null;
+          district_slug: string | null;
+        }>;
+
+        const enriched: Candidate[] = [];
+        for (const c of rawList) {
+          const { distanceKm, durationMin } = computeDetourFromPolyline(
+            { lat: c.lat, lng: c.lng },
+            decoded,
+            profile,
+          );
+          if (distanceKm > params.detourKmMax) continue;
+          if (durationMin > params.detourMinMax) continue;
+          enriched.push({
+            ...c,
+            detourKm: distanceKm,
+            detourMin: durationMin,
+          });
+        }
+        enriched.sort((x, y) => x.detourMin - y.detourMin);
+
+        resolved.push({
+          geometry: r.geometry,
+          distanceM: r.distanceM,
+          durationS: r.durationS,
+          candidates: enriched,
         });
       }
-      enriched.sort((x, y) => x.detourMin - y.detourMin);
-      setCandidates(enriched);
-      if (enriched.length === 0) {
-        toast.info(
-          `Yol üstünde uygun klinik yok (limit ${Math.round(params.detourMinMax)}dk / ${params.detourKmMax}km)`,
-        );
+
+      setRoutes(resolved);
+      setSelectedRouteIdx(0);
+      if (resolved.length > 1) {
+        toast.success(`${resolved.length} alternatif rota bulundu`);
+      } else if (resolved[0]!.candidates.length === 0) {
+        toast.info('Yol üstünde uygun klinik yok');
       } else {
-        toast.success(
-          `${enriched.length} klinik bulundu (buffer ${(params.bufferM / 1000).toFixed(0)}km, detour ≤${params.detourKmMax}km/${Math.round(params.detourMinMax)}dk)`,
-        );
+        toast.success(`${resolved[0]!.candidates.length} klinik bulundu`);
       }
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Hesaplama hatası');
@@ -221,28 +254,39 @@ export default function CorridorRoutePage() {
     if (!m) return;
     markersRef.current.forEach((x) => x.remove());
     markersRef.current = [];
-    if (m.getLayer('corridor-line')) m.removeLayer('corridor-line');
-    if (m.getSource('corridor-src')) m.removeSource('corridor-src');
+    // Önceki tüm rota katmanlarını temizle (0..2)
+    for (let i = 0; i < 3; i++) {
+      if (m.getLayer(`corridor-line-${i}`)) m.removeLayer(`corridor-line-${i}`);
+      if (m.getSource(`corridor-src-${i}`)) m.removeSource(`corridor-src-${i}`);
+    }
 
-    if (routeGeom) {
-      const coords = decodePolyline(routeGeom);
-      m.addSource('corridor-src', {
-        type: 'geojson',
-        data: {
-          type: 'Feature',
-          properties: {},
-          geometry: { type: 'LineString', coordinates: coords },
-        },
+    if (routes.length > 0) {
+      const allBounds = new mapboxgl.LngLatBounds();
+      // Alternatif rotaları soluk + seçili olanı kalın çiz
+      routes.forEach((r, idx) => {
+        const coords = decodePolyline(r.geometry);
+        m.addSource(`corridor-src-${idx}`, {
+          type: 'geojson',
+          data: {
+            type: 'Feature',
+            properties: {},
+            geometry: { type: 'LineString', coordinates: coords },
+          },
+        });
+        const isActive = idx === selectedRouteIdx;
+        m.addLayer({
+          id: `corridor-line-${idx}`,
+          type: 'line',
+          source: `corridor-src-${idx}`,
+          paint: {
+            'line-color': ROUTE_COLORS[idx] ?? '#64748b',
+            'line-width': isActive ? 6 : 3,
+            'line-opacity': isActive ? 0.95 : 0.45,
+          },
+        });
+        coords.forEach((c) => allBounds.extend(c));
       });
-      m.addLayer({
-        id: 'corridor-line',
-        type: 'line',
-        source: 'corridor-src',
-        paint: { 'line-color': '#2563eb', 'line-width': 5, 'line-opacity': 0.85 },
-      });
-      const bounds = new mapboxgl.LngLatBounds();
-      coords.forEach((c) => bounds.extend(c));
-      m.fitBounds(bounds, { padding: 60, maxZoom: 13 });
+      m.fitBounds(allBounds, { padding: 60, maxZoom: 13 });
     }
 
     if (aCoord) {
@@ -269,7 +313,7 @@ export default function CorridorRoutePage() {
       const mk = new mapboxgl.Marker({ element: el }).setLngLat([c.lng, c.lat]).addTo(m);
       markersRef.current.push(mk);
     });
-  }, [routeGeom, candidates, aCoord, bCoord]);
+  }, [routes, selectedRouteIdx, candidates, aCoord, bCoord]);
 
   // Harita tıklayarak B set
   useEffect(() => {
@@ -390,21 +434,57 @@ export default function CorridorRoutePage() {
         className="h-[360px] w-full overflow-hidden rounded-xl border border-slate-200"
       />
 
-      {baseline && (
-        <section className="rounded-xl bg-slate-50 p-3">
-          <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
-            A → B baseline
+      {/* Alternatif rota seçici — Google Maps tarzı kart liste */}
+      {routes.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+            {routes.length === 1 ? 'Rota' : `${routes.length} alternatif rota`}
           </h2>
-          <div className="flex gap-4 text-sm">
-            <span>
-              <strong>{baseline.km.toFixed(1)} km</strong>
-            </span>
-            <span>
-              <strong>{Math.round(baseline.min)} dk</strong>
-            </span>
-            {candidates.length > 0 && (
-              <span className="ml-auto text-slate-600">{candidates.length} aday klinik</span>
-            )}
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {routes.map((r, idx) => {
+              const isActive = idx === selectedRouteIdx;
+              const km = r.distanceM / 1000;
+              const min = Math.round(r.durationS / 60);
+              const color = ROUTE_COLORS[idx] ?? '#64748b';
+              const label = idx === 0 ? 'Önerilen' : `Alternatif ${idx}`;
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setSelectedRouteIdx(idx)}
+                  className={`text-left rounded-xl border p-3 transition ${
+                    isActive
+                      ? 'border-blue-600 bg-white shadow-md ring-2 ring-blue-200'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="inline-block h-3 w-3 rounded-full"
+                        style={{ backgroundColor: color }}
+                      />
+                      <span className="text-xs font-semibold text-slate-700">{label}</span>
+                    </div>
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                      {r.candidates.length} klinik
+                    </span>
+                  </div>
+                  <div className="mt-2 flex items-baseline gap-3">
+                    <span className="text-lg font-bold text-slate-800">{min} dk</span>
+                    <span className="text-sm text-slate-600">{km.toFixed(1)} km</span>
+                  </div>
+                  {idx > 0 && routes[0] && (
+                    <div className="mt-1 text-[11px] text-slate-500">
+                      {min - Math.round(routes[0].durationS / 60) >= 0 ? '+' : ''}
+                      {min - Math.round(routes[0].durationS / 60)} dk /{' '}
+                      {km - routes[0].distanceM / 1000 >= 0 ? '+' : ''}
+                      {(km - routes[0].distanceM / 1000).toFixed(1)} km
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </section>
       )}
