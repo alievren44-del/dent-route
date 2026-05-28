@@ -18,7 +18,7 @@ function App() {
       )}
       <AppRouter />
       <Toaster position="top-center" richColors />
-      <DebugOverlay />
+      {import.meta.env.DEV && <DebugOverlay />}
     </div>
   );
 }

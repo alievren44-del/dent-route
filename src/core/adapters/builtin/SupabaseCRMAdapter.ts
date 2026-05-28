@@ -411,12 +411,12 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
     const { data: userData } = await this.supabase.auth.getUser();
     const salesRepId = userData.user?.id;
 
-    // Idempotency check
+    // Idempotency check — orders.idempotency_key kolonu var (20260605000001).
     if (order.idempotencyKey) {
       const { data: existing } = await this.supabase
         .from('orders')
         .select('id')
-        .eq('notes', `idempotency:${order.idempotencyKey}`)
+        .eq('idempotency_key', order.idempotencyKey)
         .maybeSingle();
       if (existing?.id) {
         return this.getOrder(existing.id);
@@ -432,10 +432,6 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       return { ...it, unitPrice, lineTotal };
     });
 
-    const notesValue = order.notes
-      ? `${order.notes} | idempotency:${order.idempotencyKey}`
-      : `idempotency:${order.idempotencyKey}`;
-
     const { data: newOrder, error: insErr } = await this.supabase
       .from('orders')
       .insert({
@@ -445,7 +441,8 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
         subtotal,
         total: subtotal,
         total_amount: subtotal,
-        notes: notesValue,
+        notes: order.notes ?? null,
+        idempotency_key: order.idempotencyKey ?? null,
       })
       .select('id')
       .single();

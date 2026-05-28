@@ -122,14 +122,14 @@ function SampleFormMobile({
     let cancelled = false;
     (async () => {
       const { data, error } = await supabase
-        .from('accounts')
-        .select('id, name, type')
+        .from('saha_clinics')
+        .select('id, name, types')
         .eq('id', preselectedAccountId)
         .maybeSingle();
       if (cancelled) return;
       if (!error && data) {
-        const row = data as AccountRow;
-        setSelectedAccount(row);
+        const row = data as { id: string; name: string; types: string[] | null };
+        setSelectedAccount({ id: row.id, name: row.name, type: row.types?.[0] ?? null });
       }
     })();
     return () => {
@@ -137,18 +137,23 @@ function SampleFormMobile({
     };
   }, [preselectedAccountId, supabase]);
 
-  // ----- Account search query
+  // ----- Account search query (saha_clinics)
   const accountSearchQuery = useQuery({
     queryKey: ['account-search', accountQuery],
     enabled: accountQuery.trim().length >= 2 && !preselectedAccountId,
     queryFn: async (): Promise<AccountRow[]> => {
       const { data, error } = await supabase
-        .from('accounts')
-        .select('id, name, type')
+        .from('saha_clinics')
+        .select('id, name, types')
         .ilike('name', `%${accountQuery.trim()}%`)
+        .eq('status', 'active')
         .limit(10);
       if (error) throw error;
-      return (data ?? []) as AccountRow[];
+      return ((data ?? []) as Array<{
+        id: string;
+        name: string;
+        types: string[] | null;
+      }>).map((r) => ({ id: r.id, name: r.name, type: r.types?.[0] ?? null }));
     },
   });
 

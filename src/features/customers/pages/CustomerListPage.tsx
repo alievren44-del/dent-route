@@ -52,26 +52,22 @@ import {
 
 type SortKey = 'name' | 'distance' | 'last_visit' | 'reviews' | 'balance';
 
-interface AddressRow {
-  account_id: string;
-  address_line: string | null;
-  district: string | null;
-  city: string | null;
-  is_primary: boolean | null;
-}
-
-interface AccountRaw {
+interface ClinicRaw {
   id: string;
   name: string;
-  type: string | null;
+  lat: number | null;
+  lng: number | null;
+  address: string | null;
   phone: string | null;
-  whatsapp: string | null;
-  email: string | null;
+  rating: number | string | null;
+  user_ratings_total: number | null;
+  types: string[] | null;
+  province_slug: string | null;
+  district_slug: string | null;
+  clinic_segment: string | null;
   status: string | null;
-  region: string | null;
-  custom_fields: Record<string, unknown> | null;
-  created_at: string | null;
-  updated_at: string | null;
+  raw_payload: Record<string, unknown> | null;
+  last_verified_at: string | null;
 }
 
 interface VisitRow {
@@ -127,136 +123,51 @@ function useDebounced<T>(value: T, delayMs: number): T {
 }
 
 /**
- * accounts + account_addresses join. saha_visits varsa son ziyareti
- * ayrı sorguda alır; yoksa boş geçer (try/catch).
+ * saha_clinics tabanlı klinik listesi. GPS varsa saha_search_nearby_clinics RPC
+ * ile distance + 50km radius; yoksa düz saha_clinics query.
+ * saha_visits varsa son ziyareti ayrı sorguda alır; yoksa boş geçer.
  */
 async function fetchAccounts(
   geo: { lat: number; lng: number } | null,
 ): Promise<CustomerListRow[]> {
   const supabase = getSupabaseClient();
 
-  // Eğer GPS varsa, RPC üzerinden distance + lat/lng dahil zenginleştirilmiş veri
-  // çekmeye çalış (50km'lik geniş bir radius). RPC erişilemezse düz query'ye düş.
   type RpcRow = {
     id: string;
+    google_place_id: string | null;
     name: string;
-    type: string | null;
+    lat: number | null;
+    lng: number | null;
+    address: string | null;
     phone: string | null;
-    whatsapp: string | null;
-    email: string | null;
-    status: string;
-    region: string | null;
-    addresses: Array<{
-      addressLine?: string | null;
-      district?: string | null;
-      city?: string | null;
-      location?: { lat: number; lng: number };
-      isPrimary?: boolean;
-    }> | null;
-    custom_fields: Record<string, unknown> | null;
-    created_at: string;
-    updated_at: string;
+    rating: number | string | null;
+    user_ratings_total: number | null;
+    types: string[] | null;
+    province_slug: string | null;
+    district_slug: string | null;
+    clinic_segment: string | null;
+    last_verified_at: string | null;
     distance_m: number | null;
   };
 
-  if (geo) {
-    const { data: rpcData, error: rpcErr } = await supabase.rpc(
-      'saha_search_nearby_accounts',
-      {
-        _lat: geo.lat,
-        _lng: geo.lng,
-        _radius_m: 50_000,
-        _customer_type: null,
-        _limit: 1000,
-      },
-    );
-    if (!rpcErr && rpcData) {
-      const rows = rpcData as RpcRow[];
-      const ids = rows.map((r) => r.id);
-      const lastVisit = await fetchLastVisitMap(ids);
-      return rows.map<CustomerListRow>((r) => {
-        const primaryAddr =
-          r.addresses?.find((a) => a.isPrimary) ?? r.addresses?.[0] ?? null;
-        const cf = (r.custom_fields ?? {}) as Record<string, unknown>;
-        const v = lastVisit.get(r.id);
-        const neighborhood =
-          typeof cf['neighborhood'] === 'string'
-            ? (cf['neighborhood'] as string)
-            : typeof cf['mahalle'] === 'string'
-              ? (cf['mahalle'] as string)
-              : null;
-        const balance =
-          typeof cf['balance'] === 'number' ? (cf['balance'] as number) : null;
-        const rating =
-          typeof cf['rating'] === 'number' ? (cf['rating'] as number) : null;
-        const reviews =
-          typeof cf['reviews'] === 'number'
-            ? (cf['reviews'] as number)
-            : typeof cf['user_ratings_total'] === 'number'
-              ? (cf['user_ratings_total'] as number)
-              : null;
-        return {
-          id: r.id,
-          name: r.name,
-          type: r.type,
-          phone: r.phone,
-          whatsapp: r.whatsapp,
-          address: primaryAddr?.addressLine ?? null,
-          city: primaryAddr?.city ?? null,
-          district: primaryAddr?.district ?? null,
-          neighborhood,
-          lat: primaryAddr?.location?.lat ?? null,
-          lng: primaryAddr?.location?.lng ?? null,
-          rating,
-          reviews,
-          balance,
-          lastVisitAt: v?.check_in_at ?? null,
-          lastVisitOutcome: v?.outcome ?? null,
-        };
-      });
-    }
-    if (rpcErr) {
-      console.warn('saha_search_nearby_accounts başarısız, fallback:', rpcErr.message);
-    }
-  }
-
-  // Fallback: düz tablo query (lat/lng/distance yok)
-  const { data: accountsData, error: accErr } = await supabase
-    .from('accounts')
-    .select(
-      'id, name, type, phone, whatsapp, email, status, region, custom_fields, created_at, updated_at',
-    )
-    .neq('status', 'deleted')
-    .order('name', { ascending: true })
-    .limit(1000);
-
-  if (accErr) throw accErr;
-  const accounts = (accountsData ?? []) as AccountRaw[];
-  if (accounts.length === 0) return [];
-
-  const ids = accounts.map((a) => a.id);
-
-  // Adresler — primary tercih (location GEOGRAPHY kolonunu çekemediğimiz için lat/lng yok)
-  const { data: addrData, error: addrErr } = await supabase
-    .from('account_addresses')
-    .select('account_id, address_line, district, city, is_primary')
-    .in('account_id', ids);
-  if (addrErr) throw addrErr;
-
-  const addrByAccount = new Map<string, AddressRow>();
-  for (const a of (addrData ?? []) as AddressRow[]) {
-    const existing = addrByAccount.get(a.account_id);
-    if (!existing || (a.is_primary && !existing.is_primary)) {
-      addrByAccount.set(a.account_id, a);
-    }
-  }
-
-  const lastVisitByAccount = await fetchLastVisitMap(ids);
-
-  return accounts.map<CustomerListRow>((a) => {
-    const addr = addrByAccount.get(a.id);
-    const visit = lastVisitByAccount.get(a.id);
-    const cf = (a.custom_fields ?? {}) as Record<string, unknown>;
+  function rowToCustomerListRow(
+    c: {
+      id: string;
+      name: string;
+      lat: number | null;
+      lng: number | null;
+      address: string | null;
+      phone: string | null;
+      rating: number | string | null;
+      user_ratings_total: number | null;
+      types: string[] | null;
+      province_slug: string | null;
+      district_slug: string | null;
+      raw_payload?: Record<string, unknown> | null;
+    },
+    visit: VisitRow | undefined,
+  ): CustomerListRow {
+    const cf = (c.raw_payload ?? {}) as Record<string, unknown>;
     const neighborhood =
       typeof cf['neighborhood'] === 'string'
         ? (cf['neighborhood'] as string)
@@ -265,33 +176,76 @@ async function fetchAccounts(
           : null;
     const balance =
       typeof cf['balance'] === 'number' ? (cf['balance'] as number) : null;
-    const rating =
-      typeof cf['rating'] === 'number' ? (cf['rating'] as number) : null;
-    const reviews =
-      typeof cf['reviews'] === 'number'
-        ? (cf['reviews'] as number)
-        : typeof cf['user_ratings_total'] === 'number'
-          ? (cf['user_ratings_total'] as number)
+    const ratingNum =
+      typeof c.rating === 'number'
+        ? c.rating
+        : typeof c.rating === 'string'
+          ? Number.parseFloat(c.rating)
           : null;
     return {
-      id: a.id,
-      name: a.name,
-      type: a.type,
-      phone: a.phone,
-      whatsapp: a.whatsapp,
-      address: addr?.address_line ?? null,
-      city: addr?.city ?? null,
-      district: addr?.district ?? null,
+      id: c.id,
+      name: c.name,
+      type: c.types?.[0] ?? null,
+      phone: c.phone,
+      whatsapp: null,
+      address: c.address,
+      city: c.province_slug,
+      district: c.district_slug,
       neighborhood,
-      lat: null,
-      lng: null,
-      rating,
-      reviews,
+      lat: c.lat,
+      lng: c.lng,
+      rating: ratingNum != null && Number.isFinite(ratingNum) ? ratingNum : null,
+      reviews: c.user_ratings_total,
       balance,
       lastVisitAt: visit?.check_in_at ?? null,
       lastVisitOutcome: visit?.outcome ?? null,
     };
-  });
+  }
+
+  if (geo) {
+    const { data: rpcData, error: rpcErr } = await supabase.rpc(
+      'saha_search_nearby_clinics',
+      {
+        _lat: geo.lat,
+        _lng: geo.lng,
+        _radius_m: 50_000,
+        _vertical_key: 'dental',
+        _limit: 1000,
+      },
+    );
+    if (!rpcErr && rpcData) {
+      const rows = rpcData as RpcRow[];
+      const ids = rows.map((r) => r.id);
+      const lastVisit = await fetchLastVisitMap(ids);
+      return rows.map<CustomerListRow>((r) =>
+        rowToCustomerListRow(r, lastVisit.get(r.id)),
+      );
+    }
+    if (rpcErr) {
+      console.warn('saha_search_nearby_clinics başarısız, fallback:', rpcErr.message);
+    }
+  }
+
+  // Fallback: düz saha_clinics query (lat/lng dahil)
+  const { data: clinicsData, error: clinicsErr } = await supabase
+    .from('saha_clinics')
+    .select(
+      'id, name, lat, lng, address, phone, rating, user_ratings_total, types, province_slug, district_slug, clinic_segment, status, raw_payload, last_verified_at',
+    )
+    .eq('status', 'active')
+    .order('name', { ascending: true })
+    .limit(1000);
+
+  if (clinicsErr) throw clinicsErr;
+  const clinics = (clinicsData ?? []) as ClinicRaw[];
+  if (clinics.length === 0) return [];
+
+  const ids = clinics.map((c) => c.id);
+  const lastVisitByClinic = await fetchLastVisitMap(ids);
+
+  return clinics.map<CustomerListRow>((c) =>
+    rowToCustomerListRow(c, lastVisitByClinic.get(c.id)),
+  );
 }
 
 /**

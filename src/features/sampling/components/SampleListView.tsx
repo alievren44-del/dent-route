@@ -188,12 +188,16 @@ function SampleListView({
       if (accountIds.length === 0) return map;
       const supabase = getSupabaseClient();
       const { data, error } = await supabase
-        .from('accounts')
-        .select('id, name, type')
+        .from('saha_clinics')
+        .select('id, name, types')
         .in('id', accountIds);
       if (error) throw error;
-      for (const row of (data ?? []) as AccountRow[]) {
-        map.set(row.id, row);
+      for (const row of (data ?? []) as Array<{
+        id: string;
+        name: string;
+        types: string[] | null;
+      }>) {
+        map.set(row.id, { id: row.id, name: row.name, type: row.types?.[0] ?? null });
       }
       return map;
     },

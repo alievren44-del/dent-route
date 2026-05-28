@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Parla Saha</string>
-    <string name="title_activity_main">Parla Saha</string>
+    <string name="app_name">Parla CRM</string>
+    <string name="title_activity_main">Parla CRM</string>
     <string name="package_name">com.parla.saha</string>
     <string name="custom_url_scheme">com.parla.saha</string>
 </resources>

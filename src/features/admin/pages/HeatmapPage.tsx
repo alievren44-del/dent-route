@@ -1,7 +1,7 @@
 /**
  * HeatmapPage — Admin ısı haritası.
  *
- * rep_visits.location_lat/lng noktalarını Mapbox heatmap layer'da gösterir.
+ * saha_visits.check_in_lat/lng noktalarını Mapbox heatmap layer'da gösterir.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -10,12 +10,6 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 
 import { getEnv } from '@config/env';
 import { getSupabaseClient } from '@/lib/supabase';
-
-interface VisitPoint {
-  location_lat: number | null;
-  location_lng: number | null;
-  check_in_at: string | null;
-}
 
 export default function HeatmapPage() {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -43,26 +37,30 @@ export default function HeatmapPage() {
       try {
         const supabase = getSupabaseClient();
         const { data, error } = await supabase
-          .from('rep_visits')
-          .select('location_lat, location_lng, check_in_at')
-          .not('location_lat', 'is', null)
-          .not('location_lng', 'is', null);
+          .from('saha_visits')
+          .select('check_in_lat, check_in_lng, check_in_at')
+          .not('check_in_lat', 'is', null)
+          .not('check_in_lng', 'is', null);
 
         if (error) throw error;
 
-        const rows = (data ?? []) as VisitPoint[];
+        const rows = (data ?? []) as Array<{
+          check_in_lat: number | null;
+          check_in_lng: number | null;
+          check_in_at: string;
+        }>;
         const features = rows
           .filter(
-            (v): v is VisitPoint & { location_lat: number; location_lng: number } =>
-              typeof v.location_lat === 'number' &&
-              typeof v.location_lng === 'number',
+            (v): v is { check_in_lat: number; check_in_lng: number; check_in_at: string } =>
+              typeof v.check_in_lat === 'number' &&
+              typeof v.check_in_lng === 'number',
           )
           .map((v) => ({
             type: 'Feature' as const,
             properties: { intensity: 1 },
             geometry: {
               type: 'Point' as const,
-              coordinates: [v.location_lng, v.location_lat],
+              coordinates: [v.check_in_lng, v.check_in_lat],
             },
           }));
 

@@ -238,7 +238,7 @@ export function AppRouter() {
         <Route
           path="/orders/new"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requireRole="sales_rep">
               <AppShell>
                 <OrderFormPage />
               </AppShell>

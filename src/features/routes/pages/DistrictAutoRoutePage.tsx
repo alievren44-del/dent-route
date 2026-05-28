@@ -137,7 +137,12 @@ export default function DistrictAutoRoutePage() {
       if (profile === 'walking' || toOptimize.length > MAPBOX_MAX) {
         const points = toOptimize.map((c) => ({ lat: c.lat, lng: c.lng }));
         const r = await optimizeRouteHybrid(points, start, { returnHome: false });
-        const ordered = r.order.map((i) => toOptimize[i]!);
+        const ordered: ClinicRow[] = [];
+        for (const i of r.order) {
+          const c = toOptimize[i];
+          if (!c) throw new Error(`Geçersiz rota index: ${i}/${toOptimize.length}`);
+          ordered.push(c);
+        }
         const avgKmh = profile === 'walking' ? 5 : 30;
         const durationMin = (r.totalDistanceKm / avgKmh) * 60;
         setRouteState({
@@ -179,7 +184,8 @@ export default function DistrictAutoRoutePage() {
       let prev = start;
       for (const idx of resp.order) {
         if (idx === 0) continue; // start
-        const c = toOptimize[idx - 1]!;
+        const c = toOptimize[idx - 1];
+        if (!c) throw new Error(`Mapbox order range hata: ${idx}/${toOptimize.length}`);
         ordered.push(c);
         running += haversineKm(prev, c);
         cumulative.push(running);

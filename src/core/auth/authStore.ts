@@ -31,6 +31,8 @@ function getClient(injected?: AuthClient): AuthClient {
   return defaultClient;
 }
 
+let authStateSubscription: { unsubscribe: () => void } | null = null;
+
 export const useAuthStore = create<AuthStoreState>((set, get) => ({
   session: null,
   profile: null,
@@ -49,8 +51,10 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       const profile = await authClient.fetchProfile(session.userId);
       set({ session, profile, loading: false });
 
-      // Subscribe to future auth changes
-      authClient.onAuthStateChange((newSession) => {
+      // Subscribe to future auth changes — eski subscription varsa kapat
+      // (StrictMode double-mount veya HMR sırasında üst üste binmesin).
+      authStateSubscription?.unsubscribe();
+      authStateSubscription = authClient.onAuthStateChange((newSession) => {
         if (!newSession) {
           set({ session: null, profile: null });
           return;

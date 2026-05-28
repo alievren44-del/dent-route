@@ -122,14 +122,21 @@ export class AuthClient {
   }
 
   async acceptKvkk(userId: string, version: string): Promise<void> {
-    const { error } = await this.supabase
+    const { data, error } = await this.supabase
       .from('profiles')
       .update({
         kvkk_accepted_at: new Date().toISOString(),
         kvkk_version: version,
       })
-      .eq('id', userId);
+      .eq('id', userId)
+      .select('id');
     if (error) throw new AuthError('UNKNOWN', `KVKK kaydedilemedi: ${error.message}`);
+    if (!data || data.length === 0) {
+      throw new AuthError(
+        'NOT_AUTHORIZED',
+        'Profil bulunamadı. Lütfen çıkış yapıp tekrar giriş yapın veya yöneticinizle iletişime geçin.',
+      );
+    }
   }
 
   /**

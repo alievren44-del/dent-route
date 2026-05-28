@@ -13,7 +13,7 @@
  *   - Submit: "Kaydet (taslak)" veya "Kaydet & Gönder"
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Plus, Trash2, Search, Save, Send, AlertTriangle } from 'lucide-react';
@@ -217,9 +217,16 @@ function InvoiceFormPage(): JSX.Element {
     },
   });
 
+  const submitLockRef = useRef(false);
   function submit(action: 'taslak' | 'gonderildi'): void {
+    if (submitLockRef.current || submitMutation.isPending) return;
+    submitLockRef.current = true;
     setError(null);
-    submitMutation.mutate(action);
+    submitMutation.mutate(action, {
+      onSettled: () => {
+        submitLockRef.current = false;
+      },
+    });
   }
 
   return (

@@ -7,6 +7,12 @@ import { ExpirationPlugin } from 'workbox-expiration';
 
 declare const self: ServiceWorkerGlobalScope & typeof globalThis;
 
+// Bump bu sürümü her deploy'da; eski cache'ler activate'te temizlenir.
+const SW_VERSION = 'v2';
+const NAV_CACHE = `saha-navigations-${SW_VERSION}`;
+const API_CACHE = `saha-api-${SW_VERSION}`;
+const KNOWN_CACHES = new Set([NAV_CACHE, API_CACHE]);
+
 // ─── Precache (Vite injectManifest tarafından doldurulur) ────
 precacheAndRoute(self.__WB_MANIFEST);
 
@@ -14,7 +20,7 @@ precacheAndRoute(self.__WB_MANIFEST);
 registerRoute(
   new NavigationRoute(
     new NetworkFirst({
-      cacheName: 'saha-navigations',
+      cacheName: NAV_CACHE,
       networkTimeoutSeconds: 3,
     }),
   ),
@@ -26,7 +32,7 @@ registerRoute(
     url.pathname.includes('/rest/v1/') ||
     url.pathname.includes('/functions/v1/'),
   new StaleWhileRevalidate({
-    cacheName: 'saha-api',
+    cacheName: API_CACHE,
     plugins: [
       new ExpirationPlugin({
         maxEntries: 100,
@@ -54,7 +60,21 @@ self.addEventListener('install', () => {
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(
+        keys
+          .filter(
+            (k) =>
+              !KNOWN_CACHES.has(k) &&
+              (k.startsWith('saha-navigations-') || k.startsWith('saha-api-')),
+          )
+          .map((k) => caches.delete(k)),
+      );
+      await self.clients.claim();
+    })(),
+  );
 });
 
 declare global {

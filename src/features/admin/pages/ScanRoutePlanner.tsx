@@ -68,7 +68,7 @@ interface OptimizeResult {
 interface ProfileHome {
   home_lat: number | null;
   home_lng: number | null;
-  full_name: string | null;
+  ad_soyad: string | null;
 }
 
 const AVG_SPEED_KMH = 30;
@@ -198,7 +198,7 @@ export default function ScanRoutePlanner(): JSX.Element {
         if (!userId) return;
         const { data } = await supabase
           .from('profiles')
-          .select('home_lat, home_lng, full_name')
+          .select('home_lat, home_lng, ad_soyad')
           .eq('id', userId)
           .maybeSingle();
         if (cancelled) return;
@@ -208,14 +208,14 @@ export default function ScanRoutePlanner(): JSX.Element {
         setProfileHome({
           home_lat: row?.home_lat ?? null,
           home_lng: row?.home_lng ?? null,
-          full_name: row?.full_name ?? null,
+          ad_soyad: row?.ad_soyad ?? null,
         });
-        if (!storedRepName && row?.full_name) {
-          setRepName(row.full_name);
+        if (!storedRepName && row?.ad_soyad) {
+          setRepName(row.ad_soyad);
         }
       } catch {
         // Sessiz fallback — home_lat kolonu yoksa Postgres error
-        setProfileHome({ home_lat: null, home_lng: null, full_name: null });
+        setProfileHome({ home_lat: null, home_lng: null, ad_soyad: null });
       }
     })();
     return () => {

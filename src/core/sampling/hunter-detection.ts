@@ -64,13 +64,13 @@ export async function getHunterCandidates(
     }
   }
 
-  const { data: accountRows } = await supabase
-    .from('accounts')
+  const { data: clinicRows } = await supabase
+    .from('saha_clinics')
     .select('id, name')
     .in('id', accountIds);
 
   const nameById = new Map<string, string>();
-  for (const row of (accountRows ?? []) as Array<{ id: string; name: string }>) {
+  for (const row of (clinicRows ?? []) as Array<{ id: string; name: string }>) {
     nameById.set(row.id, row.name);
   }
 

@@ -77,7 +77,7 @@ async function fetchDashboard(sinceIso: string): Promise<DashboardData> {
       .select('id, ad_soyad, email, role')
       .ilike('role', '%REP%'),
     supabase
-      .from('rep_visits')
+      .from('saha_visits')
       .select('id, rep_id')
       .gte('check_in_at', sinceIso),
     supabase

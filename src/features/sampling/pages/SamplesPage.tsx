@@ -77,8 +77,8 @@ function SamplesPage(): JSX.Element {
     queryFn: async (): Promise<number> => {
       if (!repId) return 0;
       const supabase = getSupabaseClient();
-      const cutoffMs = Date.now() + 3 * 86400000;
-      const cutoffIso = new Date(cutoffMs).toISOString();
+      // Bugün veya geçmişte takip günü gelmiş (overdue) numuneler.
+      const cutoffIso = new Date().toISOString();
       const { count, error } = await supabase
         .from('saha_samples')
         .select('id', { count: 'exact', head: true })

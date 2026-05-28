@@ -24,6 +24,8 @@ export default function KvkkConsentPage() {
       .acceptKvkk(config.legal.kvkkVersion)
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
         setSubmitting(false);
       });
   }

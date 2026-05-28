@@ -99,20 +99,47 @@ function CheckInPage(): JSX.Element {
     request();
   }, [request]);
 
-  // Müşteri verisi
+  // Müşteri verisi — önce saha_clinics (modern), sonra profiles (DOCTOR rolü) fallback.
   const accountQuery = useQuery({
     queryKey: ['checkin-account', id],
     enabled: Boolean(id),
     queryFn: async (): Promise<AccountRow | null> => {
       if (!id) return null;
-      // Profiles tablosu lat/lng kolonu içermeyebilir — defansif select.
+
+      // 1) saha_clinics — Discovery / SahaTara / Atanan rota sepete clinic id yazar.
+      const clinicRes = await supabase
+        .from('saha_clinics')
+        .select('id, name, address, lat, lng, province_slug')
+        .eq('id', id)
+        .maybeSingle();
+      if (clinicRes.data) {
+        const c = clinicRes.data as {
+          id: string;
+          name: string;
+          address: string | null;
+          lat: number | null;
+          lng: number | null;
+          province_slug: string | null;
+        };
+        return {
+          id: c.id,
+          klinik_adi: c.name,
+          ad_soyad: null,
+          email: null,
+          city: c.province_slug ?? c.address,
+          lat: c.lat,
+          lng: c.lng,
+        };
+      }
+
+      // 2) profiles fallback (DOCTOR / Parla mevcut müşterileri).
       const { data, error } = await supabase
         .from('profiles')
         .select('id, klinik_adi, ad_soyad, email, city, lat, lng')
         .eq('id', id)
         .maybeSingle();
       if (error) {
-        // lat/lng kolonu yoksa fallback (kolonsuz select)
+        // lat/lng kolonu yoksa kolonsuz select fallback.
         const fallback = await supabase
           .from('profiles')
           .select('id, klinik_adi, ad_soyad, email, city')

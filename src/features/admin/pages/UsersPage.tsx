@@ -655,7 +655,8 @@ function CreateUserModal({ onClose, onCreated }: CreateUserModalProps): JSX.Elem
                 </label>
                 <input
                   id="cu-pass"
-                  type="text"
+                  type="password"
+                  autoComplete="new-password"
                   required
                   minLength={8}
                   value={password}

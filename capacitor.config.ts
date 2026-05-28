@@ -2,14 +2,14 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.parla.saha',
-  appName: 'Parla Saha',
+  appName: 'Parla CRM',
   webDir: 'dist',
   server: {
     androidScheme: 'https',
-    // Native APK bundled webDir'ı kullanır — offline çalışır.
-    // Eğer remote URL kullanmak istersen yorum sat:
-    //   url: 'https://saha.parladisdeposu.com',
-    // (ama ağ gerektirir, saha şartlarında riskli)
+    // Remote URL — anında güncel web app, APK hafif, startup hızlı.
+    // Saha tamamen online çalışır (Supabase + Mapbox zaten ağ gerektirir),
+    // offline mod için bundled webDir'a dönmek istersen bu satırı yoruma al.
+    url: 'https://saha.parladisdeposu.com',
     cleartext: false,
     // Deep-link/OAuth callback için izinli host'lar (CapacitorHttp bypass):
     allowNavigation: [

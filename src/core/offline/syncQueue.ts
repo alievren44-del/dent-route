@@ -54,7 +54,7 @@ async function executeOp(op: OfflineOp): Promise<void> {
       return;
     }
     case 'visit.create': {
-      const { error } = await supabase.from('rep_visits').insert(op.payload);
+      const { error } = await supabase.from('saha_visits').insert(op.payload);
       if (error) throw error;
       return;
     }

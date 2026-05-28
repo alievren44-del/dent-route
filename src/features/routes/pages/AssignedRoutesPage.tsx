@@ -47,13 +47,13 @@ async function fetchAssigned(userId: string): Promise<AssignedRoute[]> {
   if (assignerIds.length > 0) {
     const { data: profs } = await supabase
       .from('profiles')
-      .select('id, email, full_name')
+      .select('id, email, ad_soyad')
       .in('id', assignerIds);
     const byId = new Map((profs ?? []).map((p: any) => [p.id, p]));
     for (const r of list) {
       if (r.assigned_by) {
         const a = byId.get(r.assigned_by);
-        if (a) r.assigner_email = a.full_name || a.email;
+        if (a) r.assigner_email = a.ad_soyad || a.email;
       }
     }
   }

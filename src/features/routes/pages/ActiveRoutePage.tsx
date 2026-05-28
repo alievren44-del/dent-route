@@ -82,46 +82,18 @@ interface RouteStopCoord {
   phone?: string;
 }
 
-interface AccountAddressJoinRow {
-  location: { type: 'Point'; coordinates: [number, number] } | null;
-  is_primary: boolean;
-}
-
-interface AccountWithAddressRow {
-  id: string;
-  name: string;
-  account_addresses: AccountAddressJoinRow[];
-}
-
 async function fetchStopCoords(accountIds: string[]): Promise<RouteStopCoord[]> {
   if (accountIds.length === 0) return [];
   const supabase = getSupabaseClient();
 
-  // Paralel iki kaynak: Parla accounts + saha_clinics. Discovery / SahaTara /
-  // DistrictAutoRoute / Corridor sepete saha_clinics.id (uuid) yazıyor;
-  // Parla'nın eski CRM rotalarında accounts.id olabilir → ikisini de dene.
-  const [accRes, clinicRes] = await Promise.all([
-    supabase
-      .from('accounts')
-      .select('id, name, account_addresses!inner(location, is_primary)')
-      .in('id', accountIds),
-    supabase
-      .from('saha_clinics')
-      .select('id, name, lat, lng, address, phone')
-      .in('id', accountIds),
-  ]);
+  // saha_clinics tek kaynak: Discovery / SahaTara / DistrictAutoRoute / Corridor
+  // sepete saha_clinics.id (uuid) yazıyor. (accounts tablosu Parla DB'de yok.)
+  const clinicRes = await supabase
+    .from('saha_clinics')
+    .select('id, name, lat, lng, address, phone')
+    .in('id', accountIds);
 
   const byId = new Map<string, RouteStopCoord>();
-  if (accRes.data) {
-    const rows = accRes.data as unknown as AccountWithAddressRow[];
-    for (const row of rows) {
-      const addrs = row.account_addresses ?? [];
-      const addr = addrs.find((a) => a.is_primary) ?? addrs[0];
-      if (!addr?.location?.coordinates) continue;
-      const [lng, lat] = addr.location.coordinates;
-      byId.set(row.id, { id: row.id, name: row.name, lat, lng });
-    }
-  }
   if (clinicRes.data) {
     for (const row of clinicRes.data as Array<{
       id: string;
