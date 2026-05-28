@@ -565,13 +565,16 @@ Deno.serve(async (req) => {
         return jsonResponse({ status: 'error', errors: ['invalid_token'] }, 401, cors);
       }
       userId = userData.user.id;
+      // ADMIN + REP/SALES_REP tarama yapabilir. Rate limit (50/gün/user)
+      // saha_api_usage tablosunda zaten var; manuel kullanıcı taramayı engeller.
       const { data: profile } = await supabase
         .from('profiles')
         .select('role')
         .eq('id', userId)
         .maybeSingle();
-      const role: string = (profile as any)?.role ?? '';
-      if (!role || role.toUpperCase() !== 'ADMIN') {
+      const role: string = ((profile as any)?.role ?? '').toUpperCase();
+      const allowed = ['ADMIN', 'REP', 'SALES_REP', 'MANAGER'].includes(role);
+      if (!allowed) {
         return jsonResponse({ status: 'error', errors: ['forbidden'] }, 403, cors);
       }
     }

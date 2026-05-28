@@ -36,6 +36,14 @@ import {
 } from '@features/routes/lib/routing-adapter';
 import { selectVariationCities, type CityVariation } from '@features/routes/lib/city-variations';
 import { RouteCard } from '@features/routes/components/RouteCard';
+import {
+  districtsAlongPolyline,
+  enrichWithScanStatus,
+  pickDistrictsToScan,
+  scanCorridorDistricts,
+  type CorridorDistrict,
+  type ScanProgress,
+} from '@features/routes/lib/corridor-enrichment';
 import type { GeocodeResult } from '@/lib/mapboxGeocode';
 
 type Profile = 'driving' | 'walking';
@@ -75,6 +83,11 @@ export default function CorridorRoutePage() {
   const [selectedRouteIdx, setSelectedRouteIdx] = useState<number>(0);
   const [computing, setComputing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // Corridor enrichment state
+  const [corridorDistricts, setCorridorDistricts] = useState<CorridorDistrict[]>([]);
+  const [enriching, setEnriching] = useState(false);
+  const [enrichProgress, setEnrichProgress] = useState<ScanProgress | null>(null);
 
   useEffect(() => {
     if (useGpsForA && geo.status === 'idle') geo.request();
@@ -210,12 +223,68 @@ export default function CorridorRoutePage() {
           0,
         )} toplam klinik)`,
       );
+
+      // Selected route'un polyline'ı için corridor district status hesapla
+      if (resolved[0]) {
+        const decoded = decodePolyline(resolved[0].geometry);
+        const nearbyDistricts = districtsAlongPolyline(decoded, {
+          maxKm: 20,
+          minPopulation: 10_000,
+        });
+        try {
+          const enriched = await enrichWithScanStatus(nearbyDistricts);
+          setCorridorDistricts(enriched);
+        } catch {
+          setCorridorDistricts(nearbyDistricts.map((d) => ({
+            ...d,
+            lastScanAt: null,
+            existingCount: 0,
+          })));
+        }
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Hesaplama hatası');
     } finally {
       setComputing(false);
     }
   }, [aCoord, bCoord, profile, provider, manualWaypoints]);
+
+  const enrichmentCandidates = useMemo(
+    () =>
+      pickDistrictsToScan(corridorDistricts, {
+        freshDays: 14,
+        minClinicThreshold: 10,
+        maxToScan: 5,
+      }),
+    [corridorDistricts],
+  );
+
+  const handleEnrich = useCallback(async () => {
+    if (enrichmentCandidates.length === 0) return;
+    setEnriching(true);
+    setEnrichProgress({
+      total: enrichmentCandidates.length,
+      done: 0,
+      currentDistrict: null,
+      scannedClinics: 0,
+      newClinics: 0,
+      errors: [],
+    });
+    try {
+      const result = await scanCorridorDistricts(enrichmentCandidates, (p) => {
+        setEnrichProgress({ ...p });
+      });
+      toast.success(
+        `${result.newClinics} yeni klinik eklendi (${result.done}/${result.total} ilçe tarandı)`,
+      );
+      // Rotaları yeniden hesapla → güncel klinik listesi
+      await handleCompute();
+    } catch (e) {
+      toast.error(`Zenginleştirme hatası: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setEnriching(false);
+    }
+  }, [enrichmentCandidates, handleCompute]);
 
   const selectedRoute = routes[selectedRouteIdx] ?? null;
 
@@ -508,6 +577,49 @@ export default function CorridorRoutePage() {
         ref={containerRef}
         className="h-[360px] w-full overflow-hidden rounded-xl border border-slate-200"
       />
+
+      {/* Corridor enrichment panel — taranmamış ilçeleri Google'dan zenginleştir */}
+      {routes.length > 0 && enrichmentCandidates.length > 0 && (
+        <section className="rounded-xl border border-purple-200 bg-purple-50 p-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-purple-900">
+            Veri tabanını zenginleştir
+          </h2>
+          <p className="mt-1 text-xs text-purple-800">
+            Bu rotada henüz taranmamış {enrichmentCandidates.length} ilçe var. Google Places'tan
+            hekim listesi çekilerek DB güçlendirilebilir.
+          </p>
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {enrichmentCandidates.slice(0, 5).map((d) => (
+              <span
+                key={`${d.provinceSlug}-${d.districtSlug}`}
+                className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-purple-700 border border-purple-200"
+              >
+                {d.districtName}
+                {d.existingCount > 0 ? ` (${d.existingCount})` : ' (yeni)'}
+              </span>
+            ))}
+          </div>
+          {enrichProgress && enriching && (
+            <div className="mt-2 rounded bg-white p-2 text-[11px] text-purple-900">
+              <div className="font-semibold">
+                Tarama: {enrichProgress.done}/{enrichProgress.total}
+                {enrichProgress.currentDistrict ? ` — ${enrichProgress.currentDistrict}` : ''}
+              </div>
+              <div className="mt-0.5 text-purple-700">
+                {enrichProgress.newClinics} yeni klinik · {enrichProgress.scannedClinics} taranan
+              </div>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => void handleEnrich()}
+            disabled={enriching}
+            className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-700 disabled:opacity-60"
+          >
+            {enriching ? 'Taranıyor…' : `${enrichmentCandidates.length} ilçeyi tara`}
+          </button>
+        </section>
+      )}
 
       {routes.length > 0 && (
         <section className="space-y-2">
