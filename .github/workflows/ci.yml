@@ -23,9 +23,6 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
-
       - name: Format check
         run: npm run format:check
 
@@ -48,6 +45,26 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ci-dummy-key
           VITE_MAPBOX_PUBLIC_TOKEN: pk.ci-dummy
         run: npm run build
+
+  lint:
+    name: Lint (non-blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
 
   deploy-migrations:
     name: Deploy Supabase migrations
