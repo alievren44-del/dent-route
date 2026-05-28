@@ -1,25 +1,26 @@
 // deno-lint-ignore-file
 // ============================================================================
-// google-directions — Google Maps Directions API wrapper (fallback provider)
+// google-directions — Google Routes API v2 wrapper (legacy Directions yerine)
 // ============================================================================
-// Mapbox alternatif yetersiz kalırsa user veya sistem Google'a switch eder.
-// Mapbox ile aynı response shape döner — frontend RoutingAdapter swap eder.
+// Legacy Directions API kapalı; Google "Routes API" (computeRoutes) kullanıyor.
+// POST https://routes.googleapis.com/directions/v2:computeRoutes
+// Header: X-Goog-FieldMask zorunlu (cost optimization)
 //
 // Body: {
-//   coords: [{lat,lng}, ...],            // start + (waypoints) + end
+//   coords: [{lat,lng}, ...],     // 1. = origin, son = destination, ara = waypoints
 //   profile?: 'driving'|'walking',
-//   alternatives?: boolean,              // default true
+//   alternatives?: boolean,        // default true
 // }
 //
 // Resp: {
 //   status: 'ok' | 'error',
-//   geometry: encoded polyline,         // ana rota
+//   geometry: encoded polyline,
 //   distanceM, durationS,
-//   routes: [{ geometry, distanceM, durationS }]  // 1-3 alternatif
+//   routes: [{ geometry, distanceM, durationS }]
 // }
 //
-// Auth: kullanıcı JWT zorunlu. Rate limit: 50/gün/user.
-// Secret: GOOGLE_DIRECTIONS_API_KEY
+// Secret: GOOGLE_DIRECTIONS_API_KEY (Routes API enabled olmalı GCP Console'da)
+// Rate limit: 50/gün/user (saha_api_usage)
 // ============================================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
@@ -69,8 +70,8 @@ function isValidCoord(n: unknown): n is number {
   return typeof n === 'number' && Number.isFinite(n);
 }
 
-function googleMode(p: Profile): string {
-  return p === 'walking' ? 'walking' : 'driving';
+function googleTravelMode(p: Profile): string {
+  return p === 'walking' ? 'WALK' : 'DRIVE';
 }
 
 Deno.serve(async (req) => {
@@ -145,69 +146,73 @@ Deno.serve(async (req) => {
     }
     const profile: Profile =
       body.profile && ['driving', 'walking'].includes(body.profile) ? body.profile : 'driving';
-    const wantAlts = body.alternatives !== false; // default true
+    const wantAlts = body.alternatives !== false;
 
-    // Google Maps Directions API
-    const origin = `${coords[0]!.lat},${coords[0]!.lng}`;
-    const destination = `${coords[coords.length - 1]!.lat},${coords[coords.length - 1]!.lng}`;
-    const waypoints =
-      coords.length > 2
-        ? coords
-            .slice(1, -1)
-            .map((c) => `${c.lat},${c.lng}`)
-            .join('|')
-        : '';
+    // Google Routes API request body (v2)
+    const origin = coords[0]!;
+    const destination = coords[coords.length - 1]!;
+    const intermediates = coords.slice(1, -1);
 
-    const params = new URLSearchParams();
-    params.set('origin', origin);
-    params.set('destination', destination);
-    params.set('mode', googleMode(profile));
-    params.set('alternatives', wantAlts ? 'true' : 'false');
-    params.set('language', 'tr');
-    params.set('region', 'tr');
-    if (waypoints) params.set('waypoints', waypoints);
-    params.set('key', GOOGLE_API_KEY);
+    const requestBody: any = {
+      origin: {
+        location: { latLng: { latitude: origin.lat, longitude: origin.lng } },
+      },
+      destination: {
+        location: { latLng: { latitude: destination.lat, longitude: destination.lng } },
+      },
+      travelMode: googleTravelMode(profile),
+      routingPreference: profile === 'driving' ? 'TRAFFIC_AWARE' : undefined,
+      computeAlternativeRoutes: wantAlts,
+      polylineEncoding: 'ENCODED_POLYLINE',
+      languageCode: 'tr',
+      regionCode: 'TR',
+    };
+    if (intermediates.length > 0) {
+      requestBody.intermediates = intermediates.map((c) => ({
+        location: { latLng: { latitude: c.lat, longitude: c.lng } },
+      }));
+    }
 
-    const url = `https://maps.googleapis.com/maps/api/directions/json?${params.toString()}`;
-    const resp = await fetch(url);
+    const fieldMask = 'routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline';
+
+    const resp = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_API_KEY,
+        'X-Goog-FieldMask': fieldMask,
+      },
+      body: JSON.stringify(requestBody),
+    });
+
     if (!resp.ok) {
       const errText = await resp.text().catch(() => '');
       return jsonResponse(
-        { status: 'error', error: `google_http_${resp.status}`, message: errText.slice(0, 200) },
+        { status: 'error', error: `google_http_${resp.status}`, message: errText.slice(0, 400) },
         500,
         cors,
       );
     }
     const json: any = await resp.json();
-    if (json?.status !== 'OK' || !Array.isArray(json?.routes) || json.routes.length === 0) {
+    if (!Array.isArray(json?.routes) || json.routes.length === 0) {
       return jsonResponse(
         {
           status: 'error',
-          error: `google_${json?.status ?? 'unknown'}`,
-          message: json?.error_message ?? '',
+          error: 'google_no_routes',
+          message: JSON.stringify(json).slice(0, 300),
         },
         500,
         cors,
       );
     }
 
-    // Google encoded polyline: routes[*].overview_polyline.points
-    // Distance + duration: routes[*].legs[*].distance.value + .duration.value (toplam)
-    function sumLegs(legs: any[]): { distanceM: number; durationS: number } {
-      let d = 0;
-      let s = 0;
-      for (const l of legs ?? []) {
-        d += l?.distance?.value ?? 0;
-        s += l?.duration?.value ?? 0;
-      }
-      return { distanceM: d, durationS: s };
-    }
-
     const allRoutes = (json.routes as any[]).map((r) => {
-      const { distanceM, durationS } = sumLegs(r.legs);
+      // duration format: "1234s" (string with 's' suffix)
+      const durStr: string = r.duration ?? '0s';
+      const durationS = Number.parseInt(durStr.replace(/[^\d]/g, ''), 10) || 0;
       return {
-        geometry: r.overview_polyline?.points ?? '',
-        distanceM,
+        geometry: r.polyline?.encodedPolyline ?? '',
+        distanceM: r.distanceMeters ?? 0,
         durationS,
       };
     });

@@ -95,32 +95,74 @@ export async function computeRouteAlternatives(opts: {
     viaCity: null,
   }));
 
-  // 2. Manuel waypoint'ler — kullanıcı belirlediği şehirler
   const manual = opts.manualWaypoints ?? [];
-  // 3. Otomatik variation şehirleri (manuel + auto union, dedup by slug)
-  const autoOn = opts.autoVariations !== false;
-  const autoCities = autoOn ? selectVariationCities(opts.a, opts.b, { maxCities: 4 }) : [];
-  const allWp = uniqueBySlug([...manual, ...autoCities]);
 
-  // 4. Her waypoint için ayrı Mapbox call (parallel, ama hız nedeniyle 3'er batch)
-  const wpResults = await Promise.allSettled(
-    allWp.slice(0, 6).map(async (city) => {
+  // 2. Manuel waypoint'ler — KULLANICI ÖZEL:
+  //    - 2+ waypoint → TEK rota hepsini gezsin (A→W1→W2→...→B)
+  //    - 1 waypoint → tek variation (A→W1→B)
+  //    Auto variations ek olarak devam (Mapbox provider only)
+  if (manual.length >= 2) {
+    try {
+      const coords: LatLng[] = [
+        opts.a,
+        ...manual.map((w) => ({ lat: w.lat, lng: w.lng })),
+        opts.b,
+      ];
+      const routes = await invokeMapbox(supabase, coords, profile, false);
+      if (routes.length > 0) {
+        const label = manual.map((w) => w.name).join(' → ');
+        collected.push({
+          ...routes[0]!,
+          provider: 'mapbox',
+          viaCity: { slug: 'combined', name: label, lat: manual[0]!.lat, lng: manual[0]!.lng, nufus: 0, approxExtraKm: 0 },
+        });
+      }
+    } catch {
+      /* yutulur */
+    }
+  } else if (manual.length === 1) {
+    try {
+      const city = manual[0]!;
       const routes = await invokeMapbox(
         supabase,
         [opts.a, { lat: city.lat, lng: city.lng }, opts.b],
         profile,
-        false, // waypoint'li alternatif Mapbox'ta zaten zorlama
+        false,
       );
-      return { city, routes };
-    }),
-  );
+      if (routes.length > 0) {
+        collected.push({ ...routes[0]!, provider: 'mapbox', viaCity: city });
+      }
+    } catch {
+      /* yutulur */
+    }
+  }
 
-  for (const r of wpResults) {
-    if (r.status !== 'fulfilled') continue;
-    const { city, routes } = r.value;
-    if (routes.length === 0) continue;
-    // Sadece ilk (en kısa) varyasyon
-    collected.push({ ...routes[0]!, provider: 'mapbox', viaCity: city });
+  // 3. Otomatik variation şehirleri (her biri ayrı A→C→B varyasyonu)
+  const autoOn = opts.autoVariations !== false;
+  if (autoOn) {
+    const autoCities = selectVariationCities(opts.a, opts.b, { maxCities: 4 });
+    // Manuel waypoint'lerle çakışanları çıkar
+    const manualSlugs = new Set(manual.map((m) => m.slug));
+    const autoFiltered = autoCities.filter((c) => !manualSlugs.has(c.slug));
+
+    const wpResults = await Promise.allSettled(
+      autoFiltered.slice(0, 4).map(async (city) => {
+        const routes = await invokeMapbox(
+          supabase,
+          [opts.a, { lat: city.lat, lng: city.lng }, opts.b],
+          profile,
+          false,
+        );
+        return { city, routes };
+      }),
+    );
+
+    for (const r of wpResults) {
+      if (r.status !== 'fulfilled') continue;
+      const { city, routes } = r.value;
+      if (routes.length === 0) continue;
+      collected.push({ ...routes[0]!, provider: 'mapbox', viaCity: city });
+    }
   }
 
   // 5. Similarity filter — birbirine çok yakın olanları ele
@@ -158,17 +200,6 @@ async function invokeMapbox(
     ];
   }
   return [];
-}
-
-function uniqueBySlug(cities: CityVariation[]): CityVariation[] {
-  const seen = new Set<string>();
-  const out: CityVariation[] = [];
-  for (const c of cities) {
-    if (seen.has(c.slug)) continue;
-    seen.add(c.slug);
-    out.push(c);
-  }
-  return out;
 }
 
 function dedupBySimilarity(routes: RouteOption[], thresholdKm: number): RouteOption[] {
