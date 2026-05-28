@@ -235,7 +235,9 @@ export async function scanCorridorDistricts(
           provinceSlug: d.provinceSlug,
           districtSlug: d.districtSlug,
           vertical: 'dental',
-          source: 'google',
+          // 'all' = DoktorTakvimi scrape + Google Places (NearbySearch + TextSearch
+          // keyword) + OSM. DoktorTakvimi hekim listesi konuma göre reverse-lookup.
+          source: 'all',
           intensity: 'standard',
           includeKamu: true,
           dryRun: false,

@@ -156,7 +156,14 @@ export async function runTrSeed(
           provinceSlug: city.province,
           districtSlug: city.district,
           vertical: 'dental',
-          source: 'google',
+          // 'all' = DoktorTakvimi scrape + Google Places + OSM. Tarama akışı:
+          // 1) DoktorTakvimi hekim listesi (konum + spesifik isim)
+          // 2) Her hekim için Google reverse-lookup (Place ID match)
+          // 3) NearbySearch grid × keyword
+          // 4) TextSearch ("X ilinde diş kliniği" gibi)
+          // 5) OSM nearby dental
+          // 6) Dedup + filter (FORBIDDEN/REQUIRED/KAMU keywords)
+          source: 'all',
           intensity: city.intensity,
           includeKamu: true,
           dryRun: false,
