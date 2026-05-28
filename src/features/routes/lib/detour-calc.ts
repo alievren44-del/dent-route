@@ -112,20 +112,50 @@ export function adaptiveCorridorParams(routeKm: number): {
   detourKmMax: number;
   detourMinMax: number;
   limit: number;
+  /** A ve B noktasının bu km'lik yarıçapı içindeki klinikleri ele (origin/destination zone) */
+  excludeStartEndKm: number;
 } {
-  // Sıkı filter: detour rota uzunluğunun %5'ini geçemez (min/max bandıyla).
-  // Buffer = detour × ~1.5 (yarım sapma haversine için).
   if (routeKm < 30) {
-    return { bufferM: 800, detourKmMax: 1.5, detourMinMax: 4, limit: 25 };
+    return {
+      bufferM: 800,
+      detourKmMax: 1.5,
+      detourMinMax: 4,
+      limit: 25,
+      excludeStartEndKm: 0.5,
+    };
   }
   if (routeKm < 100) {
-    return { bufferM: 2500, detourKmMax: 4, detourMinMax: 8, limit: 60 };
+    return {
+      bufferM: 2500,
+      detourKmMax: 4,
+      detourMinMax: 8,
+      limit: 60,
+      excludeStartEndKm: 3,
+    };
   }
   if (routeKm < 300) {
-    return { bufferM: 6000, detourKmMax: 10, detourMinMax: 15, limit: 120 };
+    return {
+      bufferM: 4500,
+      detourKmMax: 8,
+      detourMinMax: 12,
+      limit: 100,
+      excludeStartEndKm: 10,
+    };
   }
   if (routeKm < 600) {
-    return { bufferM: 12000, detourKmMax: 20, detourMinMax: 25, limit: 200 };
+    return {
+      bufferM: 7000,
+      detourKmMax: 15,
+      detourMinMax: 20,
+      limit: 140,
+      excludeStartEndKm: 20,
+    };
   }
-  return { bufferM: 20000, detourKmMax: 30, detourMinMax: 35, limit: 300 };
+  return {
+    bufferM: 10000,
+    detourKmMax: 20,
+    detourMinMax: 30,
+    limit: 180,
+    excludeStartEndKm: 30,
+  };
 }

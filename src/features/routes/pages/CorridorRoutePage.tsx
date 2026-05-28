@@ -25,6 +25,7 @@ import { decodePolyline } from '@/lib/polyline';
 import {
   computeDetourFromPolyline,
   adaptiveCorridorParams,
+  haversineKm,
 } from '@features/routes/lib/detour-calc';
 import {
   computeRouteAlternatives,
@@ -172,6 +173,17 @@ export default function CorridorRoutePage() {
 
         const enriched: Candidate[] = [];
         for (const c of rawList) {
+          // Başlangıç + bitiş zone'larındaki klinikleri ele — rota başında
+          // değil yol üstünde olanlar lazım.
+          if (aCoord && params.excludeStartEndKm > 0) {
+            const dA = haversineKm({ lat: c.lat, lng: c.lng }, aCoord);
+            if (dA < params.excludeStartEndKm) continue;
+          }
+          if (bCoord && params.excludeStartEndKm > 0) {
+            const dB = haversineKm({ lat: c.lat, lng: c.lng }, bCoord);
+            if (dB < params.excludeStartEndKm) continue;
+          }
+
           const { distanceKm, durationMin } = computeDetourFromPolyline(
             { lat: c.lat, lng: c.lng },
             decoded,
