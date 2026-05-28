@@ -9,7 +9,7 @@
  */
 
 import { readdirSync, statSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
 import process from 'node:process';
 
 const ROOT = resolve(import.meta.dirname ?? process.cwd(), '..');
@@ -22,6 +22,8 @@ const EXCLUDED_DIRS = new Set([
   '.github',
   'coverage',
   '.supabase',
+  'android',
+  'ios',
 ]);
 
 const EXCLUDED_FILES = new Set([
@@ -47,7 +49,7 @@ function walk(dir: string) {
       walk(full);
     } else if (!EXCLUDED_FILES.has(entry)) {
       const list = fileMap.get(entry) ?? [];
-      list.push(full.replace(ROOT + '/', ''));
+      list.push(relative(ROOT, full).replace(/\\/g, '/'));
       fileMap.set(entry, list);
     }
   }
@@ -55,7 +57,24 @@ function walk(dir: string) {
 
 walk(ROOT);
 
-const duplicates = Array.from(fileMap.entries()).filter(([, paths]) => paths.length > 1);
+const SUPABASE_FN_RE = /^supabase\/functions\/[^/]+\//;
+
+// Master in src/data, isolated copies in each supabase/function/<fn>/ (Deno runtime, no shared imports).
+const SHARED_SUPABASE_FN_FILES = new Set([
+  'districts.json',
+  'provinces.json',
+  'dedup.ts',
+]);
+
+const duplicates = Array.from(fileMap.entries()).filter(([name, paths]) => {
+  if (paths.length < 2) return false;
+  if (paths.every((p) => SUPABASE_FN_RE.test(p))) return false;
+  if (SHARED_SUPABASE_FN_FILES.has(name)) {
+    const nonFn = paths.filter((p) => !SUPABASE_FN_RE.test(p));
+    if (nonFn.length <= 1) return false;
+  }
+  return true;
+});
 
 if (duplicates.length === 0) {
   console.log('✅ Duplicate dosya tespit edilmedi.');
