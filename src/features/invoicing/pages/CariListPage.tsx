@@ -411,12 +411,14 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
         .in('role', ['REP', 'SALES_REP', 'ADMIN', 'MANAGER'])
         .order('ad_soyad', { ascending: true });
       if (err) throw err;
-      return ((data ?? []) as Array<{
-        id: string;
-        ad_soyad: string | null;
-        email: string | null;
-        role: string;
-      }>).map((r) => ({
+      return (
+        (data ?? []) as Array<{
+          id: string;
+          ad_soyad: string | null;
+          email: string | null;
+          role: string;
+        }>
+      ).map((r) => ({
         id: r.id,
         label: r.ad_soyad?.trim() || r.email || r.id.slice(0, 8),
         role: r.role,

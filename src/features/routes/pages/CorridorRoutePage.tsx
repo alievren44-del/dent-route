@@ -296,8 +296,8 @@ export default function CorridorRoutePage() {
       <header>
         <h1 className="text-2xl font-semibold">Yol Üstü Klinik Önerileri</h1>
         <p className="text-sm text-slate-600">
-          A → B rotanı çiz, yolda uğrayabileceğin klinikleri gör. Detour limiti rota uzunluğuna
-          göre otomatik ayarlanır (kısa rotada sıkı, uzun rotada gevşek).
+          A → B rotanı çiz, yolda uğrayabileceğin klinikleri gör. Detour limiti rota uzunluğuna göre
+          otomatik ayarlanır (kısa rotada sıkı, uzun rotada gevşek).
         </p>
       </header>
 

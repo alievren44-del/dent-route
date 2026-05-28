@@ -237,7 +237,14 @@ export default function SahaTaraPage() {
       if (found) return { lat: found.lat, lng: found.lng };
     }
     return null;
-  }, [locationMode, geo.position, manualProvince, manualDistrict, selectedNeighborhood, neighborhoods]);
+  }, [
+    locationMode,
+    geo.position,
+    manualProvince,
+    manualDistrict,
+    selectedNeighborhood,
+    neighborhoods,
+  ]);
 
   // Mahalle seçiliyse 1.5km sabit (mahalle ölçeği). Aksi halde ilçe nüfusu.
   const dynamicRadius = useMemo(() => {
