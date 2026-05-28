@@ -350,13 +350,33 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       throw new AdapterError('UNKNOWN', error.message, { originalError: error });
     }
 
+    type OrderItemRow = {
+      product_id: string | null;
+      product_name?: string | null;
+      quantity: number | null;
+      unit_price: number | null;
+      line_total: number | null;
+    };
+    type OrderRow = {
+      id: string;
+      order_number: string | null;
+      user_id: string;
+      status: string;
+      total: number | null;
+      total_amount: number | null;
+      notes: string | null;
+      sales_rep_id: string | null;
+      created_at: string;
+      order_items: OrderItemRow[] | null;
+    };
+
     return {
-      items: (data ?? []).map((r: any) => ({
+      items: (data ?? []).map((r: OrderRow) => ({
         id: r.id,
         externalId: r.order_number ?? undefined,
         customerId: r.user_id,
         status: mapOrderStatus(r.status),
-        items: (r.order_items ?? []).map((li: any) => ({
+        items: (r.order_items ?? []).map((li: OrderItemRow) => ({
           productId: li.product_id ?? undefined,
           productName: String(li.product_name ?? li.product_id ?? 'Ürün'),
           quantity: Number(li.quantity ?? 0),
@@ -389,13 +409,32 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       throw AdapterError.notFound('Order', id);
     }
 
-    const r = data as any;
+    type OrderItemRow = {
+      product_id: string | null;
+      product_name?: string | null;
+      quantity: number | null;
+      unit_price: number | null;
+      line_total: number | null;
+    };
+    type OrderRow = {
+      id: string;
+      order_number: string | null;
+      user_id: string;
+      status: string;
+      total: number | null;
+      total_amount: number | null;
+      notes: string | null;
+      sales_rep_id: string | null;
+      created_at: string;
+      order_items: OrderItemRow[] | null;
+    };
+    const r = data as OrderRow;
     return {
       id: r.id,
       externalId: r.order_number ?? undefined,
       customerId: r.user_id,
       status: mapOrderStatus(r.status),
-      items: (r.order_items ?? []).map((li: any) => ({
+      items: (r.order_items ?? []).map((li: OrderItemRow) => ({
         productId: li.product_id ?? undefined,
         productName: String(li.product_name ?? li.product_id ?? 'Ürün'),
         quantity: Number(li.quantity ?? 0),
@@ -540,8 +579,22 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       throw new AdapterError('UNKNOWN', error.message, { originalError: error });
     }
 
+    type ProductRow = {
+      id: string;
+      sku: string | null;
+      name: string;
+      description: string | null;
+      category_id: string | null;
+      base_price: number | null;
+      sale_price: number | null;
+      currency: string | null;
+      stock_quantity: number | null;
+      is_active: boolean | null;
+      main_image: string | null;
+    };
+
     return {
-      items: (data ?? []).map((r: any) => ({
+      items: (data ?? []).map((r: ProductRow) => ({
         id: r.id,
         sku: r.sku ?? undefined,
         name: r.name,
@@ -574,7 +627,20 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       throw AdapterError.notFound('Product', id);
     }
 
-    const r = data as any;
+    type ProductRow = {
+      id: string;
+      sku: string | null;
+      name: string;
+      description: string | null;
+      category_id: string | null;
+      base_price: number | null;
+      sale_price: number | null;
+      currency: string | null;
+      stock_quantity: number | null;
+      is_active: boolean | null;
+      main_image: string | null;
+    };
+    const r = data as ProductRow;
     return {
       id: r.id,
       sku: r.sku ?? undefined,
@@ -605,7 +671,20 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       throw new AdapterError('UNKNOWN', error.message, { originalError: error });
     }
 
-    return (data ?? []).map((r: any) => ({
+    type ProductRow = {
+      id: string;
+      sku: string | null;
+      name: string;
+      description: string | null;
+      category_id: string | null;
+      base_price: number | null;
+      sale_price: number | null;
+      currency: string | null;
+      stock_quantity: number | null;
+      is_active: boolean | null;
+      main_image: string | null;
+    };
+    return (data ?? []).map((r: ProductRow) => ({
       id: r.id,
       sku: r.sku ?? undefined,
       name: r.name,

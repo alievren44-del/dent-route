@@ -82,7 +82,7 @@ export default function CollectionListPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rep-collections'] });
+      void queryClient.invalidateQueries({ queryKey: ['rep-collections'] });
       setShowForm(false);
       setForm(INITIAL_FORM);
       toast.success('Tahsilat kaydedildi');

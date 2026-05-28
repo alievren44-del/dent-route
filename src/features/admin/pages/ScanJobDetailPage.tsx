@@ -242,7 +242,7 @@ export default function ScanJobDetailPage() {
       {jobQuery.isLoading && <div className="text-sm text-muted-foreground">Job yükleniyor…</div>}
       {jobQuery.isError && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-          Job yüklenemedi: {(jobQuery.error as Error)?.message ?? 'unknown'}
+          Job yüklenemedi: {jobQuery.error?.message ?? 'unknown'}
         </div>
       )}
 

@@ -42,14 +42,22 @@ async function searchClinics(query: string): Promise<ClinicResult[]> {
     .ilike('name', `%${query.trim()}%`)
     .limit(6);
   if (error || !Array.isArray(data)) return [];
-  return data.map((c: any) => ({
-    kind: 'clinic' as const,
-    name: String(c.name),
-    lat: Number(c.lat),
-    lng: Number(c.lng),
-    address: c.address ?? null,
-    clinic_segment: c.clinic_segment === 'kamu' ? 'kamu' : 'private',
-  }));
+  return data.map(
+    (c: {
+      name: unknown;
+      lat: unknown;
+      lng: unknown;
+      address: string | null;
+      clinic_segment: unknown;
+    }) => ({
+      kind: 'clinic' as const,
+      name: String(c.name),
+      lat: Number(c.lat),
+      lng: Number(c.lng),
+      address: c.address ?? null,
+      clinic_segment: c.clinic_segment === 'kamu' ? 'kamu' : 'private',
+    }),
+  );
 }
 
 export function AddressSearchInput({ placeholder, value, onChange, proximity }: Props) {
@@ -69,27 +77,29 @@ export function AddressSearchInput({ placeholder, value, onChange, proximity }: 
       setResults([]);
       return;
     }
-    debounce.current = window.setTimeout(async () => {
-      setLoading(true);
-      try {
-        // Paralel: DB klinik + Mapbox adres
-        const [clinics, addresses] = await Promise.all([
-          searchClinics(text),
-          mapboxGeocode(text, {
-            proximity: proximity ? [proximity.lng, proximity.lat] : undefined,
-          }).catch(() => [] as GeocodeResult[]),
-        ]);
-        const combined: SearchResult[] = [
-          ...clinics,
-          ...addresses.slice(0, 4).map((a) => ({ kind: 'address' as const, result: a })),
-        ];
-        setResults(combined);
-        setOpen(true);
-      } catch {
-        setResults([]);
-      } finally {
-        setLoading(false);
-      }
+    debounce.current = window.setTimeout(() => {
+      void (async () => {
+        setLoading(true);
+        try {
+          // Paralel: DB klinik + Mapbox adres
+          const [clinics, addresses] = await Promise.all([
+            searchClinics(text),
+            mapboxGeocode(text, {
+              proximity: proximity ? [proximity.lng, proximity.lat] : undefined,
+            }).catch(() => [] as GeocodeResult[]),
+          ]);
+          const combined: SearchResult[] = [
+            ...clinics,
+            ...addresses.slice(0, 4).map((a) => ({ kind: 'address' as const, result: a })),
+          ];
+          setResults(combined);
+          setOpen(true);
+        } catch {
+          setResults([]);
+        } finally {
+          setLoading(false);
+        }
+      })();
     }, 350);
     return () => {
       if (debounce.current) window.clearTimeout(debounce.current);

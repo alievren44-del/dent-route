@@ -61,11 +61,12 @@ async function fetchAssigned(userId: string): Promise<AssignedRoute[]> {
       .from('profiles')
       .select('id, email, ad_soyad')
       .in('id', assignerIds);
-    const byId = new Map((profs ?? []).map((p: any) => [p.id, p]));
+    type ProfileRow = { id: string; email: string | null; ad_soyad: string | null };
+    const byId = new Map((profs ?? []).map((p: ProfileRow) => [p.id, p]));
     for (const r of list) {
       if (r.assigned_by) {
         const a = byId.get(r.assigned_by);
-        if (a) r.assigner_email = a.ad_soyad || a.email;
+        if (a) r.assigner_email = a.ad_soyad ?? a.email ?? undefined;
       }
     }
   }
@@ -93,7 +94,7 @@ export default function AssignedRoutesPage() {
           .eq('id', routeId);
         if (error) throw error;
         toast.success('Rota kabul edildi');
-        queryClient.invalidateQueries({ queryKey: ['assigned-routes'] });
+        void queryClient.invalidateQueries({ queryKey: ['assigned-routes'] });
         navigate(`/routes/active/${routeId}`);
       } catch (e) {
         toast.error(`Hata: ${e instanceof Error ? e.message : String(e)}`);
@@ -113,7 +114,7 @@ export default function AssignedRoutesPage() {
           .eq('id', routeId);
         if (error) throw error;
         toast.success('Rota reddedildi');
-        queryClient.invalidateQueries({ queryKey: ['assigned-routes'] });
+        void queryClient.invalidateQueries({ queryKey: ['assigned-routes'] });
       } catch (e) {
         toast.error(`Hata: ${e instanceof Error ? e.message : String(e)}`);
       }

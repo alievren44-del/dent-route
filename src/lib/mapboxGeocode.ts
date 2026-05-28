@@ -66,10 +66,8 @@ function pickContext(ctx: MapboxContextEntry[], prefix: string): string | undefi
 
 function featureToResult(f: MapboxFeature): GeocodeResult {
   const ctx: MapboxContextEntry[] = Array.isArray(f.context) ? f.context : [];
-  const center = (Array.isArray(f.center) && f.center.length === 2 ? f.center : [0, 0]) as [
-    number,
-    number,
-  ];
+  const center: [number, number] =
+    Array.isArray(f.center) && f.center.length === 2 ? f.center : [0, 0];
   const [lng, lat] = center;
   return {
     id: String(f.id ?? ''),

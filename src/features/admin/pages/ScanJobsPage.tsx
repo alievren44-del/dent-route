@@ -62,11 +62,11 @@ function scopeLabel(row: ScanJobRow): string {
   const p = row.scope_params ?? {};
   switch (row.scope_type) {
     case 'single_district':
-      return `Tek İlçe: ${String((p as Record<string, unknown>).province ?? '?')} / ${String((p as Record<string, unknown>).district ?? '?')}`;
+      return `Tek İlçe: ${String(p.province ?? '?')} / ${String(p.district ?? '?')}`;
     case 'whole_province':
-      return `Tüm İl: ${String((p as Record<string, unknown>).province ?? '?')}`;
+      return `Tüm İl: ${String(p.province ?? '?')}`;
     case 'region':
-      return `Bölge: ${String((p as Record<string, unknown>).region ?? '?')}`;
+      return `Bölge: ${String(p.region ?? '?')}`;
     case 'whole_country':
       return 'Türkiye (973 ilçe)';
     default:
@@ -208,7 +208,7 @@ export default function ScanJobsPage({ embedded = false }: ScanJobsPageProps = {
 
       {jobsQuery.isError && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-          Job'lar yüklenemedi: {(jobsQuery.error as Error)?.message ?? 'unknown'}
+          Job'lar yüklenemedi: {jobsQuery.error?.message ?? 'unknown'}
         </div>
       )}
 

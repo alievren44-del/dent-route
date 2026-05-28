@@ -52,7 +52,7 @@ interface ImportSummary {
 
 function parseCsv(text: string): ParsedCsv {
   const lines = text
-    .replace(/^﻿/, '')
+    .replace(new RegExp('^\\uFEFF'), '')
     .split(/\r?\n/)
     .filter((l) => l.trim().length > 0);
   if (lines.length === 0) return { headers: [], rows: [] };
@@ -273,7 +273,9 @@ function UserCsvImport() {
           <button
             type="button"
             disabled={!canImport}
-            onClick={handleImport}
+            onClick={() => {
+              void handleImport();
+            }}
             className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             {importing ? (

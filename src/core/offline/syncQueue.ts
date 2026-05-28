@@ -11,7 +11,7 @@ export async function enqueueOp(opType: OpType, payload: Record<string, unknown>
     retryCount: 0,
     status: 'pending',
   });
-  return id as number;
+  return id;
 }
 
 export async function listPending(): Promise<OfflineOp[]> {

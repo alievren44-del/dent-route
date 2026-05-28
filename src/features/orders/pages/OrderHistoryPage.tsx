@@ -241,7 +241,10 @@ function OrderHistoryPage(): JSX.Element {
         return q;
       };
 
-      let { data: rows, error, count } = await buildQuery(baseSelect);
+      const initial = await buildQuery(baseSelect);
+      const { error } = initial;
+      let rows = initial.data;
+      let count = initial.count;
       if (error) {
         // FK alias hatası olursa sade select ile dene
         const fallback = await buildQuery(

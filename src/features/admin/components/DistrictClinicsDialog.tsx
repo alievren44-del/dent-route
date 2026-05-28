@@ -282,7 +282,6 @@ export default function DistrictClinicsDialog({
   // ───────────────────────────────────────────────────────────────────────
 
   async function handleDelete(clinic: SahaClinicRow): Promise<void> {
-    // eslint-disable-next-line no-alert
     if (!window.confirm(`"${clinic.name}" silinsin mi?`)) return;
     setDeletingId(clinic.id);
     const supabase = getSupabaseClient();
@@ -311,7 +310,7 @@ export default function DistrictClinicsDialog({
       toast.success('Silindi');
       // Local refetch + parent invalidation
       await refetch();
-      queryClient.invalidateQueries({ queryKey: ['clinic-scan-stats'] });
+      void queryClient.invalidateQueries({ queryKey: ['clinic-scan-stats'] });
       onChanged?.();
     } catch (e) {
       toast.error(`Silinemedi: ${(e as Error)?.message ?? 'bilinmeyen hata'}`);

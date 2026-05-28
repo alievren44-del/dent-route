@@ -121,7 +121,7 @@ export default function TaskListPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rep-tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ['rep-tasks'] });
       setShowForm(false);
       setForm(INITIAL_FORM);
       toast.success('Görev eklendi');
@@ -145,7 +145,7 @@ export default function TaskListPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rep-tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ['rep-tasks'] });
       toast.success('Görev silindi');
     },
   });

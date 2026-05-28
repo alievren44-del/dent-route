@@ -124,7 +124,7 @@ export default function RegionAssignmentPage() {
     },
     onSuccess: () => {
       if (selectedRepId) {
-        queryClient.invalidateQueries({
+        void queryClient.invalidateQueries({
           queryKey: ['admin', 'region-assignment', 'assignment', selectedRepId],
         });
       }

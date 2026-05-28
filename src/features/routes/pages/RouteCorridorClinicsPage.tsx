@@ -68,6 +68,7 @@ export default function RouteCorridorClinicsPage() {
   const [assignOpen, setAssignOpen] = useState(false);
   const basketAdd = useRouteBasket((s) => s.add);
   const basketItems = useRouteBasket((s) => s.items);
+  const basketIds = useMemo(() => new Set(basketItems.map((x) => x.id)), [basketItems]);
 
   if (!state || !state.route) {
     return (
@@ -85,7 +86,6 @@ export default function RouteCorridorClinicsPage() {
   }
 
   const { route, candidates, a, b, routeName } = state;
-  const basketIds = useMemo(() => new Set(basketItems.map((x) => x.id)), [basketItems]);
 
   const addOne = (c: RouteCandidate) => {
     const stop: Omit<BasketStop, 'addedAt'> = {

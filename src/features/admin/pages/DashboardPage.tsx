@@ -143,7 +143,7 @@ async function fetchDashboard(sinceIso: string): Promise<DashboardData> {
     if (!m.profile_id) continue;
     const km =
       typeof m.distance_km === 'string' ? Number.parseFloat(m.distance_km) : (m.distance_km ?? 0);
-    bucket(m.profile_id).km += Number.isFinite(km) ? (km as number) : 0;
+    bucket(m.profile_id).km += Number.isFinite(km) ? km : 0;
   }
 
   for (const o of (orders.data ?? []) as Array<{
@@ -231,7 +231,7 @@ async function fetchDashboard(sinceIso: string): Promise<DashboardData> {
           typeof m.distance_km === 'string'
             ? Number.parseFloat(m.distance_km)
             : (m.distance_km ?? 0);
-        return acc + (Number.isFinite(km) ? (km as number) : 0);
+        return acc + (Number.isFinite(km) ? km : 0);
       },
       0,
     ),

@@ -293,7 +293,12 @@ export default function EditClinicModal({
           </button>
         </div>
 
-        <form onSubmit={handleSave} className="max-h-[75vh] space-y-3 overflow-y-auto px-5 py-4">
+        <form
+          onSubmit={(e) => {
+            void handleSave(e);
+          }}
+          className="max-h-[75vh] space-y-3 overflow-y-auto px-5 py-4"
+        >
           {/* Klinik adı */}
           <div>
             <label htmlFor="ec-name" className="mb-1 block text-xs font-medium text-slate-600">
@@ -423,7 +428,9 @@ export default function EditClinicModal({
           <div className="flex flex-wrap items-center justify-between gap-2 pt-3">
             <button
               type="button"
-              onClick={handleDelete}
+              onClick={() => {
+                void handleDelete();
+              }}
               disabled={saving || deleting}
               className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium disabled:opacity-50 ${
                 confirmDelete

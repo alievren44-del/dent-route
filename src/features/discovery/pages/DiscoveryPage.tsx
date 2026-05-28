@@ -163,7 +163,9 @@ function DiscoveryPage(): JSX.Element {
         </h1>
         <button
           type="button"
-          onClick={() => refetch()}
+          onClick={() => {
+            void refetch();
+          }}
           disabled={!position || showSpinner}
           className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 h-10 text-sm font-medium hover:bg-muted disabled:opacity-50"
         >

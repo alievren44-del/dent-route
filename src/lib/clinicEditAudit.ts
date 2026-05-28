@@ -53,11 +53,9 @@ export async function logClinicEdit(input: ClinicEditLogInput): Promise<void> {
       after: input.after ?? null,
     });
     if (error) {
-      // eslint-disable-next-line no-console
       console.warn('clinic edit audit failed:', error.message);
     }
   } catch (e) {
-    // eslint-disable-next-line no-console
     console.warn('clinic edit audit failed:', (e as Error)?.message ?? e);
   }
 }

@@ -722,33 +722,37 @@ export default function ActiveRoutePage(): JSX.Element {
             <button
               type="button"
               disabled={savingNote || !noteText.trim()}
-              onClick={async () => {
-                if (!notingStop || !session?.userId) return;
-                setSavingNote(true);
-                try {
-                  const supabase = getSupabaseClient();
-                  const gpsLat = geolocation.position?.lat ?? null;
-                  const gpsLng = geolocation.position?.lng ?? null;
-                  const { error: insErr } = await supabase.from('saha_visits').insert({
-                    account_id: notingStop.id,
-                    rep_id: session.userId,
-                    route_id: route?.id ?? null,
-                    check_in_at: new Date().toISOString(),
-                    check_in_lat: gpsLat,
-                    check_in_lng: gpsLng,
-                    status: 'completed',
-                    notes: noteText.trim(),
-                    custom_fields: {},
-                  });
-                  if (insErr) throw insErr;
-                  toast.success('Not kaydedildi');
-                  setNotingStop(null);
-                  setNoteText('');
-                } catch (e) {
-                  toast.error('Not kaydedilemedi: ' + (e instanceof Error ? e.message : String(e)));
-                } finally {
-                  setSavingNote(false);
-                }
+              onClick={() => {
+                void (async () => {
+                  if (!notingStop || !session?.userId) return;
+                  setSavingNote(true);
+                  try {
+                    const supabase = getSupabaseClient();
+                    const gpsLat = geolocation.position?.lat ?? null;
+                    const gpsLng = geolocation.position?.lng ?? null;
+                    const { error: insErr } = await supabase.from('saha_visits').insert({
+                      account_id: notingStop.id,
+                      rep_id: session.userId,
+                      route_id: route?.id ?? null,
+                      check_in_at: new Date().toISOString(),
+                      check_in_lat: gpsLat,
+                      check_in_lng: gpsLng,
+                      status: 'completed',
+                      notes: noteText.trim(),
+                      custom_fields: {},
+                    });
+                    if (insErr) throw insErr;
+                    toast.success('Not kaydedildi');
+                    setNotingStop(null);
+                    setNoteText('');
+                  } catch (e) {
+                    toast.error(
+                      'Not kaydedilemedi: ' + (e instanceof Error ? e.message : String(e)),
+                    );
+                  } finally {
+                    setSavingNote(false);
+                  }
+                })();
               }}
               className="mt-3 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-sm font-semibold text-white disabled:opacity-50"
             >

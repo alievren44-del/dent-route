@@ -130,10 +130,10 @@ export default function UsersPage(): JSX.Element {
     },
     onSuccess: (_, vars) => {
       toast.success(`Rol değiştirildi → ${vars.role}`);
-      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
     },
     onError: (err) => {
-      toast.error(`Rol değiştirilemedi: ${(err as Error).message}`);
+      toast.error(`Rol değiştirilemedi: ${err.message}`);
     },
   });
 
@@ -157,10 +157,10 @@ export default function UsersPage(): JSX.Element {
     },
     onSuccess: (_, vars) => {
       toast.success(vars.nextActive ? 'Kullanıcı aktive edildi' : 'Kullanıcı deaktive edildi');
-      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
     },
     onError: (err) => {
-      toast.error(`İşlem başarısız: ${(err as Error).message}`);
+      toast.error(`İşlem başarısız: ${err.message}`);
     },
   });
 
@@ -188,7 +188,7 @@ export default function UsersPage(): JSX.Element {
       });
     },
     onError: (err) => {
-      toast.error(`Şifre sıfırlanamadı: ${(err as Error).message}`, {
+      toast.error(`Şifre sıfırlanamadı: ${err.message}`, {
         description: 'Supabase Dashboard üzerinden manuel olarak göndermeniz gerekebilir.',
       });
     },
@@ -426,7 +426,7 @@ export default function UsersPage(): JSX.Element {
         <CreateUserModal
           onClose={() => setShowCreate(false)}
           onCreated={() => {
-            queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+            void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
           }}
         />
       )}
@@ -474,7 +474,7 @@ function CreateUserModal({ onClose, onCreated }: CreateUserModalProps): JSX.Elem
       }
     },
     onError: (err) => {
-      toast.error(`Oluşturulamadı: ${(err as Error).message}`);
+      toast.error(`Oluşturulamadı: ${err.message}`);
     },
   });
 

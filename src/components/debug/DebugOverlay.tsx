@@ -122,7 +122,9 @@ export function DebugOverlay() {
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={handleCopyAll}
+            onClick={() => {
+              void handleCopyAll();
+            }}
             disabled={!hasAny}
             className="inline-flex h-7 items-center gap-1 rounded px-2 text-xs font-medium text-amber-900 hover:bg-amber-300 disabled:opacity-40"
             title="Tümünü kopyala"
@@ -198,7 +200,9 @@ export function DebugOverlay() {
                   )}
                   <button
                     type="button"
-                    onClick={() => handleCopyOne(e)}
+                    onClick={() => {
+                      void handleCopyOne(e);
+                    }}
                     className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-white/60"
                     title="Bu satırı kopyala"
                   >

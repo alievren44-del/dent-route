@@ -103,7 +103,6 @@ function SamplesPage(): JSX.Element {
   );
 
   function handleSubmitted(sampleId: string): void {
-    // eslint-disable-next-line no-alert
     alert(`Numune kaydedildi: ${sampleId}`);
     setActiveTab('active');
   }

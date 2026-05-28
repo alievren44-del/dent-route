@@ -504,7 +504,9 @@ export default function ScanPreviewDialog({ onCommit, onEditClinic, onManualAdd 
           </button>
           <button
             type="button"
-            onClick={handleCommit}
+            onClick={() => {
+              void handleCommit();
+            }}
             disabled={selectedIds.size === 0 || committing || !lastScanInput}
             className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 h-10 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
           >

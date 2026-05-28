@@ -176,14 +176,14 @@ async function fetchAccounts(geo: { lat: number; lng: number } | null): Promise<
     },
     visit: VisitRow | undefined,
   ): CustomerListRow {
-    const cf = (c.raw_payload ?? {}) as Record<string, unknown>;
+    const cf = c.raw_payload ?? {};
     const neighborhood =
       typeof cf['neighborhood'] === 'string'
-        ? (cf['neighborhood'] as string)
+        ? cf['neighborhood']
         : typeof cf['mahalle'] === 'string'
-          ? (cf['mahalle'] as string)
+          ? cf['mahalle']
           : null;
-    const balance = typeof cf['balance'] === 'number' ? (cf['balance'] as number) : null;
+    const balance = typeof cf['balance'] === 'number' ? cf['balance'] : null;
     const ratingNum =
       typeof c.rating === 'number'
         ? c.rating

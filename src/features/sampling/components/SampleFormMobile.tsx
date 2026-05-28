@@ -120,7 +120,7 @@ function SampleFormMobile({
   useEffect(() => {
     if (!preselectedAccountId) return;
     let cancelled = false;
-    (async () => {
+    void (async () => {
       const { data, error } = await supabase
         .from('saha_clinics')
         .select('id, name, types')

@@ -149,10 +149,9 @@ function applyStyleToRow(
   colCount: number,
   style: CellStyle,
 ): void {
-  // Worksheet'in cell access tipi `any` (xlsx WSKeys union'ı) ve `s`
-  // property'si SheetJS Community'de typed değil. Runtime'da çalışıyor —
-  // any cast + explicit eslint-disable bloku ile assignment yapıyoruz.
-  /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any */
+  // Worksheet cell tipi `any` (xlsx WSKeys union'ı); `s` property SheetJS
+  // Community'de typed değil. Runtime'da çalışıyor — `as CellStyle` cast ile
+  // assignment yapıyoruz.
   for (let c = 0; c < colCount; c++) {
     const ref = XLSX.utils.encode_cell({ r: rowIdx, c });
     const cell = ws[ref];
@@ -160,7 +159,6 @@ function applyStyleToRow(
     const existing: CellStyle = (cell.s as CellStyle | undefined) ?? {};
     cell.s = { ...existing, ...style };
   }
-  /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any */
 }
 
 function buildSheetForSegment(clinics: ExportClinic[], options: ExportOptions): XLSX.WorkSheet {

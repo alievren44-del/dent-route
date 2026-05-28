@@ -120,7 +120,9 @@ export default function FirstAdminPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted px-4 py-8">
       <form
-        onSubmit={handleSubmit}
+        onSubmit={(e) => {
+          void handleSubmit(e);
+        }}
         className="w-full max-w-md space-y-5 rounded-2xl bg-background p-6 shadow-lg"
       >
         <div className="text-center">

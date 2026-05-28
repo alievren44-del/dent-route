@@ -235,11 +235,13 @@ export default function CorridorRoutePage() {
           const enriched = await enrichWithScanStatus(nearbyDistricts);
           setCorridorDistricts(enriched);
         } catch {
-          setCorridorDistricts(nearbyDistricts.map((d) => ({
-            ...d,
-            lastScanAt: null,
-            existingCount: 0,
-          })));
+          setCorridorDistricts(
+            nearbyDistricts.map((d) => ({
+              ...d,
+              lastScanAt: null,
+              existingCount: 0,
+            })),
+          );
         }
       }
     } catch (e) {

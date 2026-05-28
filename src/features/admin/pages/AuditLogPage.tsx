@@ -143,7 +143,9 @@ export default function AuditLogPage(): JSX.Element {
           </div>
           <button
             type="button"
-            onClick={() => logsQuery.refetch()}
+            onClick={() => {
+              void logsQuery.refetch();
+            }}
             className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
           >
             <RefreshCw className={`h-4 w-4 ${logsQuery.isFetching ? 'animate-spin' : ''}`} />

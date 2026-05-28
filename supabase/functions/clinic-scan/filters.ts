@@ -62,7 +62,7 @@ function normalize(s: string | undefined | null): string {
   // JS default .toLowerCase() İngilizce locale kullanır: "I" → "i" (dotted),
   // ama Türkçe'de "I" → "ı" (dotless). Bu yüzden "AĞIZ" → "ağiz" (dotted)
   // oluyor ama keyword listemizde "ağız" (dotless) → match fail.
-  let n = (s ?? '').toLocaleLowerCase('tr-TR').trim();
+  const n = (s ?? '').toLocaleLowerCase('tr-TR').trim();
   // Türkçe → ASCII fold: keyword listesindeki "ağız"/"agiz" varyantlarının
   // her ikisi de yakalansın diye text'i çift normalize ederiz.
   // (Liste hem 'diş' hem 'dis', hem 'ağız' hem 'agiz' içeriyor — bu sayede
