@@ -94,6 +94,25 @@ interface CustomerListRow {
 
 const PAGE_SIZE = 50;
 
+/**
+ * Türkçe accent-fold + lowercase. Aramada "çağdaş" ↔ "cagdas" eşitlemek için.
+ */
+function foldTr(s: string): string {
+  return s
+    .toLocaleLowerCase('tr')
+    .replace(/ç/g, 'c')
+    .replace(/ğ/g, 'g')
+    .replace(/ı/g, 'i')
+    .replace(/i̇/g, 'i')
+    .replace(/ö/g, 'o')
+    .replace(/ş/g, 's')
+    .replace(/ü/g, 'u');
+}
+
+function digits(s: string): string {
+  return s.replace(/\D+/g, '');
+}
+
 function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
   const toRad = (d: number) => (d * Math.PI) / 180;
@@ -362,7 +381,9 @@ function CustomerListPage(): JSX.Element {
   // İstemci tarafı filtre + sıralama
   const filtered = useMemo<CustomerListRow[]>(() => {
     const all = accountsQuery.data ?? [];
-    const q = debouncedSearch.trim().toLocaleLowerCase('tr');
+    const rawQ = debouncedSearch.trim();
+    const q = foldTr(rawQ);
+    const qDigits = digits(rawQ);
 
     const fromTs = filters.lastVisitFrom ? new Date(filters.lastVisitFrom).getTime() : null;
     const toTs = filters.lastVisitTo
@@ -370,10 +391,24 @@ function CustomerListPage(): JSX.Element {
       : null;
 
     const result = all.filter((r) => {
-      // Arama
+      // Akıllı arama: ad + telefon + whatsapp + adres + il + ilçe + mahalle
+      // Türkçe accent-fold, case-insensitive. Telefon için ayrıca digits-only match.
       if (q) {
-        const hay = `${r.name ?? ''} ${r.phone ?? ''} ${r.address ?? ''}`.toLocaleLowerCase('tr');
-        if (!hay.includes(q)) return false;
+        const hay = foldTr(
+          [
+            r.name ?? '',
+            r.phone ?? '',
+            r.whatsapp ?? '',
+            r.address ?? '',
+            r.city ?? '',
+            r.district ?? '',
+            r.neighborhood ?? '',
+          ].join(' '),
+        );
+        const phoneHay = digits(`${r.phone ?? ''} ${r.whatsapp ?? ''}`);
+        const matchText = hay.includes(q);
+        const matchPhone = qDigits.length >= 3 && phoneHay.includes(qDigits);
+        if (!matchText && !matchPhone) return false;
       }
       // Tipler
       if (filters.types.length > 0 && (!r.type || !filters.types.includes(r.type))) {
@@ -606,7 +641,7 @@ function CustomerListPage(): JSX.Element {
             type="search"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Ad, doktor veya telefon ara…"
+            placeholder="Akıllı arama: ad, telefon, adres, il, ilçe, mahalle…"
             className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm focus:border-primary focus:outline-none"
           />
         </div>

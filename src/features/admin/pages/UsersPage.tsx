@@ -292,6 +292,7 @@ export default function UsersPage(): JSX.Element {
                 <th className="px-3 py-2 text-left font-medium">E-posta</th>
                 <th className="px-3 py-2 text-left font-medium">Rol</th>
                 <th className="px-3 py-2 text-left font-medium">Bölge</th>
+                <th className="px-3 py-2 text-left font-medium">Durum</th>
                 <th className="px-3 py-2 text-left font-medium">Kayıt</th>
                 <th className="px-3 py-2 text-right font-medium">Aksiyon</th>
               </tr>
@@ -343,6 +344,22 @@ export default function UsersPage(): JSX.Element {
                       </select>
                     </td>
                     <td className="px-3 py-2 text-slate-600">{u.region ?? '—'}</td>
+                    <td className="px-3 py-2">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                          active
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-rose-100 text-rose-700'
+                        }`}
+                      >
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            active ? 'bg-emerald-500' : 'bg-rose-500'
+                          }`}
+                        />
+                        {active ? 'AKTİF' : 'PASİF'}
+                      </span>
+                    </td>
                     <td className="px-3 py-2 text-slate-500">{formatDate(u.created_at)}</td>
                     <td className="px-3 py-2">
                       <div className="flex justify-end gap-1">
@@ -370,21 +387,25 @@ export default function UsersPage(): JSX.Element {
                         <button
                           type="button"
                           disabled={toggleActive.isPending}
-                          onClick={() =>
+                          onClick={() => {
+                            const confirmMsg = active
+                              ? `${userLabel(u)} kullanıcısını PASİF yap?`
+                              : `${userLabel(u)} kullanıcısını AKTİF yap?`;
+                            if (!window.confirm(confirmMsg)) return;
                             toggleActive.mutate({
                               userId: u.id,
                               nextActive: !active,
-                            })
-                          }
+                            });
+                          }}
                           className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs disabled:opacity-50 ${
                             active
                               ? 'border-rose-200 text-rose-700 hover:bg-rose-50'
                               : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
                           }`}
-                          title={active ? 'Deaktive et' : 'Aktive et'}
+                          title={active ? 'Pasif yap' : 'Aktif yap'}
                         >
                           <Power className="h-3.5 w-3.5" />
-                          {active ? 'Pasif' : 'Aktif'}
+                          {active ? 'Pasif yap' : 'Aktif yap'}
                         </button>
                       </div>
                     </td>

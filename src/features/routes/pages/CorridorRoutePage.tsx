@@ -22,15 +22,14 @@ import { getSupabaseClient } from '@lib/supabase';
 import { useGeolocation } from '@features/map/hooks/useGeolocation';
 import { AddressSearchInput } from '@features/routes/components/AddressSearchInput';
 import { decodePolyline } from '@/lib/polyline';
-import { computeDetour } from '@features/routes/lib/detour-calc';
+import {
+  computeDetourFromPolyline,
+  adaptiveCorridorParams,
+} from '@features/routes/lib/detour-calc';
 import { useRouteBasket } from '@features/routes/store/routeBasketStore';
 import type { GeocodeResult } from '@/lib/mapboxGeocode';
 
 type Profile = 'driving' | 'walking';
-
-const DETOUR_KM_MAX = 7;
-const DETOUR_MIN_MAX = 15;
-const BUFFER_M = 2000;
 
 interface Candidate {
   id: string;
@@ -41,6 +40,8 @@ interface Candidate {
   address: string | null;
   phone: string | null;
   clinic_segment: 'private' | 'kamu';
+  province_slug: string | null;
+  district_slug: string | null;
   detourKm: number;
   detourMin: number;
 }
@@ -109,20 +110,22 @@ export default function CorridorRoutePage() {
       const durMin = (dir.durationS ?? 0) / 60;
       setBaseline({ km: distKm, min: durMin });
 
+      // Adaptive eşikler: rota uzun ise buffer + detour limiti büyür.
+      const params = adaptiveCorridorParams(distKm);
+
       // 2. polyline → GeoJSON LineString (frontend decode + GeoJSON)
       const decoded = decodePolyline(dir.geometry);
-      // Buffer için fazla nokta yormaz; tüm decoded geçer.
       const lineGeojson = JSON.stringify({
         type: 'LineString',
         coordinates: decoded,
       });
 
-      // 3. saha_clinics_near_polyline RPC
+      // 3. saha_clinics_near_polyline RPC — adaptive buffer
       const { data: nearData, error: nearErr } = await supabase.rpc('saha_clinics_near_polyline', {
         _line_geojson: lineGeojson,
-        _buffer_m: BUFFER_M,
+        _buffer_m: params.bufferM,
         _vertical_key: 'dental',
-        _limit: 80,
+        _limit: params.limit,
       });
       if (nearErr) throw nearErr;
 
@@ -135,19 +138,21 @@ export default function CorridorRoutePage() {
         address: string | null;
         phone: string | null;
         clinic_segment: 'private' | 'kamu';
+        province_slug: string | null;
+        district_slug: string | null;
       }>;
 
-      // 4. detour hesapla + filtre
+      // 4. detour: gerçek polyline'a dik mesafe × 2 (haversine via-C'den
+      //    çok daha doğru — Mapbox rotası zaten gerçek yolu izliyor).
       const enriched: Candidate[] = [];
       for (const c of rawList) {
-        const { distanceKm, durationMin } = computeDetour(
-          aCoord,
+        const { distanceKm, durationMin } = computeDetourFromPolyline(
           { lat: c.lat, lng: c.lng },
-          bCoord,
+          decoded,
           profile,
         );
-        if (distanceKm > DETOUR_KM_MAX) continue;
-        if (durationMin > DETOUR_MIN_MAX) continue;
+        if (distanceKm > params.detourKmMax) continue;
+        if (durationMin > params.detourMinMax) continue;
         enriched.push({
           ...c,
           detourKm: distanceKm,
@@ -157,7 +162,13 @@ export default function CorridorRoutePage() {
       enriched.sort((x, y) => x.detourMin - y.detourMin);
       setCandidates(enriched);
       if (enriched.length === 0) {
-        toast.info('Yol üstünde uygun klinik yok (limit 15dk / 7km)');
+        toast.info(
+          `Yol üstünde uygun klinik yok (limit ${Math.round(params.detourMinMax)}dk / ${params.detourKmMax}km)`,
+        );
+      } else {
+        toast.success(
+          `${enriched.length} klinik bulundu (buffer ${(params.bufferM / 1000).toFixed(0)}km, detour ≤${params.detourKmMax}km/${Math.round(params.detourMinMax)}dk)`,
+        );
       }
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Hesaplama hatası');
@@ -285,8 +296,8 @@ export default function CorridorRoutePage() {
       <header>
         <h1 className="text-2xl font-semibold">Yol Üstü Klinik Önerileri</h1>
         <p className="text-sm text-slate-600">
-          A → B rotanı çiz, yolda uğrayabileceğin klinikleri ({DETOUR_MIN_MAX} dk içinde uzatma)
-          gör.
+          A → B rotanı çiz, yolda uğrayabileceğin klinikleri gör. Detour limiti rota uzunluğuna
+          göre otomatik ayarlanır (kısa rotada sıkı, uzun rotada gevşek).
         </p>
       </header>
 
@@ -450,8 +461,8 @@ export default function CorridorRoutePage() {
 
       {!candidates.length && baseline && (
         <p className="text-sm text-slate-500">
-          Yol üstünde uygun klinik bulunamadı. Detour limiti {DETOUR_MIN_MAX} dk / {DETOUR_KM_MAX}{' '}
-          km'yi geçmeyen klinik yok.
+          Yol üstünde uygun klinik bulunamadı (limit otomatik). Rotayı genişlet veya farklı bir
+          güzergâh dene.
         </p>
       )}
 

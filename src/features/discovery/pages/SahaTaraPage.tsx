@@ -111,6 +111,14 @@ export default function SahaTaraPage() {
   const [locationMode, setLocationMode] = useState<'gps' | 'manual'>('gps');
   const [manualProvince, setManualProvince] = useState('');
   const [manualDistrict, setManualDistrict] = useState('');
+  // Mahalle daraltma (opsiyonel) — saha_neighborhoods'tan çekilir
+  interface NeighborhoodOpt {
+    name: string;
+    lat: number | null;
+    lng: number | null;
+  }
+  const [neighborhoods, setNeighborhoods] = useState<NeighborhoodOpt[]>([]);
+  const [selectedNeighborhood, setSelectedNeighborhood] = useState<string>('');
   const [clinics, setClinics] = useState<NearbyClinic[]>([]);
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -173,12 +181,49 @@ export default function SahaTaraPage() {
     }
   }, [locationMode, manualProvince, manualDistrict]);
 
-  // Konum origin — GPS modunda gps.position, manuel modda ilçe centroid
+  // Mahalle listesini ilçe değişince çek
+  useEffect(() => {
+    setSelectedNeighborhood('');
+    setNeighborhoods([]);
+    if (locationMode !== 'manual' || !manualProvince || !manualDistrict) return;
+    let cancelled = false;
+    void (async () => {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from('saha_neighborhoods')
+        .select('name, lat, lng')
+        .eq('province_slug', manualProvince)
+        .eq('district_slug', manualDistrict)
+        .order('name', { ascending: true });
+      if (cancelled) return;
+      if (!error && data) {
+        setNeighborhoods(
+          (data as Array<{ name: string; lat: number | null; lng: number | null }>).map((d) => ({
+            name: d.name,
+            lat: d.lat,
+            lng: d.lng,
+          })),
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [locationMode, manualProvince, manualDistrict]);
+
+  // Konum origin — GPS modunda gps.position, manuel modda mahalle/ilçe centroid
   const searchOrigin = useMemo(() => {
     if (locationMode === 'gps' && geo.position) {
       return { lat: geo.position.lat, lng: geo.position.lng };
     }
     if (locationMode === 'manual' && manualProvince && manualDistrict) {
+      // Mahalle seçiliyse + koord varsa → mahalle merkezi
+      if (selectedNeighborhood) {
+        const n = neighborhoods.find((x) => x.name === selectedNeighborhood);
+        if (n && n.lat !== null && n.lng !== null) {
+          return { lat: n.lat, lng: n.lng };
+        }
+      }
       const list = districts as Array<{
         il_ad: string;
         ad: string;
@@ -192,14 +237,13 @@ export default function SahaTaraPage() {
       if (found) return { lat: found.lat, lng: found.lng };
     }
     return null;
-  }, [locationMode, geo.position, manualProvince, manualDistrict]);
+  }, [locationMode, geo.position, manualProvince, manualDistrict, selectedNeighborhood, neighborhoods]);
 
-  // districtInfo yoksa fallback 3km (orta tier), varsa nüfusa göre dinamik.
-  // Kullanıcı manuel override edebilsin diye state.
-  const dynamicRadius = useMemo(
-    () => (districtInfo ? radiusForNufus(districtInfo.nufus) : 3000),
-    [districtInfo],
-  );
+  // Mahalle seçiliyse 1.5km sabit (mahalle ölçeği). Aksi halde ilçe nüfusu.
+  const dynamicRadius = useMemo(() => {
+    if (selectedNeighborhood) return 1500;
+    return districtInfo ? radiusForNufus(districtInfo.nufus) : 3000;
+  }, [districtInfo, selectedNeighborhood]);
   const [radiusOverride, setRadiusOverride] = useState<number | null>(null);
   const radius = radiusOverride ?? dynamicRadius;
 
@@ -355,14 +399,36 @@ export default function SahaTaraPage() {
           </button>
         </div>
         {locationMode === 'manual' && (
-          <DistrictPicker
-            provinceSlug={manualProvince}
-            districtSlug={manualDistrict}
-            onChange={(p, d) => {
-              setManualProvince(p);
-              setManualDistrict(d);
-            }}
-          />
+          <>
+            <DistrictPicker
+              provinceSlug={manualProvince}
+              districtSlug={manualDistrict}
+              onChange={(p, d) => {
+                setManualProvince(p);
+                setManualDistrict(d);
+              }}
+            />
+            {neighborhoods.length > 0 && (
+              <div className="mt-2 flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-600">
+                  Mahalle (opsiyonel — seçince 1.5km daraltır)
+                </label>
+                <select
+                  value={selectedNeighborhood}
+                  onChange={(e) => setSelectedNeighborhood(e.target.value)}
+                  className="h-10 rounded-lg border border-slate-200 px-2 text-sm"
+                >
+                  <option value="">(Tüm ilçe)</option>
+                  {neighborhoods.map((n) => (
+                    <option key={n.name} value={n.name}>
+                      {n.name}
+                      {n.lat === null ? ' (koord yok)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </>
         )}
       </section>
 

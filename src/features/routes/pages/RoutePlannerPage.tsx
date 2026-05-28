@@ -59,8 +59,12 @@ interface BasketItem {
 
 interface RouteResult {
   order: number[];
-  /** Sepet sırası ile gidilseydi toplam km (kuşbakışı, karşılaştırma için) */
+  /** Sepet sırası ile gidilseydi toplam km (kuşbakışı, geriye uyumluluk) */
   baselineKm: number;
+  /** Sepet sırası ile Mapbox yol mesafesi (apples-to-apples kıyas için) — null ise haversine fallback */
+  baselineRoadKm: number | null;
+  /** Sepet sırası ile Mapbox yol süresi dk */
+  baselineDurationMin: number | null;
   distanceM: number;
   durationS: number;
   geometry: string;
@@ -193,6 +197,8 @@ export default function RoutePlannerPage() {
         setRouteResult({
           order,
           baselineKm,
+          baselineRoadKm: null,
+          baselineDurationMin: null,
           distanceM,
           durationS,
           geometry: '',
@@ -238,12 +244,34 @@ export default function RoutePlannerPage() {
         throw new Error(`Mapbox: ${resp.status}`);
       }
 
-      // Baseline: sepet sırası ile gidilseydi toplam km
+      // Baseline (kuşbakışı, fallback)
       const baselineKm = baselineSequenceKm(
         startCoord[0],
         startCoord[1],
         drivingBasket.map((b) => ({ lat: b.lat, lng: b.lng })),
       );
+
+      // Baseline (gerçek yol) — sepet sırasıyla Mapbox Directions çağır.
+      // Best-effort: fail edersek haversine baseline ile devam et.
+      let baselineRoadKm: number | null = null;
+      let baselineDurationMin: number | null = null;
+      try {
+        const { data: baseData, error: baseErr } = await supabase.functions.invoke(
+          'mapbox-directions',
+          {
+            body: { coords: coordsForFn, profile },
+          },
+        );
+        if (!baseErr && baseData) {
+          const baseResp = baseData as { status: string; distanceM?: number; durationS?: number };
+          if (baseResp.status === 'ok') {
+            baselineRoadKm = (baseResp.distanceM ?? 0) / 1000;
+            baselineDurationMin = (baseResp.durationS ?? 0) / 60;
+          }
+        }
+      } catch {
+        // Yutulur — baselineRoadKm null kalır, UI haversine'e düşer
+      }
 
       // Mapbox sırasına göre koord dizisi (start=0 dahil)
       const orderedCoords: Array<[number, number]> = resp.order.map((idx) => coords[idx]!);
@@ -258,6 +286,8 @@ export default function RoutePlannerPage() {
       setRouteResult({
         order: finalOrderInOriginal,
         baselineKm,
+        baselineRoadKm,
+        baselineDurationMin,
         distanceM: resp.distanceM,
         durationS: resp.durationS,
         geometry: resp.geometry,
@@ -709,35 +739,62 @@ export default function RoutePlannerPage() {
               </div>
             </div>
 
-            {/* Baseline kıyas — optimize gerçek mi test et */}
+            {/* Baseline kıyas — apples-to-apples (gerçek yol vs gerçek yol) */}
             {(() => {
               const optimizedKm = routeResult.distanceM / 1000;
-              const baselineKm = routeResult.baselineKm;
+              const optimizedMin = routeResult.durationS / 60;
+              // Araç modunda baselineRoadKm yoksa anlamlı kıyas yok — gizle.
+              const useRoad =
+                profile !== 'walking' &&
+                routeResult.baselineRoadKm !== null &&
+                routeResult.baselineRoadKm > 0;
+              const baselineKm = useRoad ? routeResult.baselineRoadKm! : routeResult.baselineKm;
+              const baselineMin = useRoad ? (routeResult.baselineDurationMin ?? 0) : 0;
               const savedKm = Math.max(0, baselineKm - optimizedKm);
+              const savedMin = useRoad ? Math.max(0, baselineMin - optimizedMin) : 0;
               const pct = baselineKm > 0 ? (savedKm / baselineKm) * 100 : 0;
               return (
                 <div className="mt-3 rounded-lg bg-slate-50 p-2 text-xs">
-                  <div className="mb-1 font-semibold text-slate-700">Tasarruf kıyası</div>
+                  <div className="mb-1 font-semibold text-slate-700">
+                    Tasarruf kıyası {useRoad ? '(gerçek yol)' : '(kuşbakışı)'}
+                  </div>
                   <div className="grid grid-cols-3 gap-2">
                     <div>
                       <div className="text-slate-500">Sepet sırası</div>
                       <div className="font-bold text-slate-700">{baselineKm.toFixed(1)} km</div>
+                      {useRoad && (
+                        <div className="text-[10px] text-slate-500">
+                          {Math.round(baselineMin)} dk
+                        </div>
+                      )}
                     </div>
                     <div>
                       <div className="text-slate-500">Optimize</div>
                       <div className="font-bold text-blue-700">{optimizedKm.toFixed(1)} km</div>
+                      {useRoad && (
+                        <div className="text-[10px] text-slate-500">
+                          {Math.round(optimizedMin)} dk
+                        </div>
+                      )}
                     </div>
                     <div>
                       <div className="text-slate-500">Tasarruf</div>
                       <div className="font-bold text-emerald-700">
                         {savedKm.toFixed(1)} km (%{pct.toFixed(0)})
                       </div>
+                      {useRoad && savedMin > 0 && (
+                        <div className="text-[10px] font-medium text-emerald-700">
+                          -{Math.round(savedMin)} dk
+                        </div>
+                      )}
                     </div>
                   </div>
                   <p className="mt-1.5 text-[10px] text-slate-500">
                     {profile === 'walking'
-                      ? 'Kuşbakışı (haversine). Baseline = sepete eklendiği sıra.'
-                      : 'Optimize = Mapbox yol mesafesi. Baseline = sepete eklendiği sırayla kuşbakışı mesafe.'}
+                      ? 'Yaya: kuşbakışı haversine. Mapbox API çağrısı yok.'
+                      : useRoad
+                        ? 'İki rota da Mapbox yol mesafesi — adil karşılaştırma.'
+                        : 'Baseline yol mesafesi alınamadı; haversine kuşbakışı gösteriliyor.'}
                   </p>
                 </div>
               );

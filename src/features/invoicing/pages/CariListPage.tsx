@@ -397,7 +397,32 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
   const [bankaAdi, setBankaAdi] = useState('');
   const [odemeVadesiGun, setOdemeVadesiGun] = useState(30);
   const [krediLimiti, setKrediLimiti] = useState(0);
+  const [salesRepId, setSalesRepId] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+
+  // Plasiyer dropdown — REP / ADMIN rolleri
+  const { data: salesReps } = useQuery({
+    queryKey: ['cari-new-sales-reps'],
+    queryFn: async (): Promise<Array<{ id: string; label: string; role: string }>> => {
+      const supabase = getSupabaseClient();
+      const { data, error: err } = await supabase
+        .from('profiles')
+        .select('id, ad_soyad, email, role')
+        .in('role', ['REP', 'SALES_REP', 'ADMIN', 'MANAGER'])
+        .order('ad_soyad', { ascending: true });
+      if (err) throw err;
+      return ((data ?? []) as Array<{
+        id: string;
+        ad_soyad: string | null;
+        email: string | null;
+        role: string;
+      }>).map((r) => ({
+        id: r.id,
+        label: r.ad_soyad?.trim() || r.email || r.id.slice(0, 8),
+        role: r.role,
+      }));
+    },
+  });
 
   // Initial profile pre-fill
   useQuery({
@@ -464,6 +489,7 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
           banka_adi: bankaAdi.trim() || null,
           odeme_vadesi_gun: odemeVadesiGun,
           kredi_limiti: krediLimiti,
+          sales_rep_id: salesRepId || null,
         })
         .select('id')
         .single();
@@ -594,6 +620,24 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
               onChange={setOdemeVadesiGun}
             />
             <NumberField label="Kredi Limiti (₺)" value={krediLimiti} onChange={setKrediLimiti} />
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">
+              Atanacak Plasiyer (opsiyonel)
+            </label>
+            <select
+              value={salesRepId}
+              onChange={(e) => setSalesRepId(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-border bg-card text-sm outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              <option value="">— Atanmamış (admin görür) —</option>
+              {(salesReps ?? []).map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.label} ({r.role})
+                </option>
+              ))}
+            </select>
           </div>
 
           {error && (

@@ -40,6 +40,14 @@ interface RepAggregate {
   checkIns: number;
   km: number;
   orders: number;
+  /** Atanmış cari sayısı */
+  cariCount: number;
+  /** Tamamlanmış sipariş toplam tutarı ₺ */
+  salesTry: number;
+  /** Tahsilat toplamı ₺ (saha_odemeler) */
+  collectionTry: number;
+  /** Composite skor — 0-100 normalize (max'a göre) */
+  score: number;
 }
 
 interface DashboardData {
@@ -50,8 +58,13 @@ interface DashboardData {
     checkIns: number;
     km: number;
     orders: number;
+    cariCount: number;
+    salesTry: number;
+    collectionTry: number;
   };
 }
+
+type ScoreKey = 'score' | 'checkIns' | 'km' | 'orders' | 'cariCount' | 'salesTry' | 'collectionTry';
 
 const RANGE_OPTIONS: { value: RangeKey; label: string }[] = [
   { value: '7', label: 'Son 7 Gün' },
@@ -71,21 +84,30 @@ async function fetchDashboard(sinceIso: string): Promise<DashboardData> {
   const supabase = getSupabaseClient();
   const sinceDate = sinceIso.slice(0, 10);
 
-  const [reps, visits, mileage, orders] = await Promise.all([
+  const [reps, visits, mileage, orders, cariler, odemeler] = await Promise.all([
     supabase.from('profiles').select('id, ad_soyad, email, role').ilike('role', '%REP%'),
     supabase.from('saha_visits').select('id, rep_id').gte('check_in_at', sinceIso),
     supabase.from('saha_mileage_logs').select('profile_id, distance_km').gte('log_date', sinceDate),
     supabase
       .from('orders')
-      .select('id, sales_rep_id')
+      .select('id, sales_rep_id, total_amount, total')
       .gte('created_at', sinceIso)
       .not('sales_rep_id', 'is', null),
+    supabase.from('saha_cariler').select('id, sales_rep_id').not('sales_rep_id', 'is', null),
+    supabase
+      .from('saha_odemeler')
+      .select('tutar, created_by')
+      .gte('odeme_tarihi', sinceDate)
+      .not('created_by', 'is', null),
   ]);
 
   if (reps.error) throw reps.error;
   if (visits.error) throw visits.error;
   if (mileage.error) throw mileage.error;
   if (orders.error) throw orders.error;
+  // cariler ve odemeler best-effort (RLS / kolon yoksa skip)
+  const carilerRows = !cariler.error && cariler.data ? cariler.data : [];
+  const odemelerRows = !odemeler.error && odemeler.data ? odemeler.data : [];
 
   const repRows = (reps.data ?? []) as RepRow[];
   const byRep: Record<string, RepAggregate> = {};
@@ -93,7 +115,15 @@ async function fetchDashboard(sinceIso: string): Promise<DashboardData> {
   function bucket(id: string): RepAggregate {
     let entry = byRep[id];
     if (!entry) {
-      entry = { checkIns: 0, km: 0, orders: 0 };
+      entry = {
+        checkIns: 0,
+        km: 0,
+        orders: 0,
+        cariCount: 0,
+        salesTry: 0,
+        collectionTry: 0,
+        score: 0,
+      };
       byRep[id] = entry;
     }
     return entry;
@@ -118,9 +148,78 @@ async function fetchDashboard(sinceIso: string): Promise<DashboardData> {
 
   for (const o of (orders.data ?? []) as Array<{
     sales_rep_id: string | null;
+    total_amount: number | string | null;
+    total: number | string | null;
   }>) {
     if (!o.sales_rep_id) continue;
-    bucket(o.sales_rep_id).orders += 1;
+    const b = bucket(o.sales_rep_id);
+    b.orders += 1;
+    const t =
+      typeof o.total_amount === 'number'
+        ? o.total_amount
+        : typeof o.total === 'number'
+          ? o.total
+          : typeof o.total_amount === 'string'
+            ? Number.parseFloat(o.total_amount)
+            : 0;
+    b.salesTry += Number.isFinite(t) ? t : 0;
+  }
+
+  for (const c of carilerRows as Array<{ sales_rep_id: string | null }>) {
+    if (!c.sales_rep_id) continue;
+    bucket(c.sales_rep_id).cariCount += 1;
+  }
+
+  for (const p of odemelerRows as Array<{
+    created_by: string | null;
+    tutar: number | string | null;
+  }>) {
+    if (!p.created_by) continue;
+    const t =
+      typeof p.tutar === 'number'
+        ? p.tutar
+        : typeof p.tutar === 'string'
+          ? Number.parseFloat(p.tutar)
+          : 0;
+    bucket(p.created_by).collectionTry += Number.isFinite(t) ? t : 0;
+  }
+
+  // Composite skor — her metriği max'a göre normalize, ağırlıklı toplam.
+  const max = {
+    checkIns: 1,
+    km: 1,
+    orders: 1,
+    cariCount: 1,
+    salesTry: 1,
+    collectionTry: 1,
+  };
+  for (const id of Object.keys(byRep)) {
+    const b = byRep[id]!;
+    if (b.checkIns > max.checkIns) max.checkIns = b.checkIns;
+    if (b.km > max.km) max.km = b.km;
+    if (b.orders > max.orders) max.orders = b.orders;
+    if (b.cariCount > max.cariCount) max.cariCount = b.cariCount;
+    if (b.salesTry > max.salesTry) max.salesTry = b.salesTry;
+    if (b.collectionTry > max.collectionTry) max.collectionTry = b.collectionTry;
+  }
+  // Ağırlıklar — ziyaret + satış ana göstergeler
+  const W = {
+    checkIns: 20,
+    km: 5,
+    orders: 20,
+    cariCount: 10,
+    salesTry: 30,
+    collectionTry: 15,
+  };
+  for (const id of Object.keys(byRep)) {
+    const b = byRep[id]!;
+    b.score =
+      (b.checkIns / max.checkIns) * W.checkIns +
+      (b.km / max.km) * W.km +
+      (b.orders / max.orders) * W.orders +
+      (b.cariCount / max.cariCount) * W.cariCount +
+      (b.salesTry / max.salesTry) * W.salesTry +
+      (b.collectionTry / max.collectionTry) * W.collectionTry;
   }
 
   const totals = {
@@ -137,6 +236,9 @@ async function fetchDashboard(sinceIso: string): Promise<DashboardData> {
       0,
     ),
     orders: (orders.data ?? []).length,
+    cariCount: carilerRows.length,
+    salesTry: Object.values(byRep).reduce((s, b) => s + b.salesTry, 0),
+    collectionTry: Object.values(byRep).reduce((s, b) => s + b.collectionTry, 0),
   };
 
   return { reps: repRows, byRep, totals };
@@ -162,17 +264,27 @@ export default function DashboardPage() {
   const data = dashboardQuery.data;
   const reps = data?.reps ?? [];
 
+  const [sortKey, setSortKey] = useState<ScoreKey>('score');
+
   const sortedReps = useMemo(() => {
     if (!data) return [];
+    const empty: RepAggregate = {
+      checkIns: 0,
+      km: 0,
+      orders: 0,
+      cariCount: 0,
+      salesTry: 0,
+      collectionTry: 0,
+      score: 0,
+    };
     return [...reps].sort((a, b) => {
-      const aa = data.byRep[a.id] ?? { checkIns: 0, km: 0, orders: 0 };
-      const bb = data.byRep[b.id] ?? { checkIns: 0, km: 0, orders: 0 };
-      const aScore = aa.checkIns + aa.orders + aa.km;
-      const bScore = bb.checkIns + bb.orders + bb.km;
-      if (bScore !== aScore) return bScore - aScore;
+      const aa = data.byRep[a.id] ?? empty;
+      const bb = data.byRep[b.id] ?? empty;
+      const diff = bb[sortKey] - aa[sortKey];
+      if (diff !== 0) return diff;
       return (a.ad_soyad ?? a.email ?? '').localeCompare(b.ad_soyad ?? b.email ?? '', 'tr');
     });
-  }, [data, reps]);
+  }, [data, reps, sortKey]);
 
   return (
     <div className="flex h-full min-h-screen flex-col bg-slate-50">
@@ -292,58 +404,107 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* Rep tablosu */}
+        {/* Rep performans + scoring tablosu */}
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 px-4 py-3">
-            <h2 className="text-sm font-semibold text-slate-700">Rep Performansı</h2>
-            <p className="text-xs text-slate-500">
-              {dashboardQuery.isLoading ? 'Yükleniyor...' : `${reps.length} rep listeleniyor`}
-            </p>
+          <div className="border-b border-slate-200 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-700">Plasiyer Performans Skoru</h2>
+              <p className="text-xs text-slate-500">
+                {dashboardQuery.isLoading
+                  ? 'Yükleniyor...'
+                  : `${reps.length} plasiyer · skor = ziyaret + KM + sipariş + cari + satış ₺ + tahsilat ₺ (normalize)`}
+              </p>
+            </div>
+            <select
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value as ScoreKey)}
+              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs"
+            >
+              <option value="score">Skor (composite)</option>
+              <option value="checkIns">Ziyaret sayısı</option>
+              <option value="km">KM</option>
+              <option value="orders">Sipariş adedi</option>
+              <option value="cariCount">Cari sayısı</option>
+              <option value="salesTry">Satış ₺</option>
+              <option value="collectionTry">Tahsilat ₺</option>
+            </select>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200 text-sm">
               <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="px-4 py-2">Ad Soyad</th>
-                  <th className="px-4 py-2">E-posta</th>
-                  <th className="px-4 py-2 text-right">Check-in</th>
-                  <th className="px-4 py-2 text-right">KM</th>
-                  <th className="px-4 py-2 text-right">Sipariş</th>
+                  <th className="px-3 py-2">#</th>
+                  <th className="px-3 py-2">Plasiyer</th>
+                  <th className="px-3 py-2 text-right">Skor</th>
+                  <th className="px-3 py-2 text-right">Ziyaret</th>
+                  <th className="px-3 py-2 text-right">KM</th>
+                  <th className="px-3 py-2 text-right">Sipariş</th>
+                  <th className="px-3 py-2 text-right">Cari</th>
+                  <th className="px-3 py-2 text-right">Satış ₺</th>
+                  <th className="px-3 py-2 text-right">Tahsilat ₺</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {dashboardQuery.isLoading && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
+                    <td colSpan={9} className="px-4 py-6 text-center text-slate-500">
                       Yükleniyor...
                     </td>
                   </tr>
                 )}
                 {!dashboardQuery.isLoading && sortedReps.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
-                      Rep bulunamadı.
+                    <td colSpan={9} className="px-4 py-6 text-center text-slate-500">
+                      Plasiyer bulunamadı.
                     </td>
                   </tr>
                 )}
-                {sortedReps.map((rep) => {
-                  const agg = data?.byRep[rep.id] ?? {
+                {sortedReps.map((rep, idx) => {
+                  const agg: RepAggregate = data?.byRep[rep.id] ?? {
                     checkIns: 0,
                     km: 0,
                     orders: 0,
+                    cariCount: 0,
+                    salesTry: 0,
+                    collectionTry: 0,
+                    score: 0,
                   };
+                  const isTop = idx < 3;
                   return (
-                    <tr key={rep.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-2 font-medium text-slate-800">{repLabel(rep)}</td>
-                      <td className="px-4 py-2 text-slate-600">{rep.email ?? '—'}</td>
-                      <td className="px-4 py-2 text-right tabular-nums text-slate-700">
+                    <tr key={rep.id} className={isTop ? 'bg-emerald-50/50' : 'hover:bg-slate-50'}>
+                      <td className="px-3 py-2 text-xs font-semibold text-slate-500">
+                        {idx + 1}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="font-medium text-slate-800">{repLabel(rep)}</div>
+                        <div className="text-[10px] text-slate-500">{rep.email ?? '—'}</div>
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold tabular-nums ${
+                            isTop ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          {agg.score.toFixed(0)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-700">
                         {agg.checkIns.toLocaleString('tr-TR')}
                       </td>
-                      <td className="px-4 py-2 text-right tabular-nums text-slate-700">
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-700">
                         {formatKm(agg.km)}
                       </td>
-                      <td className="px-4 py-2 text-right tabular-nums text-slate-700">
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-700">
                         {agg.orders.toLocaleString('tr-TR')}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                        {agg.cariCount.toLocaleString('tr-TR')}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                        {agg.salesTry.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                        {agg.collectionTry.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}
                       </td>
                     </tr>
                   );
