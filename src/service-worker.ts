@@ -8,7 +8,7 @@ import { ExpirationPlugin } from 'workbox-expiration';
 declare const self: ServiceWorkerGlobalScope & typeof globalThis;
 
 // Bump bu sürümü her deploy'da; eski cache'ler activate'te temizlenir.
-const SW_VERSION = 'v2';
+const SW_VERSION = 'v3';
 const NAV_CACHE = `saha-navigations-${SW_VERSION}`;
 const API_CACHE = `saha-api-${SW_VERSION}`;
 const KNOWN_CACHES = new Set([NAV_CACHE, API_CACHE]);
@@ -26,9 +26,12 @@ registerRoute(
   ),
 );
 
-// ─── API responses — stale-while-revalidate ──────────────────
+// ─── REST GET — stale-while-revalidate ──────────────────
+// Edge fn'leri (/functions/v1/) ASLA cache'leme — POST + non-idempotent.
+// Routing/clinic-scan response cache'lenirse stale data döner (550km vs 685km
+// gibi). Sadece /rest/v1/ GET PostgREST select için cache.
 registerRoute(
-  ({ url }) => url.pathname.includes('/rest/v1/') || url.pathname.includes('/functions/v1/'),
+  ({ url, request }) => request.method === 'GET' && url.pathname.includes('/rest/v1/'),
   new StaleWhileRevalidate({
     cacheName: API_CACHE,
     plugins: [
