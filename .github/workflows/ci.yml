@@ -103,3 +103,37 @@ jobs:
               psql --set ON_ERROR_STOP=on -v ON_ERROR_STOP=1 -f "$f"
               echo "::endgroup::"
           done
+
+  deploy-cloudflare:
+    name: Deploy to Cloudflare Workers
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: cf-workers-prod
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        env:
+          VITE_SUPABASE_URL: https://rranpzicmhgfupgabgbi.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_9wnwTdO3WiIczkuKaLNnsg__CD2eUXW
+          VITE_MAPBOX_PUBLIC_TOKEN: pk.eyJ1IjoiYWxpZXZyZW40NCIsImEiOiJjbXBtczg3cXowY2k0MnNzOWo2MzA1NDhvIn0.X8ehMO7Hg35KvUtan5VdDA
+        run: npm run build
+
+      - name: Deploy via Wrangler
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@latest deploy

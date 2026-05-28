@@ -98,3 +98,56 @@ export function buildYandexMapsUrl(start: RoutePoint, stops: RoutePoint[]): stri
   params.set('rtt', 'auto');
   return `https://yandex.com/maps/?${params.toString()}`;
 }
+
+/**
+ * Tek URL'de tüm rotayı Google Maps'te aç — 10+ duraklarda otomatik parçalar
+ * varsa ilk URL'yi döndürür (paylaşım için).
+ */
+export function buildGoogleMapsRouteUrl(
+  stops: Array<{ lat: number; lng: number; name?: string }>,
+): string {
+  if (stops.length === 0) return 'https://www.google.com/maps';
+  const start = stops[0]!;
+  const rest = stops.slice(1);
+  const urls = buildGoogleMapsUrls(start, rest, 'driving');
+  return urls[0] ?? 'https://www.google.com/maps';
+}
+
+/**
+ * WhatsApp mesajı — rep'e gönderilecek rota paylaşım metni.
+ */
+export interface WaMessagePayload {
+  repName: string;
+  routeName: string;
+  origin: string;
+  destination: string;
+  km: number;
+  durationMin: number;
+  clinics: Array<{ name: string; district?: string | null }>;
+  mapsUrl: string;
+}
+
+export function buildWaWhatsappMessage(p: WaMessagePayload): string {
+  const lines: string[] = [];
+  lines.push(`🚗 Merhaba ${p.repName},`);
+  lines.push('');
+  lines.push(`📋 ${p.routeName}`);
+  lines.push('');
+  lines.push(`📍 Başlangıç: ${p.origin}`);
+  lines.push(`🎯 Varış: ${p.destination}`);
+  lines.push(`📏 ${p.km.toFixed(1)} km · ⏱️ ${p.durationMin} dk`);
+  lines.push('');
+  if (p.clinics.length > 0) {
+    lines.push(`🏥 Uğrak klinikler (${p.clinics.length}):`);
+    const show = p.clinics.slice(0, 15);
+    show.forEach((c, i) => {
+      lines.push(`${i + 1}. ${c.name}${c.district ? ` — ${c.district}` : ''}`);
+    });
+    if (p.clinics.length > 15) {
+      lines.push(`... ve ${p.clinics.length - 15} klinik daha`);
+    }
+    lines.push('');
+  }
+  lines.push(`🗺️ Google Maps: ${p.mapsUrl}`);
+  return lines.join('\n');
+}

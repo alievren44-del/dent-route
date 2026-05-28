@@ -87,6 +87,18 @@ export class AuthClient {
     return this.toAuthSession(s.access_token, s.user.id, s.user.email, s.expires_at);
   }
 
+  /**
+   * Server-side validate: localStorage session geçerli mi backend'de?
+   * Supabase yeni ES256 JWT'lerinde session_id claim DB lookup ister.
+   * Session DB'den silinmişse getUser() error döner → çağıran signOut etmeli.
+   */
+  async validateSession(): Promise<{ valid: boolean; error: string | null }> {
+    const { data, error } = await this.supabase.auth.getUser();
+    if (error) return { valid: false, error: error.message };
+    if (!data.user) return { valid: false, error: 'no user' };
+    return { valid: true, error: null };
+  }
+
   async fetchProfile(userId: string): Promise<SahaProfile> {
     const { data, error } = await this.supabase
       .from('profiles')

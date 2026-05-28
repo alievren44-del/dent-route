@@ -48,6 +48,24 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
         set({ session: null, profile: null, loading: false });
         return;
       }
+
+      // Server-side validate — eski/silinmiş session row varsa otomatik signOut.
+      // Supabase ES256 JWT'lerinde session_id DB lookup gerek; lookup fail =
+      // 401 "Session from session_id claim does not exist".
+      const validity = await authClient.validateSession();
+      if (!validity.valid) {
+        await authClient.signOut().catch(() => {
+          /* yutulur */
+        });
+        set({
+          session: null,
+          profile: null,
+          loading: false,
+          error: `Oturum sona erdi (${validity.error ?? 'unknown'}). Lütfen tekrar giriş yapın.`,
+        });
+        return;
+      }
+
       const profile = await authClient.fetchProfile(session.userId);
       set({ session, profile, loading: false });
 

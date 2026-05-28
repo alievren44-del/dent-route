@@ -15,6 +15,9 @@ const RoutePlannerPage = lazy(() => import('@features/routes/pages/RoutePlannerP
 const ActiveRoutePage = lazy(() => import('@features/routes/pages/ActiveRoutePage'));
 const DistrictAutoRoutePage = lazy(() => import('@features/routes/pages/DistrictAutoRoutePage'));
 const CorridorRoutePage = lazy(() => import('@features/routes/pages/CorridorRoutePage'));
+const RouteCorridorClinicsPage = lazy(
+  () => import('@features/routes/pages/RouteCorridorClinicsPage'),
+);
 const AssignedRoutesPage = lazy(() => import('@features/routes/pages/AssignedRoutesPage'));
 const CollectionListPage = lazy(() => import('@features/rep-ops/pages/CollectionListPage'));
 const TaskListPage = lazy(() => import('@features/rep-ops/pages/TaskListPage'));
@@ -167,6 +170,16 @@ export function AppRouter() {
             <ProtectedRoute>
               <AppShell>
                 <CorridorRoutePage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/routes/corridor/clinics"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <RouteCorridorClinicsPage />
               </AppShell>
             </ProtectedRoute>
           }
