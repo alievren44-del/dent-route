@@ -83,15 +83,23 @@ jobs:
       # CREATE OR REPLACE FUNCTION, DROP POLICY IF EXISTS). Parla shared DB
       # geçmişine dokunmamak için supabase CLI yerine direkt psql kullanıyoruz.
       # Sadece bu sprint'te değişen 2 dosyayı apply ediyoruz.
-      - name: Apply migrations via psql
+      # GitHub Actions IPv4-only; Supabase direct DB IPv6 sadece. Pooler (IPv4)
+      # üzerinden session mode (port 5432) DDL'leri uygular. Region default
+      # eu-central-1 (TR proximity); secret SUPABASE_POOLER_HOST varsa onu kullan.
+      - name: Apply migrations via psql (pooler)
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-          PGHOST: db.${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co
-          PGUSER: postgres
+          PGHOST: ${{ secrets.SUPABASE_POOLER_HOST }}
+          PGUSER: postgres.${{ secrets.SUPABASE_PROJECT_REF }}
           PGDATABASE: postgres
           PGPORT: '5432'
         run: |
           set -euo pipefail
+          if [ -z "${PGHOST:-}" ]; then
+            PGHOST="aws-0-eu-central-1.pooler.supabase.com"
+            export PGHOST
+          fi
+          echo "Connecting to ${PGHOST}:${PGPORT} as ${PGUSER}"
           for f in \
             supabase/migrations/20260528000007_saha_route_assignment.sql \
             supabase/migrations/20260528000008_saha_auth_trigger.sql; do
