@@ -23,6 +23,7 @@ import {
   Wallet,
   Receipt,
   CreditCard,
+  Globe,
 } from 'lucide-react';
 
 import { getSupabaseClient } from '@/lib/supabase';
@@ -331,6 +332,11 @@ export default function DashboardPage() {
               to="/admin/clinic-scan"
               label="Klinik Tarama"
               icon={<Radar className="h-4 w-4" />}
+            />
+            <AdminLink
+              to="/admin/tr-seed"
+              label="TR Seed Tarama"
+              icon={<Globe className="h-4 w-4" />}
             />
             <AdminLink
               to="/admin/clinics"

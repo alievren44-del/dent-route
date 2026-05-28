@@ -37,6 +37,7 @@ const ClinicScanPage = lazy(() => import('@features/admin/pages/ClinicScanPage')
 const ScanJobDetailPage = lazy(() => import('@features/admin/pages/ScanJobDetailPage'));
 const ScanRoutePlanner = lazy(() => import('@features/admin/pages/ScanRoutePlanner'));
 const UsersPage = lazy(() => import('@features/admin/pages/UsersPage'));
+const TrSeedPage = lazy(() => import('@features/admin/pages/TrSeedPage'));
 const AuditLogPage = lazy(() => import('@features/admin/pages/AuditLogPage'));
 
 // Visits (Sprint 4)
@@ -392,6 +393,16 @@ export function AppRouter() {
             <ProtectedRoute requireRole="admin">
               <AppShell>
                 <UsersPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/tr-seed"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <TrSeedPage />
               </AppShell>
             </ProtectedRoute>
           }

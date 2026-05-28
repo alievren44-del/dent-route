@@ -1,0 +1,695 @@
+[
+  {
+    "tier": "large",
+    "province": "adana",
+    "district": "seyhan",
+    "lat": 36.9976,
+    "lng": 35.3013,
+    "nufus": 814393,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "ankara",
+    "district": "cankaya",
+    "lat": 39.92,
+    "lng": 32.8534,
+    "nufus": 950271,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "ankara",
+    "district": "etimesgut",
+    "lat": 39.9471,
+    "lng": 32.66,
+    "nufus": 599183,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "ankara",
+    "district": "kecioren",
+    "lat": 39.9778,
+    "lng": 32.8678,
+    "nufus": 949312,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "ankara",
+    "district": "mamak",
+    "lat": 39.9349,
+    "lng": 32.8953,
+    "nufus": 691389,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "ankara",
+    "district": "sincan",
+    "lat": 39.9624,
+    "lng": 32.5802,
+    "nufus": 583649,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "ankara",
+    "district": "yenimahalle",
+    "lat": 39.9623,
+    "lng": 32.8102,
+    "nufus": 678731,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "antalya",
+    "district": "kepez",
+    "lat": 36.9152,
+    "lng": 30.7158,
+    "nufus": 596706,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "antalya",
+    "district": "muratpasa",
+    "lat": 36.852,
+    "lng": 30.7573,
+    "nufus": 519404,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "bursa",
+    "district": "nilufer",
+    "lat": 40.2164,
+    "lng": 28.9771,
+    "nufus": 524093,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "bursa",
+    "district": "osmangazi",
+    "lat": 40.1961,
+    "lng": 29.0602,
+    "nufus": 887061,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "bursa",
+    "district": "yildirim",
+    "lat": 40.1915,
+    "lng": 29.1272,
+    "nufus": 656677,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "gaziantep",
+    "district": "sahinbey",
+    "lat": 37.0457,
+    "lng": 37.3697,
+    "nufus": 982678,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "gaziantep",
+    "district": "sehitkamil",
+    "lat": 37.0881,
+    "lng": 37.3912,
+    "nufus": 770547,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "istanbul",
+    "district": "bagcilar",
+    "lat": 41.0344,
+    "lng": 28.8565,
+    "nufus": 737206,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "istanbul",
+    "district": "bahcelievler",
+    "lat": 40.9984,
+    "lng": 28.8583,
+    "nufus": 587418,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "istanbul",
+    "district": "basaksehir",
+    "lat": 41.1179,
+    "lng": 28.8073,
+    "nufus": 503223,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "istanbul",
+    "district": "esenyurt",
+    "lat": 41.0349,
+    "lng": 28.6794,
+    "nufus": 977697,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "istanbul",
+    "district": "kucukcekmece",
+    "lat": 41.0063,
+    "lng": 28.797,
+    "nufus": 802712,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "istanbul",
+    "district": "maltepe",
+    "lat": 40.9246,
+    "lng": 29.131,
+    "nufus": 524841,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "istanbul",
+    "district": "pendik",
+    "lat": 40.876,
+    "lng": 29.2343,
+    "nufus": 743886,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "istanbul",
+    "district": "sultangazi",
+    "lat": 41.094,
+    "lng": 28.9033,
+    "nufus": 538857,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "istanbul",
+    "district": "umraniye",
+    "lat": 41.0258,
+    "lng": 29.097,
+    "nufus": 723189,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "istanbul",
+    "district": "uskudar",
+    "lat": 41.0261,
+    "lng": 29.0138,
+    "nufus": 519860,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "izmir",
+    "district": "buca",
+    "lat": 38.388,
+    "lng": 27.1742,
+    "nufus": 524295,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "kayseri",
+    "district": "melikgazi",
+    "lat": 38.7118,
+    "lng": 35.4994,
+    "nufus": 597452,
+    "intensity": "standard"
+  },
+  {
+    "tier": "large",
+    "province": "konya",
+    "district": "selcuklu",
+    "lat": 37.8923,
+    "lng": 32.477,
+    "nufus": 716296,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "istanbul",
+    "district": "sancaktepe",
+    "lat": 40.9904,
+    "lng": 29.2288,
+    "nufus": 491169,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "istanbul",
+    "district": "gaziosmanpasa",
+    "lat": 41.057,
+    "lng": 28.9155,
+    "nufus": 481995,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "kahramanmaras",
+    "district": "onikisubat",
+    "lat": 37.5865,
+    "lng": 36.8978,
+    "nufus": 481256,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "sanliurfa",
+    "district": "haliliye",
+    "lat": 37.1674,
+    "lng": 38.7954,
+    "nufus": 480257,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "istanbul",
+    "district": "kartal",
+    "lat": 40.8877,
+    "lng": 29.1862,
+    "nufus": 477001,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "istanbul",
+    "district": "kadikoy",
+    "lat": 40.9904,
+    "lng": 29.0291,
+    "nufus": 467919,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "izmir",
+    "district": "bornova",
+    "lat": 38.4667,
+    "lng": 27.2198,
+    "nufus": 466554,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "izmir",
+    "district": "karabaglar",
+    "lat": 38.3827,
+    "lng": 27.1203,
+    "nufus": 459802,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "elazig",
+    "district": "merkez",
+    "lat": 38.675,
+    "lng": 39.2125,
+    "nufus": 451680,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "istanbul",
+    "district": "avcilar",
+    "lat": 40.9796,
+    "lng": 28.7218,
+    "nufus": 448882,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "istanbul",
+    "district": "esenler",
+    "lat": 41.038,
+    "lng": 28.8821,
+    "nufus": 444514,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "istanbul",
+    "district": "kagithane",
+    "lat": 41.0855,
+    "lng": 28.9816,
+    "nufus": 437025,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "batman",
+    "district": "merkez",
+    "lat": 37.8795,
+    "lng": 41.1241,
+    "nufus": 432489,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "adana",
+    "district": "yuregir",
+    "lat": 36.9971,
+    "lng": 35.3581,
+    "nufus": 432036,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "eskisehir",
+    "district": "odunpazari",
+    "lat": 39.7665,
+    "lng": 30.5433,
+    "nufus": 426891,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "istanbul",
+    "district": "atasehir",
+    "lat": 40.9974,
+    "lng": 29.0988,
+    "nufus": 425094,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "istanbul",
+    "district": "eyupsultan",
+    "lat": 41.0477,
+    "lng": 28.934,
+    "nufus": 421014,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "kayseri",
+    "district": "kocasinan",
+    "lat": 38.75,
+    "lng": 35.471,
+    "nufus": 419087,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "kocaeli",
+    "district": "gebze",
+    "lat": 40.7992,
+    "lng": 29.4322,
+    "nufus": 411712,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "diyarbakir",
+    "district": "kayapinar",
+    "lat": 37.9398,
+    "lng": 40.1807,
+    "nufus": 411124,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "ankara",
+    "district": "altindag",
+    "lat": 39.9351,
+    "lng": 32.8517,
+    "nufus": 410317,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "sanliurfa",
+    "district": "eyyubiye",
+    "lat": 37.1483,
+    "lng": 38.783,
+    "nufus": 410258,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "diyarbakir",
+    "district": "baglar",
+    "lat": 37.9234,
+    "lng": 40.1935,
+    "nufus": 408532,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "istanbul",
+    "district": "beylikduzu",
+    "lat": 40.9996,
+    "lng": 28.6451,
+    "nufus": 405039,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "samsun",
+    "district": "ilkadim",
+    "lat": 41.2786,
+    "lng": 36.3281,
+    "nufus": 374589,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "sivas",
+    "district": "merkez",
+    "lat": 39.7504,
+    "lng": 37.015,
+    "nufus": 374231,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "adana",
+    "district": "cukurova",
+    "lat": 37.0485,
+    "lng": 35.2805,
+    "nufus": 372218,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "istanbul",
+    "district": "fatih",
+    "lat": 41.0204,
+    "lng": 28.9491,
+    "nufus": 367945,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "antalya",
+    "district": "alanya",
+    "lat": 36.5365,
+    "lng": 31.9987,
+    "nufus": 365788,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "kocaeli",
+    "district": "izmit",
+    "lat": 40.7663,
+    "lng": 29.9411,
+    "nufus": 365589,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "denizli",
+    "district": "pamukkale",
+    "lat": 37.7625,
+    "lng": 29.1033,
+    "nufus": 363145,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "konya",
+    "district": "meram",
+    "lat": 37.8606,
+    "lng": 32.4735,
+    "nufus": 354495,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "mersin",
+    "district": "tarsus",
+    "lat": 36.9166,
+    "lng": 34.8956,
+    "nufus": 354478,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "eskisehir",
+    "district": "tepebasi",
+    "lat": 39.7836,
+    "lng": 30.5013,
+    "nufus": 350189,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "hatay",
+    "district": "antakya",
+    "lat": 36.2025,
+    "lng": 36.1602,
+    "nufus": 348125,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "izmir",
+    "district": "karsiyaka",
+    "lat": 38.463,
+    "lng": 27.1083,
+    "nufus": 343464,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "istanbul",
+    "district": "sariyer",
+    "lat": 41.1667,
+    "lng": 29.0573,
+    "nufus": 343396,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "istanbul",
+    "district": "sultanbeyli",
+    "lat": 40.969,
+    "lng": 29.2552,
+    "nufus": 343318,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "trabzon",
+    "district": "ortahisar",
+    "lat": 41.0034,
+    "lng": 39.7241,
+    "nufus": 327258,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "izmir",
+    "district": "konak",
+    "lat": 38.4235,
+    "lng": 27.1422,
+    "nufus": 326552,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "malatya",
+    "district": "battalgazi",
+    "lat": 38.3553,
+    "lng": 38.3335,
+    "nufus": 322745,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "istanbul",
+    "district": "arnavutkoy",
+    "lat": 41.1831,
+    "lng": 28.7397,
+    "nufus": 320754,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "izmir",
+    "district": "bayrakli",
+    "lat": 38.4653,
+    "lng": 27.1681,
+    "nufus": 320452,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "malatya",
+    "district": "yesilyurt",
+    "lat": 38.3475,
+    "lng": 38.286,
+    "nufus": 320215,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "adiyaman",
+    "district": "merkez",
+    "lat": 37.7636,
+    "lng": 38.2772,
+    "nufus": 314865,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "denizli",
+    "district": "merkezefendi",
+    "lat": 37.7874,
+    "lng": 29.0371,
+    "nufus": 313156,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "konya",
+    "district": "karatay",
+    "lat": 37.87,
+    "lng": 32.526,
+    "nufus": 308429,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "mersin",
+    "district": "toroslar",
+    "lat": 36.829,
+    "lng": 34.61,
+    "nufus": 304287,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "aydin",
+    "district": "efeler",
+    "lat": 37.8676,
+    "lng": 27.9004,
+    "nufus": 304129,
+    "intensity": "standard"
+  },
+  {
+    "tier": "mid",
+    "province": "bursa",
+    "district": "inegol",
+    "lat": 40.08,
+    "lng": 29.5096,
+    "nufus": 296042,
+    "intensity": "standard"
+  }
+]
