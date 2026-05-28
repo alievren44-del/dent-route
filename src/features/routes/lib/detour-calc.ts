@@ -135,27 +135,27 @@ export function adaptiveCorridorParams(routeKm: number): {
   }
   if (routeKm < 300) {
     return {
-      bufferM: 4500,
-      detourKmMax: 8,
-      detourMinMax: 12,
-      limit: 100,
-      excludeStartEndKm: 10,
+      bufferM: 8000,
+      detourKmMax: 12,
+      detourMinMax: 18,
+      limit: 150,
+      excludeStartEndKm: 8,
     };
   }
   if (routeKm < 600) {
     return {
-      bufferM: 7000,
-      detourKmMax: 15,
-      detourMinMax: 20,
-      limit: 140,
-      excludeStartEndKm: 20,
+      bufferM: 15000,
+      detourKmMax: 25,
+      detourMinMax: 30,
+      limit: 250,
+      excludeStartEndKm: 15,
     };
   }
   return {
-    bufferM: 10000,
-    detourKmMax: 20,
-    detourMinMax: 30,
-    limit: 180,
-    excludeStartEndKm: 30,
+    bufferM: 25000,
+    detourKmMax: 35,
+    detourMinMax: 45,
+    limit: 300,
+    excludeStartEndKm: 20,
   };
 }
