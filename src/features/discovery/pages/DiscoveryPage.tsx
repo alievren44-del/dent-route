@@ -233,6 +233,21 @@ function DiscoveryPage(): JSX.Element {
 
   const showSpinner = isLoading || isFetching;
 
+  // Akıllı aramaya göre filtrelenmiş liste (tek hesap — sayaç + render paylaşır)
+  const filteredData = useMemo(() => {
+    if (!data) return [];
+    const q = foldTr(searchQuery.trim());
+    if (!q) return data;
+    const qDigits = searchQuery.replace(/\D+/g, '');
+    return data.filter((c) => {
+      const hay = foldTr(`${c.name} ${c.phone ?? ''} ${c.address ?? ''}`);
+      const phoneHay = (c.phone ?? '').replace(/\D+/g, '');
+      return hay.includes(q) || (qDigits.length >= 3 && phoneHay.includes(qDigits));
+    });
+    // foldTr is a stable pure local fn; safe to omit from deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, searchQuery]);
+
   return (
     <div className="p-4 space-y-4">
       {/* Header */}
@@ -390,35 +405,25 @@ function DiscoveryPage(): JSX.Element {
         </div>
       )}
 
+      {/* Sonuç sayacı — teyit için */}
+      {origin && data && data.length > 0 && (
+        <div className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2 text-sm">
+          <span className="font-medium text-foreground">
+            {searchQuery.trim()
+              ? `${filteredData.length} / ${data.length} klinik`
+              : `${data.length} klinik`}
+          </span>
+          <span className="text-xs text-muted-foreground">{origin.label}</span>
+        </div>
+      )}
+
       {/* Results */}
       {origin && data && data.length > 0 && (
         <div className="space-y-3">
-          {(() => {
-            const q = foldTr(searchQuery.trim());
-            const qDigits = searchQuery.replace(/\D+/g, '');
-            const filtered = q
-              ? data.filter((c) => {
-                  const hay = foldTr(`${c.name} ${c.phone ?? ''} ${c.address ?? ''}`);
-                  const phoneHay = (c.phone ?? '').replace(/\D+/g, '');
-                  return hay.includes(q) || (qDigits.length >= 3 && phoneHay.includes(qDigits));
-                })
-              : data;
-            return filtered.length === 0 && q ? (
-              <p className="text-sm text-muted-foreground">"{searchQuery}" için sonuç yok.</p>
-            ) : null;
-          })()}
-          {(() => {
-            const q = foldTr(searchQuery.trim());
-            const qDigits = searchQuery.replace(/\D+/g, '');
-            const filtered = q
-              ? data.filter((c) => {
-                  const hay = foldTr(`${c.name} ${c.phone ?? ''} ${c.address ?? ''}`);
-                  const phoneHay = (c.phone ?? '').replace(/\D+/g, '');
-                  return hay.includes(q) || (qDigits.length >= 3 && phoneHay.includes(qDigits));
-                })
-              : data;
-            return filtered;
-          })().map((c) => {
+          {filteredData.length === 0 && searchQuery.trim() && (
+            <p className="text-sm text-muted-foreground">"{searchQuery}" için sonuç yok.</p>
+          )}
+          {filteredData.map((c) => {
             const key = c.customerId ?? c.externalId ?? `${c.lat},${c.lng},${c.name}`;
             const isExisting = c.sources.includes('saha');
             const stopId = buildStopId(c);
