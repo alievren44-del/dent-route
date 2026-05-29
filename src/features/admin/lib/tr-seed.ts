@@ -63,7 +63,10 @@ export function tierForPopulation(nufus: number): SeedCity['tier'] {
  * 5 plasiyerin çalıştığı il slug'larını priorityProvinces ver → ücretsiz
  * aylık Google tavanı önce o bölgelere harcanır (anında saha faydası).
  */
-export function buildFullSeedList(priorityProvinces: string[] = []): SeedCity[] {
+export function buildFullSeedList(
+  priorityProvinces: string[] = [],
+  intensity: SeedCity['intensity'] = 'standard',
+): SeedCity[] {
   const priorityRank = new Map<string, number>(
     priorityProvinces.map((slug, i) => [slug.toLowerCase(), i]),
   );
@@ -78,7 +81,7 @@ export function buildFullSeedList(priorityProvinces: string[] = []): SeedCity[] 
       lat: d.lat,
       lng: d.lng,
       nufus: d.nufus_2023,
-      intensity: 'standard',
+      intensity,
     });
   }
   const RANK_NONE = priorityProvinces.length + 1;

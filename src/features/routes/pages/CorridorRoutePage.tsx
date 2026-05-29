@@ -33,6 +33,7 @@ import {
   type RouteProvider,
 } from '@features/routes/lib/routing-adapter';
 import { selectVariationCities, type CityVariation } from '@features/routes/lib/city-variations';
+import { CORRIDOR_PRESETS, type CorridorPreset } from '@features/routes/data/corridor-presets';
 import { RouteCard } from '@features/routes/components/RouteCard';
 import {
   districtsAlongPolyline,
@@ -82,10 +83,32 @@ export default function CorridorRoutePage() {
 
   // Corridor district coverage (read-only — DB'den okur, canlı tarama YOK)
   const [corridorDistricts, setCorridorDistricts] = useState<CorridorDistrict[]>([]);
+  // Hazır rota seçilince A/B set edilir, bu flag bir kez auto-compute tetikler
+  const [pendingPresetCompute, setPendingPresetCompute] = useState(false);
 
   useEffect(() => {
     if (useGpsForA && geo.status === 'idle') geo.request();
   }, [useGpsForA, geo]);
+
+  const loadPreset = useCallback((preset: CorridorPreset) => {
+    setUseGpsForA(false);
+    setManualWaypoints([]);
+    setA({
+      placeName: preset.a.placeName,
+      lat: preset.a.lat,
+      lng: preset.a.lng,
+      center: [preset.a.lng, preset.a.lat],
+      relevance: 1,
+    } as GeocodeResult);
+    setB({
+      placeName: preset.b.placeName,
+      lat: preset.b.lat,
+      lng: preset.b.lng,
+      center: [preset.b.lng, preset.b.lat],
+      relevance: 1,
+    } as GeocodeResult);
+    setPendingPresetCompute(true);
+  }, []);
 
   const aCoord = useMemo(() => {
     if (useGpsForA && geo.position) {
@@ -249,6 +272,14 @@ export default function CorridorRoutePage() {
     }
   }, [aCoord, bCoord, profile, provider, manualWaypoints]);
 
+  // Hazır rota seçildiğinde A/B set olunca bir kez otomatik hesapla
+  useEffect(() => {
+    if (pendingPresetCompute && aCoord && bCoord) {
+      setPendingPresetCompute(false);
+      void handleCompute();
+    }
+  }, [pendingPresetCompute, aCoord, bCoord, handleCompute]);
+
   const selectedRoute = routes[selectedRouteIdx] ?? null;
 
   // Map render
@@ -399,6 +430,26 @@ export default function CorridorRoutePage() {
           A → B rotanı çiz, alternatif yolları kıyasla. Her rota üzerindeki klinikleri detaylı gör.
         </p>
       </header>
+
+      {/* Hazır rotalar — çizmeden seç */}
+      <section className="rounded-xl bg-white p-3 shadow-sm">
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+          Hazır rotalar
+        </h2>
+        <div className="flex flex-wrap gap-1.5">
+          {CORRIDOR_PRESETS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => loadPreset(p)}
+              disabled={computing}
+              className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-blue-600 hover:text-white disabled:opacity-50"
+            >
+              {p.name}
+            </button>
+          ))}
+        </div>
+      </section>
 
       <section className="rounded-xl bg-white p-3 shadow-sm">
         <div className="mb-2 flex items-center justify-between">

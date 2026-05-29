@@ -69,6 +69,7 @@ export default function TrSeedPage() {
   const [running, setRunning] = useState(false);
   const [mode, setMode] = useState<'seed77' | 'full'>('full');
   const [tierFilter, setTierFilter] = useState<TierFilter>('all');
+  const [intensity, setIntensity] = useState<'standard' | 'deep'>('standard');
   const [priorityInput, setPriorityInput] = useState('');
   const [monthlyCap, setMonthlyCap] = useState(4500);
   const [skipFreshDays, setSkipFreshDays] = useState(30);
@@ -81,8 +82,9 @@ export default function TrSeedPage() {
 
   // Mode'a göre temel liste (öncelik illeri önce sıralanmış)
   const baseList = useMemo<SeedCity[]>(
-    () => (mode === 'full' ? buildFullSeedList(priorityProvinces) : TR_SEED_LIST),
-    [mode, priorityProvinces],
+    () =>
+      mode === 'full' ? buildFullSeedList(priorityProvinces, intensity) : TR_SEED_LIST,
+    [mode, priorityProvinces, intensity],
   );
 
   const filteredList = useMemo(
@@ -197,6 +199,30 @@ export default function TrSeedPage() {
                 </span>
               )}
             </label>
+            <div className="text-xs">
+              <span className="text-slate-600">Tarama derinliği</span>
+              <div className="mt-1 grid grid-cols-2 gap-1.5">
+                {(
+                  [
+                    { key: 'standard', label: 'Standard (~55 call/ilçe)' },
+                    { key: 'deep', label: 'Derinlemesine (~100 call/ilçe)' },
+                  ] as const
+                ).map(({ key, label }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setIntensity(key)}
+                    className={`rounded-lg border px-2 py-2 text-[11px] font-medium transition ${
+                      intensity === key
+                        ? 'border-indigo-600 bg-indigo-600 text-white'
+                        : 'border-slate-200 bg-white text-slate-700'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <label className="block text-xs">
               <span className="text-slate-600">
                 Aylık ücretsiz Google tavanı (call) — Pro ~5000/ay, güvenli 4500
