@@ -19,9 +19,11 @@
 
 import { getSupabaseClient } from '@lib/supabase';
 import seedList from './tr-seed-list.json';
+import provincesRaw from '@/data/tr-locations/provinces.json';
+import districtsRaw from '@/data/tr-locations/districts.json';
 
 export interface SeedCity {
-  tier: 'large' | 'mid';
+  tier: 'large' | 'mid' | 'small';
   province: string;
   district: string;
   lat: number;
@@ -31,6 +33,63 @@ export interface SeedCity {
 }
 
 export const TR_SEED_LIST = seedList as SeedCity[];
+
+interface ProvinceJson {
+  plaka: number;
+  slug: string;
+}
+interface DistrictJson {
+  il_plaka: number;
+  slug: string;
+  lat: number;
+  lng: number;
+  nufus_2023: number;
+}
+
+const PROVINCE_SLUG_BY_PLAKA = new Map<number, string>(
+  (provincesRaw as ProvinceJson[]).map((p) => [p.plaka, p.slug]),
+);
+
+/** Nüfusa göre tier sınıfı */
+export function tierForPopulation(nufus: number): SeedCity['tier'] {
+  if (nufus >= 500_000) return 'large';
+  if (nufus >= 80_000) return 'mid';
+  return 'small';
+}
+
+/**
+ * districts.json'dan TÜM 973 ilçeyi SeedCity listesine çevir.
+ * Sıralama: priorityProvinces (verilen sırada) önce → sonra nüfus azalan.
+ * 5 plasiyerin çalıştığı il slug'larını priorityProvinces ver → ücretsiz
+ * aylık Google tavanı önce o bölgelere harcanır (anında saha faydası).
+ */
+export function buildFullSeedList(priorityProvinces: string[] = []): SeedCity[] {
+  const priorityRank = new Map<string, number>(
+    priorityProvinces.map((slug, i) => [slug.toLowerCase(), i]),
+  );
+  const list: SeedCity[] = [];
+  for (const d of districtsRaw as DistrictJson[]) {
+    const provinceSlug = PROVINCE_SLUG_BY_PLAKA.get(d.il_plaka);
+    if (!provinceSlug) continue;
+    list.push({
+      tier: tierForPopulation(d.nufus_2023),
+      province: provinceSlug,
+      district: d.slug,
+      lat: d.lat,
+      lng: d.lng,
+      nufus: d.nufus_2023,
+      intensity: 'standard',
+    });
+  }
+  const RANK_NONE = priorityProvinces.length + 1;
+  list.sort((a, b) => {
+    const ra = priorityRank.get(a.province) ?? RANK_NONE;
+    const rb = priorityRank.get(b.province) ?? RANK_NONE;
+    if (ra !== rb) return ra - rb; // öncelik illeri önce, verilen sırada
+    return b.nufus - a.nufus; // sonra nüfus azalan
+  });
+  return list;
+}
 
 /** Tahmini call sayısı (intensity=standard) */
 export function estimateCallsForCity(c: SeedCity): number {
@@ -69,8 +128,11 @@ export interface SeedProgress {
 }
 
 export interface SeedOptions {
-  /** Tüm liste yerine sadece tier='large' veya 'mid' filtre */
-  tier?: 'large' | 'mid';
+  /** Taranacak liste — verilmezse hardcoded TR_SEED_LIST (77 ilçe). Tüm Türkiye
+   *  için buildFullSeedList(priorityProvinces) sonucunu geç. */
+  list?: SeedCity[];
+  /** Tüm liste yerine sadece tier filtre */
+  tier?: 'large' | 'mid' | 'small';
   /** Liste içinden başlangıç index (continue support) */
   startIndex?: number;
   /** Batch size — Edge fn 150s limitle çakışmasın diye */
@@ -79,6 +141,10 @@ export interface SeedOptions {
   skipFreshDays?: number;
   /** Per-city min klinik eşiği — bu sayıdan fazla varsa skip */
   skipIfClinicCount?: number;
+  /** Aylık ücretsiz Google tavanı (tahmini call). Bu run'da biriken tahmini
+   *  call bunu aşacaksa döngü durur → cep $0 kalır. Pro free ~5000/ay,
+   *  güvenli default 4500. Skip edilen ilçeler call saymaz. */
+  monthlyCallCap?: number;
 }
 
 export async function runTrSeed(
@@ -86,12 +152,14 @@ export async function runTrSeed(
   onProgress: (p: SeedProgress) => void,
 ): Promise<SeedProgress> {
   const supabase = getSupabaseClient();
-  let list = TR_SEED_LIST.slice();
+  let list = (opts.list ?? TR_SEED_LIST).slice();
   if (opts.tier) list = list.filter((c) => c.tier === opts.tier);
 
   const startIdx = opts.startIndex ?? 0;
   const batchLimit = opts.batchLimit ?? list.length;
   const slice = list.slice(startIdx, startIdx + batchLimit);
+  const monthlyCallCap = opts.monthlyCallCap ?? Infinity;
+  let estimatedCalls = 0;
 
   const progress: SeedProgress = {
     total: slice.length,
@@ -146,6 +214,22 @@ export async function runTrSeed(
       // RLS engelliyor olabilir, taramaya devam
     }
 
+    // Aylık ücretsiz tavan guard: bu ilçeyi taramak tavanı aşacaksa dur.
+    // (Skip edilen ilçeler buraya gelmez → call saymaz.)
+    const callsEst = estimateCallsForCity(city);
+    if (estimatedCalls + callsEst > monthlyCallCap) {
+      progress.currentCity = null;
+      progress.results.push({
+        province: city.province,
+        district: city.district,
+        status: 'skipped',
+        error: 'monthly_cap_reached',
+      });
+      onProgress({ ...progress });
+      break;
+    }
+    estimatedCalls += callsEst;
+
     // Scan invoke
     try {
       const { data, error } = await supabase.functions.invoke('clinic-scan-v3', {
@@ -178,7 +262,6 @@ export async function runTrSeed(
         committed?: number;
       };
       if (result.status === 'error') throw new Error('scan_failed');
-      const callsEst = estimateCallsForCity(city);
       progress.estimatedCost += callsEst * COST_PER_CALL;
       progress.newClinics += result.new ?? result.committed ?? 0;
       progress.totalScanned += result.scanned ?? 0;
@@ -213,14 +296,14 @@ export async function runTrSeed(
 export function estimateTotalCost(list: SeedCity[] = TR_SEED_LIST): {
   totalCalls: number;
   totalCostUsd: number;
-  byTier: { large: number; mid: number };
+  byTier: { large: number; mid: number; small: number };
 } {
   let totalCalls = 0;
-  const byTier = { large: 0, mid: 0 };
+  const byTier = { large: 0, mid: 0, small: 0 };
   for (const c of list) {
     const calls = estimateCallsForCity(c);
     totalCalls += calls;
-    byTier[c.tier as 'large' | 'mid'] += calls * COST_PER_CALL;
+    byTier[c.tier] += calls * COST_PER_CALL;
   }
   return {
     totalCalls,

@@ -6,11 +6,11 @@
  * Live Google çağrısı YOK — klinikler admin tarafından `clinic-scan` ile önceden eklenir.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { MapPin, Loader2, AlertCircle, Search } from 'lucide-react';
+import { MapPin, Loader2, AlertCircle, Search, Crosshair, ListFilter } from 'lucide-react';
 import { useGeolocation } from '@features/map/hooks/useGeolocation';
 import {
   dedupCandidates,
@@ -18,6 +18,8 @@ import {
   type DiscoveryCandidate,
 } from '@features/discovery/dedup';
 import ClinicCard from '@features/discovery/components/ClinicCard';
+import { DistrictPicker } from '@features/routes/components/DistrictPicker';
+import { getDistrictsByProvince } from '@/data/tr-locations/geo-helpers';
 import { useVertical } from '@core/verticals/useVertical';
 import { getSupabaseClient } from '@lib/supabase';
 import { SupabaseCRMAdapter } from '@core/adapters/builtin/SupabaseCRMAdapter';
@@ -26,6 +28,12 @@ import {
   type BasketStop,
   type BasketStopSource,
 } from '@features/routes/store/routeBasketStore';
+
+interface Origin {
+  lat: number;
+  lng: number;
+  label: string;
+}
 
 const adapter = new SupabaseCRMAdapter();
 
@@ -77,8 +85,26 @@ function DiscoveryPage(): JSX.Element {
   const { position, status, request } = useGeolocation();
   const [radiusKm, setRadiusKm] = useState<number>(5);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [originMode, setOriginMode] = useState<'gps' | 'manual'>('gps');
+  const [provinceSlug, setProvinceSlug] = useState<string>('');
+  const [districtSlug, setDistrictSlug] = useState<string>('');
   const basketAdd = useRouteBasket((s) => s.add);
   const basketItems = useRouteBasket((s) => s.items);
+
+  // Manuel origin: seçili ilçe centroid'i (GPS yoksa / planlama için)
+  const manualOrigin = useMemo<Origin | null>(() => {
+    if (originMode !== 'manual' || !provinceSlug || !districtSlug) return null;
+    const d = getDistrictsByProvince(provinceSlug).find((x) => x.slug === districtSlug);
+    if (!d) return null;
+    return { lat: d.lat, lng: d.lng, label: `${d.ad} / ${d.il_ad}` };
+  }, [originMode, provinceSlug, districtSlug]);
+
+  // Etkin origin: manuel seçim veya GPS konumu
+  const origin = useMemo<Origin | null>(() => {
+    if (originMode === 'manual') return manualOrigin;
+    if (position) return { lat: position.lat, lng: position.lng, label: 'Konumum' };
+    return null;
+  }, [originMode, manualOrigin, position]);
 
   // Türkçe accent-fold + lowercase
   const foldTr = (s: string) =>
@@ -93,23 +119,23 @@ function DiscoveryPage(): JSX.Element {
       .replace(/ü/g, 'u');
 
   useEffect(() => {
-    request();
-  }, [request]);
+    if (originMode === 'gps') request();
+  }, [request, originMode]);
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: ['discovery', position?.lat, position?.lng, radiusKm, vertical.id],
-    enabled: !!position,
+    queryKey: ['discovery', origin?.lat, origin?.lng, radiusKm, vertical.id],
+    enabled: !!origin,
     retry: false,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     queryFn: async () => {
-      if (!position) return [];
+      if (!origin) return [];
 
       const [sahaResult, clinicsResult] = await Promise.allSettled([
-        adapter.searchNearby({ lat: position.lat, lng: position.lng }, radiusKm, {
+        adapter.searchNearby({ lat: origin.lat, lng: origin.lng }, radiusKm, {
           limit: 50,
         }),
-        fetchSahaClinics(position.lat, position.lng, radiusKm * 1000, vertical.id),
+        fetchSahaClinics(origin.lat, origin.lng, radiusKm * 1000, vertical.id),
       ]);
 
       const candidates: DiscoveryCandidate[] = [];
@@ -166,7 +192,7 @@ function DiscoveryPage(): JSX.Element {
           onClick={() => {
             void refetch();
           }}
-          disabled={!position || showSpinner}
+          disabled={!origin || showSpinner}
           className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 h-10 text-sm font-medium hover:bg-muted disabled:opacity-50"
         >
           {showSpinner ? (
@@ -176,6 +202,51 @@ function DiscoveryPage(): JSX.Element {
           )}
           Yenile
         </button>
+      </div>
+
+      {/* Origin mode: GPS konumu veya il/ilçe seçimi */}
+      <div className="space-y-2 rounded-xl border border-border bg-card p-3">
+        <div className="grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
+            onClick={() => setOriginMode('gps')}
+            className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 h-9 text-sm font-medium ${
+              originMode === 'gps'
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background border-border hover:bg-muted'
+            }`}
+          >
+            <Crosshair className="h-4 w-4" aria-hidden="true" />
+            Konumum
+          </button>
+          <button
+            type="button"
+            onClick={() => setOriginMode('manual')}
+            className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 h-9 text-sm font-medium ${
+              originMode === 'manual'
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background border-border hover:bg-muted'
+            }`}
+          >
+            <ListFilter className="h-4 w-4" aria-hidden="true" />
+            İl / İlçe seç
+          </button>
+        </div>
+        {originMode === 'manual' && (
+          <DistrictPicker
+            provinceSlug={provinceSlug}
+            districtSlug={districtSlug}
+            onChange={(p, d) => {
+              setProvinceSlug(p);
+              setDistrictSlug(d);
+            }}
+          />
+        )}
+        {origin && (
+          <p className="text-xs text-muted-foreground">
+            Merkez: <span className="font-medium text-foreground">{origin.label}</span>
+          </p>
+        )}
       </div>
 
       {/* Radius selector */}
@@ -201,17 +272,24 @@ function DiscoveryPage(): JSX.Element {
       </div>
 
       {/* Status banners */}
-      {status === 'denied' && (
+      {originMode === 'gps' && status === 'denied' && (
         <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
           <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden="true" />
-          <span>Konum izni reddedildi. Tarayıcı ayarlarından izin ver.</span>
+          <span>Konum izni reddedildi. "İl / İlçe seç" ile manuel ara veya tarayıcıdan izin ver.</span>
         </div>
       )}
 
-      {status === 'unavailable' && (
+      {originMode === 'gps' && status === 'unavailable' && (
         <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
           <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden="true" />
-          <span>Konum servisi mevcut değil.</span>
+          <span>Konum servisi mevcut değil. "İl / İlçe seç" ile manuel ara.</span>
+        </div>
+      )}
+
+      {originMode === 'manual' && !origin && (
+        <div className="flex items-start gap-2 rounded-xl border border-border bg-card p-3 text-sm text-muted-foreground">
+          <ListFilter className="h-4 w-4 mt-0.5 shrink-0" aria-hidden="true" />
+          <span>Yukarıdan il ve ilçe seç — o bölgeye yakın klinikler listelenir.</span>
         </div>
       )}
 
@@ -230,7 +308,7 @@ function DiscoveryPage(): JSX.Element {
       )}
 
       {/* Akıllı arama */}
-      {position && data && data.length > 0 && (
+      {origin && data && data.length > 0 && (
         <div className="relative">
           <Search
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
@@ -257,7 +335,7 @@ function DiscoveryPage(): JSX.Element {
       )}
 
       {/* Results */}
-      {position && data && data.length > 0 && (
+      {origin && data && data.length > 0 && (
         <div className="space-y-3">
           {(() => {
             const q = foldTr(searchQuery.trim());
@@ -295,7 +373,9 @@ function DiscoveryPage(): JSX.Element {
                 name={c.name}
                 address={c.address}
                 phone={c.phone}
-                distanceM={haversineMeters(position.lat, position.lng, c.lat, c.lng)}
+                lat={c.lat}
+                lng={c.lng}
+                distanceM={haversineMeters(origin.lat, origin.lng, c.lat, c.lng)}
                 rating={c.rating}
                 isExistingCustomer={isExisting}
                 isInBasket={inBasket}
@@ -332,12 +412,12 @@ function DiscoveryPage(): JSX.Element {
         </div>
       )}
 
-      {position && data && data.length === 0 && !showSpinner && !isError && (
+      {origin && data && data.length === 0 && !showSpinner && !isError && (
         <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground space-y-2">
           <p>Bu yarıçapta klinik bulunamadı.</p>
           <p className="text-xs">
             Admin'e tarama talebinde bulun (vertical: <code>{vertical.id}</code>, konum:{' '}
-            {position.lat.toFixed(4)}, {position.lng.toFixed(4)}, yarıçap: {radiusKm}km).
+            {origin.lat.toFixed(4)}, {origin.lng.toFixed(4)}, yarıçap: {radiusKm}km).
           </p>
         </div>
       )}

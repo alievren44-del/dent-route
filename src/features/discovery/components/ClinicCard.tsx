@@ -6,7 +6,16 @@
  * `labels.customer.singular` değeri kullanılır.
  */
 
-import { Phone, MessageCircle, MapPin, Star, Plus, Check, ChevronRight } from 'lucide-react';
+import {
+  Phone,
+  MessageCircle,
+  MapPin,
+  Star,
+  Plus,
+  Check,
+  ChevronRight,
+  Navigation,
+} from 'lucide-react';
 import { useVertical } from '@core/verticals/useVertical';
 
 export interface ClinicCardProps {
@@ -16,11 +25,20 @@ export interface ClinicCardProps {
   whatsapp?: string;
   distanceM?: number;
   rating?: number;
+  /** Verilirse "Yol tarifi" butonu Google Maps deep-link açar (map-light, $0). */
+  lat?: number;
+  lng?: number;
   isExistingCustomer?: boolean;
   /** Bu durak rota sepetinde mi? */
   isInBasket?: boolean;
   onAdd?: () => void;
   onOpenDetail?: () => void;
+}
+
+/** Google Maps yol tarifi deep-link (API değil, ücretsiz URL) */
+function googleMapsDirectionsUrl(lat: number, lng: number, name?: string): string {
+  const dest = name ? `${name} @${lat},${lng}` : `${lat},${lng}`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}`;
 }
 
 function formatDistance(m: number): string {
@@ -43,6 +61,8 @@ function ClinicCard({
   whatsapp,
   distanceM,
   rating,
+  lat,
+  lng,
   isExistingCustomer = false,
   isInBasket = false,
   onAdd,
@@ -55,6 +75,10 @@ function ClinicCard({
   const waHref = waLink(waPhoneSource);
   const hasPhone = Boolean(phone);
   const showAdd = !isExistingCustomer && typeof onAdd === 'function';
+  const directionsHref =
+    typeof lat === 'number' && typeof lng === 'number'
+      ? googleMapsDirectionsUrl(lat, lng, name)
+      : null;
 
   return (
     <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
@@ -139,6 +163,19 @@ function ClinicCard({
             <MessageCircle className="h-4 w-4" aria-hidden="true" />
             WhatsApp
           </button>
+        )}
+
+        {directionsHref && (
+          <a
+            href={directionsHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-background px-3 min-h-tap-min h-11 text-sm font-medium hover:bg-muted"
+            aria-label="Yol tarifi"
+          >
+            <Navigation className="h-4 w-4" aria-hidden="true" />
+            Yol tarifi
+          </a>
         )}
 
         {showAdd &&

@@ -59,10 +59,11 @@ export interface CorridorDistrict {
  */
 export function districtsAlongPolyline(
   polyline: Array<[number, number]>,
-  opts: { maxKm?: number; minPopulation?: number } = {},
+  opts: { maxKm?: number; minPopulation?: number; maxResults?: number } = {},
 ): Array<Omit<CorridorDistrict, 'lastScanAt' | 'existingCount'>> {
   const maxKm = opts.maxKm ?? 15;
   const minPop = opts.minPopulation ?? 5_000;
+  const maxResults = opts.maxResults ?? Infinity;
 
   const provinceBySlug = new Map<string, ProvinceJson>();
   for (const p of PROVINCES) {
@@ -89,7 +90,7 @@ export function districtsAlongPolyline(
   }
   // Polyline'a yakın olanlar önce
   out.sort((a, b) => a.distFromPolylineKm - b.distFromPolylineKm);
-  return out;
+  return Number.isFinite(maxResults) ? out.slice(0, maxResults) : out;
 }
 
 /**
@@ -151,123 +152,10 @@ export async function enrichWithScanStatus(
   }));
 }
 
-export interface ScanFilterOpts {
-  /** En son N gün içinde taranmışsa skip */
-  freshDays?: number;
-  /** Min klinik eşiği — bu sayıdan az ise mutlak tara */
-  minClinicThreshold?: number;
-  /** Max kaç ilçe tarayalım (rate limit + maliyet) */
-  maxToScan?: number;
-}
-
-/**
- * Taranmaya değer ilçeleri filtrele:
- *  - Hiç taranmamış (lastScanAt null) → öncelik 1
- *  - >freshDays gün öncesi taranmış AND klinik az → öncelik 2
- *  - Aksi halde skip
- */
-export function pickDistrictsToScan(
-  districts: CorridorDistrict[],
-  opts: ScanFilterOpts = {},
-): CorridorDistrict[] {
-  const freshDays = opts.freshDays ?? 14;
-  const minClinics = opts.minClinicThreshold ?? 15;
-  const maxToScan = opts.maxToScan ?? 5;
-  const nowMs = Date.now();
-
-  const candidates = districts.filter((d) => {
-    if (d.lastScanAt === null) return true;
-    const scanMs = new Date(d.lastScanAt).getTime();
-    if (Number.isNaN(scanMs)) return true;
-    const ageDays = (nowMs - scanMs) / 86400_000;
-    if (ageDays > freshDays * 2) return true; // çok eski tarama
-    if (ageDays > freshDays && d.existingCount < minClinics) return true; // eski + az klinik
-    return false;
-  });
-  // Polyline'a en yakın + nüfusu yüksek olanları önce
-  candidates.sort((a, b) => {
-    if (a.distFromPolylineKm !== b.distFromPolylineKm) {
-      return a.distFromPolylineKm - b.distFromPolylineKm;
-    }
-    return b.populationK - a.populationK;
-  });
-  return candidates.slice(0, maxToScan);
-}
-
-export interface ScanProgress {
-  total: number;
-  done: number;
-  currentDistrict: string | null;
-  scannedClinics: number;
-  newClinics: number;
-  errors: Array<{ district: string; message: string }>;
-}
-
-/**
- * District listesini clinic-scan-v3 ile sırayla tara.
- * Parallel 2 (her ilçe ~30sn). Toast/UI için onProgress callback.
- */
-export async function scanCorridorDistricts(
-  districts: CorridorDistrict[],
-  onProgress: (p: ScanProgress) => void,
-): Promise<ScanProgress> {
-  const supabase = getSupabaseClient();
-  const progress: ScanProgress = {
-    total: districts.length,
-    done: 0,
-    currentDistrict: null,
-    scannedClinics: 0,
-    newClinics: 0,
-    errors: [],
-  };
-  onProgress({ ...progress });
-
-  // Sıralı işle — clinic-scan-v3 Google rate limit, paralel risky
-  for (const d of districts) {
-    progress.currentDistrict = `${d.provinceName} / ${d.districtName}`;
-    onProgress({ ...progress });
-    try {
-      const { data, error } = await supabase.functions.invoke('clinic-scan-v3', {
-        body: {
-          lat: d.lat,
-          lng: d.lng,
-          radiusM: 8000,
-          provinceSlug: d.provinceSlug,
-          districtSlug: d.districtSlug,
-          vertical: 'dental',
-          // 'all' = DoktorTakvimi scrape + Google Places (NearbySearch + TextSearch
-          // keyword) + OSM. DoktorTakvimi hekim listesi konuma göre reverse-lookup.
-          source: 'all',
-          intensity: 'standard',
-          includeKamu: true,
-          dryRun: false,
-          strictDistrict: true,
-        },
-      });
-      if (error) throw new Error(error.message);
-      const result = data as {
-        status?: string;
-        new?: number;
-        scanned?: number;
-        committed?: number;
-      };
-      if (result.status === 'error') throw new Error('scan_failed');
-      progress.scannedClinics += result.scanned ?? 0;
-      progress.newClinics += result.new ?? result.committed ?? 0;
-    } catch (e) {
-      progress.errors.push({
-        district: `${d.provinceName}/${d.districtName}`,
-        message: e instanceof Error ? e.message : String(e),
-      });
-    } finally {
-      progress.done += 1;
-      onProgress({ ...progress });
-    }
-  }
-  progress.currentDistrict = null;
-  onProgress({ ...progress });
-  return progress;
-}
+// NOT: Eski `scanCorridorDistricts` (rota başına canlı clinic-scan-v3 → Google Places)
+// kaldırıldı. Koridor artık SADECE DB'den okur (saha_clinics_near_polyline +
+// enrichWithScanStatus). Taranmamış ilçeler admin toplu tarama (TR-Seed) ile doldurulur.
+// Rota başına Google maliyeti = $0.
 
 /**
  * Eksik kalsa da rota planlama için DB hangi ilçelerde klinik var topla.

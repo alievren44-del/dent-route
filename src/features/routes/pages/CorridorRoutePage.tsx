@@ -37,10 +37,7 @@ import { RouteCard } from '@features/routes/components/RouteCard';
 import {
   districtsAlongPolyline,
   enrichWithScanStatus,
-  pickDistrictsToScan,
-  scanCorridorDistricts,
   type CorridorDistrict,
-  type ScanProgress,
 } from '@features/routes/lib/corridor-enrichment';
 import type { GeocodeResult } from '@/lib/mapboxGeocode';
 
@@ -83,10 +80,8 @@ export default function CorridorRoutePage() {
   const [computing, setComputing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Corridor enrichment state
+  // Corridor district coverage (read-only — DB'den okur, canlı tarama YOK)
   const [corridorDistricts, setCorridorDistricts] = useState<CorridorDistrict[]>([]);
-  const [enriching, setEnriching] = useState(false);
-  const [enrichProgress, setEnrichProgress] = useState<ScanProgress | null>(null);
 
   useEffect(() => {
     if (useGpsForA && geo.status === 'idle') geo.request();
@@ -218,14 +213,21 @@ export default function CorridorRoutePage() {
         )} toplam klinik)`,
       );
 
-      // Selected route'un polyline'ı için TÜM rota üstü ilçeleri renkli liste
-      // (yeşil=fresh, turuncu=stale, kırmızı=untouched). minPopulation düşürüldü
-      // küçük ilçeler de görünsün (Mucur, Pınarbaşı gibi).
+      // Selected route'un polyline'ı için rota üstü ilçeleri renkli liste
+      // (yeşil=fresh, turuncu=stale, kırmızı=untouched). Read-only DB coverage.
+      // Buffer + cap rota uzunluğuna göre adaptif — Ankara→Malatya'da 222 ilçe
+      // yerine makul sayı (uzun rotada dar buffer + count cap).
       if (resolved[0]) {
         const decoded = decodePolyline(resolved[0].geometry);
+        const routeKm = resolved[0].distanceM / 1000;
+        // Uzun rota → dar koridor (yoldan çok sapma istemeyiz) + sıkı min nüfus
+        const maxKm = routeKm > 400 ? 12 : routeKm > 150 ? 18 : 25;
+        const minPopulation = routeKm > 400 ? 15_000 : routeKm > 150 ? 10_000 : 5_000;
+        const maxResults = 60;
         const nearbyDistricts = districtsAlongPolyline(decoded, {
-          maxKm: 25,
-          minPopulation: 5_000,
+          maxKm,
+          minPopulation,
+          maxResults,
         });
         try {
           const enrichedDistricts = await enrichWithScanStatus(nearbyDistricts);
@@ -246,43 +248,6 @@ export default function CorridorRoutePage() {
       setComputing(false);
     }
   }, [aCoord, bCoord, profile, provider, manualWaypoints]);
-
-  const enrichmentCandidates = useMemo(
-    () =>
-      pickDistrictsToScan(corridorDistricts, {
-        freshDays: 14,
-        minClinicThreshold: 10,
-        maxToScan: 5,
-      }),
-    [corridorDistricts],
-  );
-
-  const handleEnrich = useCallback(async () => {
-    if (enrichmentCandidates.length === 0) return;
-    setEnriching(true);
-    setEnrichProgress({
-      total: enrichmentCandidates.length,
-      done: 0,
-      currentDistrict: null,
-      scannedClinics: 0,
-      newClinics: 0,
-      errors: [],
-    });
-    try {
-      const result = await scanCorridorDistricts(enrichmentCandidates, (p) => {
-        setEnrichProgress({ ...p });
-      });
-      toast.success(
-        `${result.newClinics} yeni klinik eklendi (${result.done}/${result.total} ilçe tarandı)`,
-      );
-      // Rotaları yeniden hesapla → güncel klinik listesi
-      await handleCompute();
-    } catch (e) {
-      toast.error(`Zenginleştirme hatası: ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      setEnriching(false);
-    }
-  }, [enrichmentCandidates, handleCompute]);
 
   const selectedRoute = routes[selectedRouteIdx] ?? null;
 
@@ -612,42 +577,10 @@ export default function CorridorRoutePage() {
             })}
           </div>
 
-          {enrichmentCandidates.length > 0 && (
-            <>
-              <p className="mt-3 text-xs text-slate-600">
-                <strong>{enrichmentCandidates.length}</strong> ilçe taranmaya değer (yeni veya
-                eski). Tek seferde max 5 tarayabilir.
-              </p>
-              <p className="mt-1 text-[10px] text-amber-700 bg-amber-50 rounded px-2 py-1">
-                ⚠️ Bu işlem Google Places API kullanır. 5 ilçe ≈ $5 ($200 aylık free credit
-                içinde). Bütçe ayırmadıysan tıklama.
-              </p>
-              {enrichProgress && enriching && (
-                <div className="mt-2 rounded bg-purple-50 p-2 text-[11px] text-purple-900">
-                  <div className="font-semibold">
-                    Tarama: {enrichProgress.done}/{enrichProgress.total}
-                    {enrichProgress.currentDistrict
-                      ? ` — ${enrichProgress.currentDistrict}`
-                      : ''}
-                  </div>
-                  <div className="mt-0.5 text-purple-700">
-                    {enrichProgress.newClinics} yeni klinik · {enrichProgress.scannedClinics}{' '}
-                    taranan
-                  </div>
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => void handleEnrich()}
-                disabled={enriching}
-                className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-700 disabled:opacity-60"
-              >
-                {enriching
-                  ? 'Taranıyor…'
-                  : `Sıradaki ${Math.min(5, enrichmentCandidates.length)} ilçeyi tara`}
-              </button>
-            </>
-          )}
+          <p className="mt-2 text-[10px] text-slate-400">
+            Kapsam DB'den okunur (canlı tarama yok, maliyet $0). Taranmamış ilçeleri admin
+            toplu tarama ile doldurur.
+          </p>
         </section>
       )}
 

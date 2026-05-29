@@ -23,29 +23,96 @@ import { toast } from 'sonner';
 
 import {
   TR_SEED_LIST,
+  buildFullSeedList,
   estimateTotalCost,
+  estimateCallsForCity,
   runTrSeed,
+  type SeedCity,
   type SeedProgress,
 } from '@features/admin/lib/tr-seed';
+import provincesRaw from '@/data/tr-locations/provinces.json';
+
+type TierFilter = 'all' | 'large' | 'mid' | 'small';
+
+/** Türkçe-duyarlı normalize — il adı/slug eşleştirme için */
+function normTr(s: string): string {
+  return s
+    .toLowerCase()
+    .replaceAll('ı', 'i')
+    .replaceAll('ş', 's')
+    .replaceAll('ğ', 'g')
+    .replaceAll('ü', 'u')
+    .replaceAll('ö', 'o')
+    .replaceAll('ç', 'c')
+    .replace(/\s+/g, '')
+    .trim();
+}
+
+// Kullanıcı "ankara, istanbul" yazınca → slug çöz (ad veya slug eşleşir)
+const PROVINCE_SLUG_LOOKUP = new Map<string, string>();
+for (const p of provincesRaw as Array<{ ad: string; slug: string }>) {
+  PROVINCE_SLUG_LOOKUP.set(normTr(p.ad), p.slug);
+  PROVINCE_SLUG_LOOKUP.set(normTr(p.slug), p.slug);
+}
+
+function parsePriorityProvinces(input: string): string[] {
+  const out: string[] = [];
+  for (const token of input.split(',')) {
+    const slug = PROVINCE_SLUG_LOOKUP.get(normTr(token));
+    if (slug && !out.includes(slug)) out.push(slug);
+  }
+  return out;
+}
 
 export default function TrSeedPage() {
   const [progress, setProgress] = useState<SeedProgress | null>(null);
   const [running, setRunning] = useState(false);
-  const [tierFilter, setTierFilter] = useState<'all' | 'large' | 'mid'>('all');
+  const [mode, setMode] = useState<'seed77' | 'full'>('full');
+  const [tierFilter, setTierFilter] = useState<TierFilter>('all');
+  const [priorityInput, setPriorityInput] = useState('');
+  const [monthlyCap, setMonthlyCap] = useState(4500);
   const [skipFreshDays, setSkipFreshDays] = useState(30);
   const [skipClinicThreshold, setSkipClinicThreshold] = useState(50);
 
-  const filteredList = useMemo(() => {
-    if (tierFilter === 'all') return TR_SEED_LIST;
-    return TR_SEED_LIST.filter((c) => c.tier === tierFilter);
-  }, [tierFilter]);
+  const priorityProvinces = useMemo(
+    () => parsePriorityProvinces(priorityInput),
+    [priorityInput],
+  );
+
+  // Mode'a göre temel liste (öncelik illeri önce sıralanmış)
+  const baseList = useMemo<SeedCity[]>(
+    () => (mode === 'full' ? buildFullSeedList(priorityProvinces) : TR_SEED_LIST),
+    [mode, priorityProvinces],
+  );
+
+  const filteredList = useMemo(
+    () => (tierFilter === 'all' ? baseList : baseList.filter((c) => c.tier === tierFilter)),
+    [baseList, tierFilter],
+  );
 
   const cost = useMemo(() => estimateTotalCost(filteredList), [filteredList]);
 
+  // Bu run'da tavan altında kaç ilçe işlenir (kabaca — skip hariç)
+  const districtsThisRun = useMemo(() => {
+    let calls = 0;
+    let n = 0;
+    for (const c of filteredList) {
+      const next = calls + estimateCallsForCity(c);
+      if (next > monthlyCap) break;
+      calls = next;
+      n += 1;
+    }
+    return { n, calls };
+  }, [filteredList, monthlyCap]);
+
   const handleRun = async () => {
+    const capNote =
+      mode === 'full'
+        ? `\n\nBu ay ücretsiz tavan (~${monthlyCap} call) altında ~${districtsThisRun.n} ilçe taranacak, kalan sonraki aya kalır.`
+        : '';
     if (
       !window.confirm(
-        `${filteredList.length} ilçe tarayacak. Tahmini maliyet: $${cost.totalCostUsd.toFixed(0)} (~${(cost.totalCostUsd * 39).toFixed(0)} TL).\n\nDevam et?`,
+        `${filteredList.length} ilçe kuyrukta. Tahmini bu run: ~${districtsThisRun.n} ilçe / ~$${(districtsThisRun.calls * 0.032).toFixed(0)}.${capNote}\n\nDevam et?`,
       )
     ) {
       return;
@@ -54,14 +121,17 @@ export default function TrSeedPage() {
     try {
       const result = await runTrSeed(
         {
+          list: baseList,
           tier: tierFilter === 'all' ? undefined : tierFilter,
+          monthlyCallCap: mode === 'full' ? monthlyCap : undefined,
           skipFreshDays,
           skipIfClinicCount: skipClinicThreshold,
         },
         (p) => setProgress({ ...p }),
       );
+      const capped = result.results.some((r) => r.error === 'monthly_cap_reached');
       toast.success(
-        `✓ ${result.done} ilçe işlendi · ${result.newClinics} yeni klinik · ~$${result.estimatedCost.toFixed(0)} harcandı`,
+        `✓ ${result.done} ilçe işlendi · ${result.newClinics} yeni klinik · ~$${result.estimatedCost.toFixed(0)} harcandı${capped ? ' · aylık tavan doldu, kalan sonraki aya' : ''}`,
       );
     } catch (e) {
       toast.error(`Seed hatası: ${e instanceof Error ? e.message : String(e)}`);
@@ -77,29 +147,97 @@ export default function TrSeedPage() {
           <Globe size={22} /> TR Seed Tarama
         </h1>
         <p className="mt-1 text-xs opacity-90">
-          Türkiye'nin stratejik 77 büyük ilçesini Google Places ile detaylı tara. Plasiyer
-          rotalarında "yol üstü" klinikler hazır olur, free credit boyutunda kullanılır.
+          Tüm Türkiye'yi (973 ilçe) clinic-scan-v3 source:'all' ile doldur. Aylık ücretsiz
+          Google tavanına tempolu — her ay ~{districtsThisRun.n} ilçe, cep $0. Plasiyer
+          bölgeleri önce.
         </p>
       </header>
+
+      {/* Mode toggle */}
+      <section className="rounded-xl bg-white p-3 shadow-sm">
+        <h2 className="mb-2 text-xs font-semibold uppercase text-slate-600">Kapsam</h2>
+        <div className="grid grid-cols-2 gap-1.5">
+          {(
+            [
+              { key: 'full', label: `Tüm Türkiye (973 ilçe)` },
+              { key: 'seed77', label: `Stratejik 77` },
+            ] as const
+          ).map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setMode(key)}
+              className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
+                mode === key
+                  ? 'border-indigo-600 bg-indigo-600 text-white'
+                  : 'border-slate-200 bg-white text-slate-700'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {mode === 'full' && (
+          <div className="mt-3 space-y-2">
+            <label className="block text-xs">
+              <span className="text-slate-600">
+                Öncelikli iller (önce taransın) — virgülle ayır
+              </span>
+              <input
+                type="text"
+                value={priorityInput}
+                onChange={(e) => setPriorityInput(e.target.value)}
+                placeholder="örn: ankara, istanbul, izmir"
+                className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm"
+              />
+              {priorityInput.trim().length > 0 && (
+                <span className="mt-0.5 block text-[10px] text-emerald-700">
+                  {priorityProvinces.length} il tanındı: {priorityProvinces.join(', ') || '—'}
+                </span>
+              )}
+            </label>
+            <label className="block text-xs">
+              <span className="text-slate-600">
+                Aylık ücretsiz Google tavanı (call) — Pro ~5000/ay, güvenli 4500
+              </span>
+              <input
+                type="number"
+                min={100}
+                max={50_000}
+                step={100}
+                value={monthlyCap}
+                onChange={(e) => setMonthlyCap(Number.parseInt(e.target.value) || 4500)}
+                className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm"
+              />
+              <span className="mt-0.5 block text-[10px] text-slate-500">
+                Bu run'da ~{districtsThisRun.n} ilçe (~{districtsThisRun.calls} call) işlenir,
+                tavan dolunca durur.
+              </span>
+            </label>
+          </div>
+        )}
+      </section>
 
       {/* Tier filter */}
       <section className="rounded-xl bg-white p-3 shadow-sm">
         <h2 className="mb-2 text-xs font-semibold uppercase text-slate-600">Tier filtresi</h2>
-        <div className="grid grid-cols-3 gap-1.5">
-          {(['all', 'large', 'mid'] as const).map((t) => (
+        <div className="grid grid-cols-4 gap-1.5">
+          {(['all', 'large', 'mid', 'small'] as const).map((t) => (
             <button
               key={t}
               type="button"
               onClick={() => setTierFilter(t)}
-              className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
+              className={`rounded-lg border px-2 py-2 text-[11px] font-medium transition ${
                 tierFilter === t
                   ? 'border-blue-600 bg-blue-600 text-white'
                   : 'border-slate-200 bg-white text-slate-700'
               }`}
             >
-              {t === 'all' && `Tümü (${TR_SEED_LIST.length})`}
-              {t === 'large' && `Large 500k+ (${TR_SEED_LIST.filter((c) => c.tier === 'large').length})`}
-              {t === 'mid' && `Mid 200-500k (${TR_SEED_LIST.filter((c) => c.tier === 'mid').length})`}
+              {t === 'all' && `Tümü (${baseList.length})`}
+              {t === 'large' && `500k+ (${baseList.filter((c) => c.tier === 'large').length})`}
+              {t === 'mid' && `80-500k (${baseList.filter((c) => c.tier === 'mid').length})`}
+              {t === 'small' && `<80k (${baseList.filter((c) => c.tier === 'small').length})`}
             </button>
           ))}
         </div>
@@ -165,8 +303,9 @@ export default function TrSeedPage() {
           </div>
         </div>
         <p className="mt-1.5 text-[10px] text-amber-700">
-          Free credit $200/ay + senin $120 credit = $320 toplam bütçe. Skip kuralları %20-40
-          tasarruf sağlar.
+          ⚠️ Google $200/ay credit Mart 2025'te kalktı. Yeni: SKU-başına aylık ücretsiz tavan
+          (Pro Nearby ~5000/ay). Tüm-Türkiye modu bu tavana tempolar → ayda ~
+          {districtsThisRun.n} ilçe, cep $0. ~10 ayda 973 ilçe biter.
         </p>
       </section>
 
@@ -183,7 +322,10 @@ export default function TrSeedPage() {
           </>
         ) : (
           <>
-            <Sparkles size={16} /> {filteredList.length} ilçeyi tara
+            <Sparkles size={16} />{' '}
+            {mode === 'full'
+              ? `Bu ay ~${districtsThisRun.n} ilçeyi tara`
+              : `${filteredList.length} ilçeyi tara`}
           </>
         )}
       </button>
@@ -267,10 +409,11 @@ export default function TrSeedPage() {
           <TrendingUp size={12} /> Strateji
         </h3>
         <ul className="mt-1 space-y-0.5 text-slate-600">
-          <li>• Standard intensity = grid /2 (Çankaya kalitesi)</li>
-          <li>• Per-city skip: yakın zamanda tarandı + zaten klinik var → skip</li>
-          <li>• 1.5sn rate limit delay</li>
-          <li>• Sonraki 11 ay free credit ($200/ay) ile organik plasiyer scan yeterli</li>
+          <li>• source:'all' = DoktorTakvimi + Google Places + OSM (birleşik, dedup içinde)</li>
+          <li>• Öncelikli iller önce → plasiyer bölgesi anında dolar</li>
+          <li>• Aylık tavan dolunca otomatik durur → her ay "Devam" ile kaldığı yerden</li>
+          <li>• Skip: yakın zamanda tarandı + zaten klinik var → call harcamaz</li>
+          <li>• Standard intensity = grid /2 (Çankaya kalitesi), 1.5sn rate limit delay</li>
         </ul>
       </section>
     </div>
