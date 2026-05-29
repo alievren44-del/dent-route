@@ -71,6 +71,34 @@ async function fetchSahaClinics(
   return (data ?? []) as SahaClinicRow[];
 }
 
+/**
+ * İlçe seçildiğinde: radius değil, o ilçenin TÜM aktif kliniklerini getir.
+ * (Çankaya gibi büyük ilçelerde centroid+radius çoğunu kaçırır.) Mesafe
+ * client-side haversine ile origin'e göre hesaplanır.
+ */
+async function fetchClinicsByDistrict(
+  provinceSlug: string,
+  districtSlug: string,
+  verticalKey: string,
+): Promise<SahaClinicRow[]> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('saha_clinics')
+    .select(
+      'id, google_place_id, name, lat, lng, address, phone, rating, user_ratings_total, types, province_slug, district_slug',
+    )
+    .eq('province_slug', provinceSlug)
+    .eq('district_slug', districtSlug)
+    .eq('status', 'active')
+    .eq('vertical_key', verticalKey)
+    .limit(1000);
+  if (error) throw error;
+  return ((data ?? []) as Omit<SahaClinicRow, 'distance_m'>[]).map((r) => ({
+    ...r,
+    distance_m: 0,
+  }));
+}
+
 const RADIUS_OPTIONS: number[] = [1, 2, 5, 10];
 
 function buildStopId(c: DiscoveryCandidate): string {
@@ -122,8 +150,16 @@ function DiscoveryPage(): JSX.Element {
     if (originMode === 'gps') request();
   }, [request, originMode]);
 
+  const isDistrictMode = originMode === 'manual' && !!provinceSlug && !!districtSlug;
+
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: ['discovery', origin?.lat, origin?.lng, radiusKm, vertical.id],
+    queryKey: [
+      'discovery',
+      origin?.lat,
+      origin?.lng,
+      isDistrictMode ? `district:${provinceSlug}/${districtSlug}` : `radius:${radiusKm}`,
+      vertical.id,
+    ],
     enabled: !!origin,
     retry: false,
     staleTime: 5 * 60 * 1000,
@@ -131,11 +167,22 @@ function DiscoveryPage(): JSX.Element {
     queryFn: async () => {
       if (!origin) return [];
 
+      // İlçe modunda: o ilçenin tüm klinikleri + geniş radius'ta saha müşteri.
+      // GPS modunda: kullanıcının seçtiği radius.
+      const sahaRadiusKm = isDistrictMode ? 30 : radiusKm;
+      const clinicsFetch = isDistrictMode
+        ? fetchClinicsByDistrict(provinceSlug, districtSlug, vertical.id).then((rows) =>
+            // Slug eşleşmezse (eski scan farklı slug) 0 dönebilir → 25km radius fallback
+            rows.length > 0
+              ? rows
+              : fetchSahaClinics(origin.lat, origin.lng, 25_000, vertical.id),
+          )
+        : fetchSahaClinics(origin.lat, origin.lng, radiusKm * 1000, vertical.id);
       const [sahaResult, clinicsResult] = await Promise.allSettled([
-        adapter.searchNearby({ lat: origin.lat, lng: origin.lng }, radiusKm, {
-          limit: 50,
+        adapter.searchNearby({ lat: origin.lat, lng: origin.lng }, sahaRadiusKm, {
+          limit: 100,
         }),
-        fetchSahaClinics(origin.lat, origin.lng, radiusKm * 1000, vertical.id),
+        clinicsFetch,
       ]);
 
       const candidates: DiscoveryCandidate[] = [];
@@ -173,7 +220,14 @@ function DiscoveryPage(): JSX.Element {
         }
       }
 
-      return dedupCandidates(candidates);
+      const deduped = dedupCandidates(candidates);
+      // En yakın önce — ilçe modunda da merkez (centroid) bazlı sırala
+      deduped.sort(
+        (a, b) =>
+          haversineMeters(origin.lat, origin.lng, a.lat, a.lng) -
+          haversineMeters(origin.lat, origin.lng, b.lat, b.lng),
+      );
+      return deduped;
     },
   });
 
@@ -249,27 +303,29 @@ function DiscoveryPage(): JSX.Element {
         )}
       </div>
 
-      {/* Radius selector */}
-      <div className="flex items-center gap-2">
-        <MapPin className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-        <span className="text-sm text-muted-foreground">Yarıçap:</span>
-        <div className="flex gap-1">
-          {RADIUS_OPTIONS.map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => setRadiusKm(r)}
-              className={`rounded-lg px-3 h-9 text-sm font-medium border ${
-                radiusKm === r
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'bg-background border-border hover:bg-muted'
-              }`}
-            >
-              {r}km
-            </button>
-          ))}
+      {/* Radius selector — sadece GPS modunda (ilçe modu tüm ilçeyi getirir) */}
+      {originMode === 'gps' && (
+        <div className="flex items-center gap-2">
+          <MapPin className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <span className="text-sm text-muted-foreground">Yarıçap:</span>
+          <div className="flex gap-1">
+            {RADIUS_OPTIONS.map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setRadiusKm(r)}
+                className={`rounded-lg px-3 h-9 text-sm font-medium border ${
+                  radiusKm === r
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background border-border hover:bg-muted'
+                }`}
+              >
+                {r}km
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Status banners */}
       {originMode === 'gps' && status === 'denied' && (
