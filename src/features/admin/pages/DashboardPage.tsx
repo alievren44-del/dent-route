@@ -98,7 +98,7 @@ async function fetchDashboard(sinceIso: string): Promise<DashboardData> {
     supabase
       .from('saha_odemeler')
       .select('tutar, created_by')
-      .gte('odeme_tarihi', sinceDate)
+      .gte('tarih', sinceDate)
       .not('created_by', 'is', null),
   ]);
 
