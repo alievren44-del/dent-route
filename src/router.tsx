@@ -30,6 +30,7 @@ const CustomerDetailPage = lazy(() => import('@features/customers/pages/Customer
 const OrderFormPage = lazy(() => import('@features/orders/pages/OrderFormPage'));
 const OrderApprovalPage = lazy(() => import('@features/orders/pages/OrderApprovalPage'));
 const OrderHistoryPage = lazy(() => import('@features/orders/pages/OrderHistoryPage'));
+const SalesHubPage = lazy(() => import('@features/sales/pages/SalesHubPage'));
 const DashboardPage = lazy(() => import('@features/admin/pages/DashboardPage'));
 const HeatmapPage = lazy(() => import('@features/admin/pages/HeatmapPage'));
 const CsvImportPage = lazy(() => import('@features/admin/pages/CsvImportPage'));
@@ -52,6 +53,10 @@ const InvoiceFormPage = lazy(() => import('@features/invoicing/pages/InvoiceForm
 const InvoiceDetailPage = lazy(() => import('@features/invoicing/pages/InvoiceDetailPage'));
 const PaymentFormPage = lazy(() => import('@features/invoicing/pages/PaymentFormPage'));
 const CekSenetListPage = lazy(() => import('@features/invoicing/pages/CekSenetListPage'));
+const AgingReportPage = lazy(() => import('@features/invoicing/pages/AgingReportPage'));
+const StockLedgerPage = lazy(() => import('@features/admin/pages/StockLedgerPage'));
+const RepKpiPage = lazy(() => import('@features/admin/pages/RepKpiPage'));
+const BIDashboardPage = lazy(() => import('@features/admin/pages/BIDashboardPage'));
 
 const Loading = () => (
   <div className="flex min-h-screen items-center justify-center">
@@ -248,6 +253,18 @@ export function AppRouter() {
           }
         />
 
+        {/* Satış sekmesi (rep + admin) */}
+        <Route
+          path="/sales"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <SalesHubPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
         {/* Siparişler */}
         <Route
           path="/orders/new"
@@ -317,6 +334,47 @@ export function AppRouter() {
             <ProtectedRoute requireRole="admin">
               <AppShell>
                 <InvoiceDetailPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        {/* Sprint 2/4 — Order-to-cash, Stok, BI, KPI, Yaşlandırma */}
+        <Route
+          path="/invoicing/aging"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <AgingReportPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/stock"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <StockLedgerPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/rep-kpi"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <RepKpiPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/bi"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <BIDashboardPage />
               </AppShell>
             </ProtectedRoute>
           }

@@ -108,14 +108,51 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
     };
   }
 
-  // ─── Customers (TODO: Sprint 2) ───────────────────────
+  // ─── Customers ────────────────────────────────────────
 
-  listCustomers(_opts?: ListCustomersOptions): Promise<Page<Customer>> {
-    throw AdapterError.notImplemented('listCustomers (Sprint 2)');
+  async listCustomers(opts?: ListCustomersOptions): Promise<Page<Customer>> {
+    let q = this.supabase
+      .from('saha_clinics')
+      .select(CLINIC_COLS, { count: 'exact' });
+
+    // DB status değerleri: 'active' | 'closed' | 'duplicate' | 'flagged'.
+    // Customer.status ise 'active' | 'inactive' | 'prospect'.
+    // 'active' → eq active; 'inactive' → not-active; default → active.
+    if (opts?.status === 'inactive') {
+      q = q.neq('status', 'active');
+    } else {
+      q = q.eq('status', 'active');
+    }
+    if (opts?.region) q = q.eq('province_slug', opts.region);
+    if (opts?.search) q = q.ilike('name', `%${opts.search}%`);
+    q = q.order('name').limit(opts?.limit ?? 50);
+
+    const { data, error, count } = await q;
+    if (error) {
+      throw new AdapterError('UNKNOWN', error.message, { originalError: error });
+    }
+
+    const rows = (data ?? []) as ClinicRow[];
+    return {
+      items: rows.map(clinicRowToCustomer),
+      total: count ?? undefined,
+    };
   }
 
-  getCustomer(_id: string): Promise<Customer> {
-    throw AdapterError.notImplemented('getCustomer (Sprint 2)');
+  async getCustomer(id: string): Promise<Customer> {
+    const { data, error } = await this.supabase
+      .from('saha_clinics')
+      .select(CLINIC_COLS)
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) {
+      throw new AdapterError('UNKNOWN', error.message, { originalError: error });
+    }
+    if (!data) {
+      throw AdapterError.notFound('Customer', id);
+    }
+    return clinicRowToCustomer(data as ClinicRow);
   }
 
   async searchNearby(
@@ -141,61 +178,71 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       });
     }
 
-    type ClinicRow = {
-      id: string;
-      google_place_id: string | null;
-      name: string;
-      lat: number | null;
-      lng: number | null;
-      address: string | null;
-      phone: string | null;
-      rating: number | null;
-      user_ratings_total: number | null;
-      types: string[] | null;
-      province_slug: string | null;
-      district_slug: string | null;
-      clinic_segment: string | null;
-      last_verified_at: string | null;
-      distance_m: number;
-    };
-
     const rows = (data ?? []) as ClinicRow[];
-    return rows.map<Customer>((r) => ({
-      id: r.id,
-      name: r.name,
-      type: r.clinic_segment ?? undefined,
-      phone: r.phone ?? undefined,
-      status: 'active' as const,
-      addresses:
-        r.lat != null && r.lng != null
-          ? ([
-              {
-                addressLine: r.address ?? '',
-                district: r.district_slug ?? undefined,
-                city: r.province_slug ?? undefined,
-                location: { lat: r.lat, lng: r.lng },
-                isPrimary: true,
-              },
-            ] as Customer['addresses'])
-          : [],
-      customFields: {
-        google_place_id: r.google_place_id,
-        rating: r.rating,
-        user_ratings_total: r.user_ratings_total,
-        types: r.types,
-        last_verified_at: r.last_verified_at,
-      },
-      createdAt: r.last_verified_at ?? new Date().toISOString(),
-      updatedAt: r.last_verified_at ?? new Date().toISOString(),
-    }));
+    return rows.map(clinicRowToCustomer);
   }
 
-  createCustomer(_data: NewCustomer): Promise<Customer> {
-    throw AdapterError.notImplemented('createCustomer (Sprint 2)');
+  async createCustomer(data: NewCustomer): Promise<Customer> {
+    const primary = data.addresses?.[0];
+    const { data: inserted, error } = await this.supabase
+      .from('saha_clinics')
+      .insert({
+        name: data.name,
+        phone: data.phone ?? null,
+        address: primary?.addressLine ?? null,
+        // lat/lng saha_clinics'te NOT NULL — adres konumu yoksa 0,0 ile yer tut.
+        lat: primary?.location?.lat ?? 0,
+        lng: primary?.location?.lng ?? 0,
+        province_slug: data.region ?? primary?.city ?? null,
+        district_slug: primary?.district ?? null,
+        types: data.type ? [data.type] : [],
+        vertical_key: 'dental',
+        status: 'active',
+        // google_place_id UNIQUE NOT NULL — manuel kayıt için benzersiz değer.
+        google_place_id: `manual:${crypto.randomUUID()}`,
+      })
+      .select(CLINIC_COLS)
+      .single();
+
+    if (error || !inserted) {
+      throw new AdapterError('UNKNOWN', error?.message ?? 'customer insert failed', {
+        originalError: error,
+      });
+    }
+    return clinicRowToCustomer(inserted as ClinicRow);
   }
 
-  updateCustomer(_id: string, _patch: Partial<Customer>): Promise<Customer> {
-    throw AdapterError.notImplemented('updateCustomer (Sprint 2)');
+  async updateCustomer(id: string, patch: Partial<Customer>): Promise<Customer> {
+    const primary = patch.addresses?.[0];
+    const row: Record<string, unknown> = {};
+    if (patch.name !== undefined) row.name = patch.name;
+    if (patch.phone !== undefined) row.phone = patch.phone ?? null;
+    if (patch.region !== undefined) row.province_slug = patch.region ?? null;
+    if (patch.type !== undefined) row.types = patch.type ? [patch.type] : [];
+    if (primary) {
+      row.address = primary.addressLine ?? null;
+      if (primary.location?.lat != null) row.lat = primary.location.lat;
+      if (primary.location?.lng != null) row.lng = primary.location.lng;
+      if (primary.district !== undefined) row.district_slug = primary.district ?? null;
+      if (primary.city !== undefined && patch.region === undefined) {
+        row.province_slug = primary.city ?? null;
+      }
+    }
+
+    const { data, error } = await this.supabase
+      .from('saha_clinics')
+      .update(row)
+      .eq('id', id)
+      .select(CLINIC_COLS)
+      .single();
+
+    if (error) {
+      throw new AdapterError('UNKNOWN', error.message, { originalError: error });
+    }
+    if (!data) {
+      throw AdapterError.notFound('Customer', id);
+    }
+    return clinicRowToCustomer(data as ClinicRow);
   }
 
   // ─── Balance ──────────────────────────────────────────
@@ -513,30 +560,37 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
   async quoteOrder(items: NewOrderItem[], _customerId: string): Promise<OrderQuote> {
     const productIds = items.map((i) => i.productId);
     const { data: products } = await this.supabase
-      .from('products')
-      .select('id, name, base_price, sale_price, currency')
+      .from('v_saha_products')
+      .select('id, name, base_price, sale_price, currency, tax_rate')
       .in('id', productIds);
 
-    const priceMap = new Map<string, { price: number; currency: string }>();
+    const priceMap = new Map<string, { price: number; currency: string; taxRate: number }>();
     const productRows = (products ?? []) as Array<{
       id: string;
       base_price: number | string;
       sale_price: number | string | null;
       currency: string | null;
+      tax_rate: number | string | null;
     }>;
     for (const p of productRows) {
+      // tax_rate DB'de yüzde olarak tutulur (ör. 20.00). Null → %20 varsayılan.
+      const taxPct = p.tax_rate != null ? Number(p.tax_rate) : 20;
       priceMap.set(p.id, {
         price: Number(p.sale_price ?? p.base_price),
         currency: p.currency ?? 'TRY',
+        taxRate: Number.isFinite(taxPct) ? taxPct / 100 : 0.2,
       });
     }
 
     let subtotal = 0;
+    let vatTotal = 0;
     const quotedItems: QuotedItem[] = items.map((it) => {
       const pi = priceMap.get(it.productId);
       const unitPrice = it.unitPriceOverride ?? pi?.price ?? 0;
       const lineTotal = unitPrice * it.quantity;
+      const vatRate = pi?.taxRate ?? 0.2;
       subtotal += lineTotal;
+      vatTotal += lineTotal * vatRate;
       return {
         ...it,
         unitPrice,
@@ -545,7 +599,7 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       };
     });
 
-    const vatTotal = subtotal * 0.2;
+    vatTotal = Math.round(vatTotal * 100) / 100;
     return {
       items: quotedItems,
       subtotal,
@@ -561,7 +615,7 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
 
   async listProducts(opts?: ListProductsOptions): Promise<Page<Product>> {
     let q = this.supabase
-      .from('products')
+      .from('v_saha_products')
       .select(
         'id, sku, name, description, category_id, base_price, sale_price, currency, stock_quantity, is_active, main_image',
         { count: 'exact' },
@@ -613,7 +667,7 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
 
   async getProduct(id: string): Promise<Product> {
     const { data, error } = await this.supabase
-      .from('products')
+      .from('v_saha_products')
       .select(
         'id, sku, name, description, category_id, base_price, sale_price, currency, stock_quantity, is_active, main_image',
       )
@@ -658,7 +712,7 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
 
   async searchProducts(query: string, limit?: number): Promise<Product[]> {
     const { data, error } = await this.supabase
-      .from('products')
+      .from('v_saha_products')
       .select(
         'id, sku, name, description, category_id, base_price, sale_price, currency, stock_quantity, is_active, main_image',
       )
@@ -699,11 +753,157 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
     }));
   }
 
-  // ─── Campaigns (TODO: Faz 2) ──────────────────────────
+  // ─── Campaigns ────────────────────────────────────────
 
-  listActiveCampaigns(_customerId?: string): Promise<Campaign[]> {
-    throw AdapterError.notImplemented('listActiveCampaigns (Faz 2)');
+  async listActiveCampaigns(_customerId?: string): Promise<Campaign[]> {
+    const nowIso = new Date().toISOString();
+    const { data, error } = await this.supabase
+      .from('campaigns')
+      .select('*')
+      .eq('is_active', true)
+      .or(`start_date.is.null,start_date.lte.${nowIso}`)
+      .or(`end_date.is.null,end_date.gte.${nowIso}`)
+      .order('priority', { ascending: false });
+
+    if (error) {
+      throw new AdapterError('UNKNOWN', error.message, { originalError: error });
+    }
+
+    type CampaignRow = {
+      id: string;
+      name: string;
+      type: string | null;
+      display_text: string | null;
+      start_date: string | null;
+      end_date: string | null;
+      reward: { type?: string; quantity?: number } | null;
+      target_product: { discountType?: string; discountValue?: number } | null;
+    };
+
+    return (data ?? []).map((r: CampaignRow) => mapCampaignRow(r));
   }
+
+  // ─── Order approval (programmatic) ────────────────────
+
+  /**
+   * Siparişi onaylar (orders.status = 'approved', approved_at = now()).
+   * OrderApprovalPage'in approve mutation'ını yansıtır; trg_order_status_change
+   * trigger'ı stok + order-to-cash akışını otomatik tetikler.
+   */
+  async approveOrder(orderId: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('orders')
+      .update({ status: 'approved', approved_at: new Date().toISOString() })
+      .eq('id', orderId);
+
+    if (error) {
+      throw new AdapterError('UNKNOWN', `approveOrder başarısız: ${error.message}`, {
+        originalError: error,
+      });
+    }
+  }
+}
+
+// ─── campaigns → Campaign mapping ───────────────────────
+
+function mapCampaignRow(r: {
+  id: string;
+  name: string;
+  type: string | null;
+  display_text: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  reward: { type?: string; quantity?: number } | null;
+  target_product: { discountType?: string; discountValue?: number } | null;
+}): Campaign {
+  // DB type → Campaign.discountType. Yüzde/sabit indirim varsa target_product'tan
+  // çek; "free" (mal fazlası) kampanyaları buy_x_get_y olarak işaretle.
+  const dbType = String(r.type ?? '').toLowerCase();
+  let discountType: Campaign['discountType'] = 'percent';
+  let discountValue: number | undefined;
+
+  if (dbType.includes('free')) {
+    discountType = 'buy_x_get_y';
+    discountValue = r.reward?.quantity != null ? Number(r.reward.quantity) : undefined;
+  } else {
+    const tp = r.target_product;
+    if (tp?.discountType === 'fixed') discountType = 'fixed';
+    else discountType = 'percent';
+    if (tp?.discountValue != null) discountValue = Number(tp.discountValue);
+  }
+
+  return {
+    id: r.id,
+    name: r.name,
+    discountType,
+    ...(discountValue != null ? { discountValue } : {}),
+    ...(r.display_text ? { description: r.display_text } : {}),
+    ...(r.start_date ? { startsAt: r.start_date } : {}),
+    ...(r.end_date ? { endsAt: r.end_date } : {}),
+  };
+}
+
+// ─── saha_clinics → Customer mapping ────────────────────
+// Tüm customer method'ları (list/get/create/update/searchNearby) bu mapper'ı
+// ve aynı kolon setini paylaşır.
+
+const CLINIC_COLS =
+  'id, google_place_id, name, lat, lng, address, phone, rating, user_ratings_total, types, province_slug, district_slug, clinic_segment, status, last_verified_at, created_at, updated_at';
+
+type ClinicRow = {
+  id: string;
+  google_place_id: string | null;
+  name: string;
+  lat: number | null;
+  lng: number | null;
+  address: string | null;
+  phone: string | null;
+  rating: number | null;
+  user_ratings_total: number | null;
+  types: string[] | null;
+  province_slug: string | null;
+  district_slug: string | null;
+  clinic_segment: string | null;
+  status: string | null;
+  last_verified_at: string | null;
+  // searchNearby RPC'sinde created_at/updated_at yok — opsiyonel.
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+function clinicRowToCustomer(r: ClinicRow): Customer {
+  const fallbackTs = r.last_verified_at ?? new Date().toISOString();
+  return {
+    id: r.id,
+    externalId: r.google_place_id ?? undefined,
+    name: r.name,
+    type: r.clinic_segment ?? r.types?.[0] ?? undefined,
+    phone: r.phone ?? undefined,
+    // status kolonu yoksa (searchNearby RPC sadece active döner) → active say.
+    status: r.status == null || r.status === 'active' ? 'active' : 'inactive',
+    region: r.province_slug ?? undefined,
+    addresses:
+      r.lat != null && r.lng != null
+        ? ([
+            {
+              addressLine: r.address ?? '',
+              district: r.district_slug ?? undefined,
+              city: r.province_slug ?? undefined,
+              location: { lat: r.lat, lng: r.lng },
+              isPrimary: true,
+            },
+          ] as Customer['addresses'])
+        : [],
+    customFields: {
+      google_place_id: r.google_place_id,
+      rating: r.rating,
+      user_ratings_total: r.user_ratings_total,
+      types: r.types,
+      last_verified_at: r.last_verified_at,
+    },
+    createdAt: r.created_at ?? r.last_verified_at ?? fallbackTs,
+    updatedAt: r.updated_at ?? r.last_verified_at ?? fallbackTs,
+  };
 }
 
 function mapOrderStatus(s: string | null | undefined): OrderStatus {

@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { getSupabaseClient } from '@lib/supabase';
+import { useAuthStore } from '@core/auth/authStore';
+import { mapParlaToSahaRole } from '@core/auth/types';
 import { useVertical } from '@core/verticals/useVertical';
 import { validateCanGiveSample } from '@core/sampling/policies';
 import { currentYearMonth, getQuota, getRemainingBudget } from '@core/sampling/quotas';
@@ -50,11 +52,41 @@ interface AccountRow {
   type?: string | null;
 }
 
+interface VariantLite {
+  id: string;
+  sku?: string | null;
+  price_try?: number | null;
+  attributes?: Record<string, unknown> | null;
+}
+
 interface ProductRow {
   id: string;
   name: string;
-  unit_cost_tl?: number | null;
-  category_key?: string | null;
+  sale_price?: number | null;
+  base_price?: number | null;
+  brand?: string | null;
+  category_id?: string | null;
+  product_variants?: VariantLite[] | null;
+}
+
+/** Varyant için kısa etiket: iso / size / shade / sku + grit/shaft. */
+function variantLabel(v: VariantLite): string {
+  const a = (v.attributes ?? {}) as Record<string, unknown>;
+  const pick = (k: string): string | undefined => {
+    const val = a[k];
+    return val == null || val === '' ? undefined : String(val);
+  };
+  const primary =
+    pick('iso') ??
+    pick('size_label') ??
+    pick('shade_code') ??
+    pick('tipSize') ??
+    (v.sku ?? undefined) ??
+    'Standart';
+  const extra = [pick('grit'), pick('shaft'), pick('package_type')]
+    .filter(Boolean)
+    .join(' ');
+  return [primary, extra].filter(Boolean).join(' · ');
 }
 
 interface FormLine extends NewSampleLine {
@@ -100,6 +132,15 @@ function SampleFormMobile({
   const vertical = useVertical();
   const customerLabel = vertical.labels.customer.singular;
   const supabase = getSupabaseClient();
+
+  // Yönetici/admin: numune bütçe limitini bypass eder (onay gerekmez).
+  const profile = useAuthStore((s) => s.profile);
+  const isAdmin = mapParlaToSahaRole(profile?.role) === 'admin';
+
+  // Hangi satır için varyant seçimi açık (productId ürün/varyant id'si).
+  const [variantPickFor, setVariantPickFor] = useState<{ uid: string; product: ProductRow } | null>(
+    null,
+  );
 
   // ----- Account selector state
   const [selectedAccount, setSelectedAccount] = useState<AccountRow | null>(null);
@@ -179,6 +220,34 @@ function SampleFormMobile({
 
   function addLine(): void {
     setLines((prev) => [...prev, emptyLine()]);
+  }
+
+  /** Ürün (+ opsiyonel varyant) seçimini satıra yazar. */
+  function finalizeLine(uid: string, product: ProductRow, variant?: VariantLite): void {
+    const price =
+      variant?.price_try ??
+      (product.sale_price ?? product.base_price) ??
+      undefined;
+    const name = variant ? `${product.name} · ${variantLabel(variant)}` : product.name;
+    updateLine(uid, {
+      productId: variant?.id ?? product.id,
+      productName: name,
+      productQuery: '',
+      showProductResults: false,
+      unitCostTl: price != null ? Number(price) : undefined,
+    });
+    setVariantPickFor(null);
+  }
+
+  /** Ürün tıklandı: ≥2 varyant varsa seçici aç, değilse direkt bitir. */
+  function handleProductPick(uid: string, product: ProductRow): void {
+    const variants = product.product_variants ?? [];
+    if (variants.length >= 2) {
+      setVariantPickFor({ uid, product });
+      updateLine(uid, { showProductResults: false });
+    } else {
+      finalizeLine(uid, product, variants[0]);
+    }
   }
 
   function removeLine(uid: string): void {
@@ -312,14 +381,15 @@ function SampleFormMobile({
         // TODO Sprint 5.5+: previousSamplesThisAccount RPC ile çekilecek
         isBlacklisted,
         previousSamplesThisAccount: [],
-        remainingBudgetTl: remainingBudget,
+        // Admin/yönetici bütçe limitine takılmaz.
+        remainingBudgetTl: isAdmin ? Number.POSITIVE_INFINITY : remainingBudget,
         estimatedLineCostTl: (line.unitCostTl ?? 0) * (line.qty || 0),
       }),
     );
-  }, [lines, vertical.id, vertical.samplePolicy, isBlacklisted, remainingBudget]);
+  }, [lines, vertical.id, vertical.samplePolicy, isBlacklisted, remainingBudget, isAdmin]);
 
   const hasBlockingIssue = validationResults.some((r) => !r.ok);
-  const budgetExceeded = totalCost > remainingBudget && remainingBudget > 0;
+  const budgetExceeded = !isAdmin && totalCost > remainingBudget && remainingBudget > 0;
 
   // ----- Product search per line
   const activeProductLine = lines.find(
@@ -334,9 +404,11 @@ function SampleFormMobile({
     enabled: Boolean(activeProductLine && activeProductLine.productQuery.trim().length >= 2),
     queryFn: async (): Promise<ProductRow[]> => {
       if (!activeProductLine) return [];
+      // Birleşik katalog view'i — public.products + Fanta + Olident (v_saha_products).
+      // Gerçek ürünler markaya özel şemalarda; bu view 3 kaynağı tek listede toplar.
       const { data, error } = await supabase
-        .from('products')
-        .select('id, name, unit_cost_tl, category_key')
+        .from('v_saha_products')
+        .select('id, name, sale_price, brand, main_image, product_variants')
         .ilike('name', `%${activeProductLine.productQuery.trim()}%`)
         .limit(8);
       if (error) throw error;
@@ -363,6 +435,25 @@ function SampleFormMobile({
     kvkkChecked &&
     !hasBlockingIssue &&
     Boolean(repId);
+
+  // "Numune Ver" neden pasif — kullanıcıya eksikleri göster.
+  const submitBlockers = useMemo<string[]>(() => {
+    const out: string[] = [];
+    if (!selectedAccount) out.push(`${customerLabel} seçilmedi`);
+    if (lines.length === 0 || !lines.every((l) => l.productName.trim().length > 0 && l.qty > 0)) {
+      out.push('Her satırda ürün + miktar olmalı');
+    }
+    if (!kvkkChecked) out.push('KVKK onay kutusu işaretlenmeli');
+    if (hasBlockingIssue) {
+      for (const r of validationResults) {
+        for (const iss of r.issues) {
+          if (!r.ok) out.push(iss.message);
+        }
+      }
+    }
+    if (!repId) out.push('Oturum bulunamadı (tekrar giriş yapın)');
+    return [...new Set(out)];
+  }, [selectedAccount, customerLabel, lines, kvkkChecked, hasBlockingIssue, validationResults, repId]);
 
   async function handleSubmit(): Promise<void> {
     setSubmitError(null);
@@ -604,45 +695,79 @@ function SampleFormMobile({
                   placeholder="Ürün adı yaz…"
                   className="w-full rounded-xl border border-border bg-background px-3 h-12 min-h-tap-min text-base"
                 />
-                {line.showProductResults && line.productQuery.trim().length >= 2 && (
+                {/* Varyant seçimi — ürün ≥2 varyantlı seçilince */}
+                {variantPickFor?.uid === line.uid && (
                   <div className="mt-1 rounded-xl border border-border bg-background shadow-lg overflow-hidden">
-                    {productSearchQuery.isLoading && activeProductLine?.uid === line.uid && (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">Aranıyor…</div>
-                    )}
-                    {activeProductLine?.uid === line.uid &&
-                      !productSearchQuery.isLoading &&
-                      (productSearchQuery.data?.length ?? 0) === 0 && (
-                        <div className="px-3 py-2 text-sm text-muted-foreground">Sonuç yok</div>
-                      )}
-                    {activeProductLine?.uid === line.uid &&
-                      (productSearchQuery.data ?? []).map((p) => (
+                    <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/40">
+                      <span className="text-xs font-medium truncate">
+                        {variantPickFor.product.name} — varyant seç
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVariantPickFor(null);
+                          updateLine(line.uid, { showProductResults: true });
+                        }}
+                        className="text-xs text-primary shrink-0 ml-2"
+                      >
+                        ← Geri
+                      </button>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto">
+                      {(variantPickFor.product.product_variants ?? []).map((v) => (
                         <button
                           type="button"
-                          key={p.id}
-                          onClick={() =>
-                            updateLine(line.uid, {
-                              productId: p.id,
-                              productName: p.name,
-                              productQuery: '',
-                              showProductResults: false,
-                              unitCostTl:
-                                line.unitCostTl ??
-                                (p.unit_cost_tl != null ? Number(p.unit_cost_tl) : undefined),
-                              categoryKey: line.categoryKey ?? p.category_key ?? undefined,
-                            })
-                          }
+                          key={v.id}
+                          onClick={() => finalizeLine(line.uid, variantPickFor.product, v)}
                           className="w-full text-left px-3 py-3 min-h-tap-min hover:bg-muted border-b border-border last:border-b-0"
                         >
-                          <div className="font-medium">{p.name}</div>
-                          {p.unit_cost_tl != null && (
-                            <div className="text-xs text-muted-foreground">
-                              {Number(p.unit_cost_tl).toFixed(2)} TL
-                            </div>
-                          )}
+                          <div className="font-medium">{variantLabel(v)}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {v.sku ? `${v.sku} · ` : ''}
+                            {v.price_try != null ? `${Number(v.price_try).toFixed(2)} TL` : 'Fiyat —'}
+                          </div>
                         </button>
                       ))}
+                    </div>
                   </div>
                 )}
+
+                {/* Ürün arama sonuçları */}
+                {variantPickFor?.uid !== line.uid &&
+                  line.showProductResults &&
+                  line.productQuery.trim().length >= 2 && (
+                    <div className="mt-1 rounded-xl border border-border bg-background shadow-lg overflow-hidden">
+                      {productSearchQuery.isLoading && activeProductLine?.uid === line.uid && (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">Aranıyor…</div>
+                      )}
+                      {activeProductLine?.uid === line.uid &&
+                        !productSearchQuery.isLoading &&
+                        (productSearchQuery.data?.length ?? 0) === 0 && (
+                          <div className="px-3 py-2 text-sm text-muted-foreground">Sonuç yok</div>
+                        )}
+                      {activeProductLine?.uid === line.uid &&
+                        (productSearchQuery.data ?? []).map((p) => {
+                          const variantCount = p.product_variants?.length ?? 0;
+                          return (
+                            <button
+                              type="button"
+                              key={p.id}
+                              onClick={() => handleProductPick(line.uid, p)}
+                              className="w-full text-left px-3 py-3 min-h-tap-min hover:bg-muted border-b border-border last:border-b-0"
+                            >
+                              <div className="font-medium">{p.name}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {p.brand ? `${p.brand} · ` : ''}
+                                {(p.sale_price ?? p.base_price) != null
+                                  ? `${Number(p.sale_price ?? p.base_price).toFixed(2)} TL`
+                                  : 'Fiyat —'}
+                                {variantCount >= 2 ? ` · ${variantCount} varyant ›` : ''}
+                              </div>
+                            </button>
+                          );
+                        })}
+                    </div>
+                  )}
               </div>
 
               {/* Qty + unit */}
@@ -888,6 +1013,16 @@ function SampleFormMobile({
 
       {/* Sticky submit */}
       <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-border bg-background/95 backdrop-blur px-4 py-3 safe-area-inset">
+        {!canSubmit && submitBlockers.length > 0 && (
+          <ul className="mb-2 flex flex-col gap-0.5 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            {submitBlockers.map((b, i) => (
+              <li key={i} className="flex items-start gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" aria-hidden="true" />
+                <span>{b}</span>
+              </li>
+            ))}
+          </ul>
+        )}
         <button
           type="button"
           disabled={!canSubmit}

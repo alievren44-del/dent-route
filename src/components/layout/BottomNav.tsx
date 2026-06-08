@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Map, Users, Route, BarChart3, Gift } from 'lucide-react';
+import { Map, Users, Route, BarChart3, Gift, ShoppingCart } from 'lucide-react';
 import { usePermissions } from '@core/auth/usePermissions';
 import { useRouteBasket } from '@features/routes/store/routeBasketStore';
 
@@ -16,6 +16,7 @@ const items: NavItem[] = [
   { to: '/clinics/discover', label: 'Klinikler', Icon: Users },
   { to: '/routes/plan', label: 'Rota', Icon: Route, showBasketBadge: true },
   { to: '/samples', label: 'Numune', Icon: Gift },
+  { to: '/sales', label: 'Satış', Icon: ShoppingCart },
   { to: '/admin/dashboard', label: 'Yönetici', Icon: BarChart3, adminOnly: true },
 ];
 

@@ -34,6 +34,11 @@ import {
   Sparkles,
   Navigation,
   Banknote,
+  Package,
+  Target,
+  BarChart3,
+  TrendingDown,
+  TrendingUp,
   ClipboardList,
 } from 'lucide-react';
 import { useRouteBasket } from '@features/routes/store/routeBasketStore';
@@ -78,8 +83,9 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: 'Sipariş & Fatura',
+    title: 'Satış & Sipariş',
     items: [
+      { to: '/sales', label: 'Satış Panosu', Icon: TrendingUp },
       { to: '/orders/new', label: 'Yeni Sipariş', Icon: ShoppingCart },
       { to: '/orders/history', label: 'Sipariş Geçmişi', Icon: ListChecks },
       { to: '/orders/approval', label: 'Onay Bekleyenler', Icon: ClipboardCheck },
@@ -87,6 +93,7 @@ const SECTIONS: NavSection[] = [
       { to: '/invoicing/fatura/yeni', label: 'Yeni Fatura', Icon: Receipt },
       { to: '/invoicing/cek-senet', label: 'Çek / Senet', Icon: CreditCard },
       { to: '/invoicing/odeme/yeni', label: 'Yeni Ödeme', Icon: FileText },
+      { to: '/invoicing/aging', label: 'Alacak Yaşlandırma', Icon: TrendingDown },
     ],
   },
   {
@@ -94,6 +101,9 @@ const SECTIONS: NavSection[] = [
     adminOnly: true,
     items: [
       { to: '/admin/dashboard', label: 'Yönetici Paneli', Icon: LayoutDashboard },
+      { to: '/admin/bi', label: 'BI Panosu', Icon: BarChart3 },
+      { to: '/admin/rep-kpi', label: 'Plasiyer KPI', Icon: Target },
+      { to: '/admin/stock', label: 'Stok Defteri', Icon: Package },
       { to: '/admin/clinic-scan', label: 'Klinik Tarama', Icon: Radar },
       { to: '/admin/clinics', label: 'CSV / Excel İçe Aktar', Icon: FileUp },
       { to: '/admin/heatmap', label: 'Heatmap', Icon: Activity },
