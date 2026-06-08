@@ -11,8 +11,19 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { Search, Plus, Minus, Trash2, ShoppingCart, X, Check, AlertTriangle } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  Search,
+  Plus,
+  Minus,
+  Trash2,
+  ShoppingCart,
+  X,
+  Check,
+  AlertTriangle,
+  Bookmark,
+  Save,
+} from 'lucide-react';
 import { SupabaseCRMAdapter } from '@core/adapters/builtin/SupabaseCRMAdapter';
 import { getSupabaseClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
@@ -24,6 +35,19 @@ const adapter = new SupabaseCRMAdapter();
 interface CartItem extends NewOrderItem {
   productName: string;
   unitPriceSnapshot: number;
+}
+
+interface TemplateLine {
+  product_id: string;
+  product_name: string;
+  qty: number;
+  unit_price: number;
+}
+
+interface OrderTemplate {
+  id: string;
+  name: string;
+  lines: TemplateLine[];
 }
 
 interface CustomerOption {
@@ -133,6 +157,57 @@ function OrderFormPage(): JSX.Element {
     enabled: cart.length > 0 && !!customerId,
     queryFn: () => adapter.quoteOrder(quoteItems, customerId),
   });
+
+  // Hazır şablonlar (rep kendi / admin hepsi — RLS).
+  const repId = profile?.id ?? null;
+  const queryClient = useQueryClient();
+  const { data: templates } = useQuery({
+    queryKey: ['order-templates', repId],
+    enabled: Boolean(repId),
+    queryFn: async (): Promise<OrderTemplate[]> => {
+      const supabase = getSupabaseClient();
+      const { data, error: err } = await supabase
+        .from('saha_order_templates')
+        .select('id, name, lines')
+        .order('name');
+      if (err) return [];
+      return (data ?? []) as OrderTemplate[];
+    },
+  });
+
+  async function saveTemplate(): Promise<void> {
+    if (cart.length === 0 || !repId) return;
+    const name = window.prompt('Şablon adı:')?.trim();
+    if (!name) return;
+    const lines: TemplateLine[] = cart.map((c) => ({
+      product_id: c.productId,
+      product_name: c.productName,
+      qty: c.quantity,
+      unit_price: c.unitPriceSnapshot,
+    }));
+    const supabase = getSupabaseClient();
+    const { error: err } = await supabase
+      .from('saha_order_templates')
+      .upsert({ rep_id: repId, name, lines }, { onConflict: 'rep_id,name' });
+    if (err) {
+      setError(`Şablon kaydedilemedi: ${err.message}`);
+      return;
+    }
+    void queryClient.invalidateQueries({ queryKey: ['order-templates', repId] });
+  }
+
+  function loadTemplate(t: OrderTemplate): void {
+    const lines = Array.isArray(t.lines) ? t.lines : [];
+    setCart(
+      lines.map((l) => ({
+        productId: l.product_id,
+        quantity: l.qty,
+        productName: l.product_name,
+        unitPriceSnapshot: l.unit_price,
+        unitPriceOverride: l.unit_price,
+      })),
+    );
+  }
 
   function addToCart(p: Product): void {
     setCart((prev) => {
@@ -325,6 +400,44 @@ function OrderFormPage(): JSX.Element {
             </div>
           )}
         </section>
+
+        {/* Hazır şablonlar */}
+        {((templates ?? []).length > 0 || cart.length > 0) && (
+          <section>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <Bookmark className="h-3.5 w-3.5" /> Hazır Şablonlar
+              </label>
+              {cart.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void saveTemplate()}
+                  className="inline-flex items-center gap-1 text-xs text-primary font-medium px-2 py-1 min-h-tap-min"
+                >
+                  <Save className="h-3.5 w-3.5" /> Sepeti Şablon Kaydet
+                </button>
+              )}
+            </div>
+            {(templates ?? []).length > 0 && (
+              <div className="flex gap-1.5 overflow-x-auto -mx-1 px-1 pb-1">
+                {(templates ?? []).map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => loadTemplate(t)}
+                    className="shrink-0 inline-flex items-center gap-1 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium min-h-tap-min hover:bg-muted/60"
+                  >
+                    <Bookmark className="h-3.5 w-3.5 text-primary" />
+                    {t.name}
+                    <span className="text-muted-foreground">
+                      ({Array.isArray(t.lines) ? t.lines.length : 0})
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Ürün ekleme */}
         <section>
