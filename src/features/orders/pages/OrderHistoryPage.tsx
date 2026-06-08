@@ -292,6 +292,23 @@ function OrderHistoryPage(): JSX.Element {
     toast.success(`${rows.length} sipariş dışa aktarıldı.`);
   }
 
+  // Faturaya gönder — siparişi parla fatura kuyruğuna (saha_invoice_requests) ekler.
+  const [invoicingId, setInvoicingId] = useState<string | null>(null);
+  async function requestInvoice(o: OrderHistoryRow): Promise<void> {
+    setInvoicingId(o.id);
+    try {
+      const supabase = getSupabaseClient();
+      const { error: rpcErr } = await supabase.rpc('request_order_invoice', { p_order_id: o.id });
+      if (rpcErr) throw rpcErr;
+      toast.success('Sipariş faturaya gönderildi (parla kuyruğu).');
+      setDetailFor(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Faturaya gönderilemedi.');
+    } finally {
+      setInvoicingId(null);
+    }
+  }
+
   return (
     <div className="flex flex-col min-h-full pb-20">
       {/* Header */}
@@ -582,10 +599,24 @@ function OrderHistoryPage(): JSX.Element {
               )}
             </dl>
 
+            {isPrivileged &&
+              ['approved', 'confirmed', 'shipped', 'delivered'].includes(
+                String(detailFor.status ?? '').toLowerCase(),
+              ) && (
+                <button
+                  type="button"
+                  disabled={invoicingId === detailFor.id}
+                  onClick={() => void requestInvoice(detailFor)}
+                  className="w-full mt-4 px-3 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium min-h-tap-min disabled:opacity-50"
+                >
+                  {invoicingId === detailFor.id ? 'Gönderiliyor…' : 'Faturaya Gönder'}
+                </button>
+              )}
+
             <button
               type="button"
               onClick={() => setDetailFor(null)}
-              className="w-full mt-4 px-3 py-2.5 rounded-lg border border-border text-sm font-medium min-h-tap-min"
+              className="w-full mt-2 px-3 py-2.5 rounded-lg border border-border text-sm font-medium min-h-tap-min"
             >
               Kapat
             </button>
