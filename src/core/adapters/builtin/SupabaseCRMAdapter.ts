@@ -573,12 +573,13 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       tax_rate: number | string | null;
     }>;
     for (const p of productRows) {
-      // tax_rate DB'de yüzde olarak tutulur (ör. 20.00). Null → %20 varsayılan.
-      const taxPct = p.tax_rate != null ? Number(p.tax_rate) : 20;
+      // tax_rate DB'de yüzde olarak tutulur (ör. 10.00). Null → %10 varsayılan
+      // (dental/medikal standart; web sitesi de 10). Açık değerler korunur.
+      const taxPct = p.tax_rate != null ? Number(p.tax_rate) : 10;
       priceMap.set(p.id, {
         price: Number(p.sale_price ?? p.base_price),
         currency: p.currency ?? 'TRY',
-        taxRate: Number.isFinite(taxPct) ? taxPct / 100 : 0.2,
+        taxRate: Number.isFinite(taxPct) ? taxPct / 100 : 0.1,
       });
     }
 
@@ -588,7 +589,7 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       const pi = priceMap.get(it.productId);
       const unitPrice = it.unitPriceOverride ?? pi?.price ?? 0;
       const lineTotal = unitPrice * it.quantity;
-      const vatRate = pi?.taxRate ?? 0.2;
+      const vatRate = pi?.taxRate ?? 0.1;
       subtotal += lineTotal;
       vatTotal += lineTotal * vatRate;
       return {
