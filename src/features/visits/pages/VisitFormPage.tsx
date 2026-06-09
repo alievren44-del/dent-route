@@ -34,6 +34,7 @@ import { getSupabaseClient } from '@lib/supabase';
 import { useVertical } from '@core/verticals/useVertical';
 import { resizeImage, extensionFor } from '@lib/imageResize';
 import type { CustomField, VisitOutcomeOption } from '@core/verticals/types';
+import { enqueueOp } from '@core/offline/syncQueue';
 
 interface VisitRow {
   id: string;
@@ -308,8 +309,48 @@ function VisitFormPage(): JSX.Element {
     }
 
     setSubmitting(true);
-    try {
-      // 1. Foto upload
+
+    // custom_fields type-aware dönüştürme (paylaşılan mantık)
+    const customPayload: Record<string, unknown> = {};
+    for (const f of visitCustomFields) {
+      const raw = customValues[f.key];
+      if (raw == null || raw === '') continue;
+      if (f.type === 'number') {
+        const n = Number(raw);
+        if (!Number.isNaN(n)) customPayload[f.key] = n;
+      } else if (f.type === 'boolean') {
+        customPayload[f.key] = raw === 'true';
+      } else {
+        customPayload[f.key] = raw;
+      }
+    }
+
+    const updatePayload: Record<string, unknown> = {
+      check_out_at: new Date().toISOString(),
+      status: 'completed',
+      outcome,
+      met_person: metPerson.trim() || null,
+      notes: notes.trim() || null,
+      custom_fields: customPayload,
+      next_visit_date: nextVisitDate || null,
+    };
+
+    // Outcome-based navigation helper (aşağıda iki yerde kullanılır)
+    const doNavigate = () => {
+      const opt = outcomes.find((o) => o.key === outcome);
+      if (opt?.requiresOrder || outcome === 'order_taken') {
+        navigate(`/orders/new?customerId=${visit.account_id}`, { replace: true });
+      } else if (outcome === 'sample_given' || outcome === 'sample_left') {
+        navigate(`/samples?customerId=${visit.account_id}`, { replace: true });
+      } else {
+        navigate('/history', { replace: true });
+      }
+    };
+
+    // Fotoğraflar: sadece çevrim içiyken upload denenebilir.
+    // Offline ise fotoğraf atlanır (blob LocalStorage'e sığmaz); key bilgisi kuyruğa eklenmez.
+    const attemptPhotoUpload = async (): Promise<void> => {
+      if (!navigator.onLine || photos.length === 0) return;
       const uploaded: { storage_path: string; category: PhotoCategory }[] = [];
       for (const photo of photos) {
         const ext = extensionFor(photo.blob.type || 'image/jpeg');
@@ -326,8 +367,6 @@ function VisitFormPage(): JSX.Element {
         }
         uploaded.push({ storage_path: path, category: photo.category });
       }
-
-      // 2. Foto satırları
       if (uploaded.length > 0) {
         const photoRows = uploaded.map((u) => ({
           visit_id: id,
@@ -339,32 +378,28 @@ function VisitFormPage(): JSX.Element {
           console.warn('Foto satır insert hatası', photoErr);
         }
       }
+    };
 
-      // 3. Visit update — check-out
-      // custom_fields type-aware dönüştürme
-      const customPayload: Record<string, unknown> = {};
-      for (const f of visitCustomFields) {
-        const raw = customValues[f.key];
-        if (raw == null || raw === '') continue;
-        if (f.type === 'number') {
-          const n = Number(raw);
-          if (!Number.isNaN(n)) customPayload[f.key] = n;
-        } else if (f.type === 'boolean') {
-          customPayload[f.key] = raw === 'true';
-        } else {
-          customPayload[f.key] = raw;
+    // Çevrim dışıysa doğrudan kuyruğa al (fotoğraf upload atlanır).
+    if (!navigator.onLine) {
+      try {
+        if (photos.length > 0) {
+          toast.warning('Çevrim dışısınız — fotoğraflar senkronize edilmeyecek, diğer alanlar kaydedildi.');
         }
+        await enqueueOp('visit.update', { id, ...updatePayload });
+        toast.success('Ziyaret kaydedildi — bağlantı geldiğinde senkronize edilecek');
+        doNavigate();
+      } catch {
+        toast.error('Ziyaret çevrim dışı kuyruğa eklenemedi.');
+      } finally {
+        setSubmitting(false);
       }
+      return;
+    }
 
-      const updatePayload: Record<string, unknown> = {
-        check_out_at: new Date().toISOString(),
-        status: 'completed',
-        outcome,
-        met_person: metPerson.trim() || null,
-        notes: notes.trim() || null,
-        custom_fields: customPayload,
-        next_visit_date: nextVisitDate || null,
-      };
+    // Çevrim içi: normal akış dene, başarısız olursa kuyruğa al.
+    try {
+      await attemptPhotoUpload();
 
       const { error: updErr } = await supabase
         .from('saha_visits')
@@ -373,19 +408,27 @@ function VisitFormPage(): JSX.Element {
       if (updErr) throw updErr;
 
       toast.success('Ziyaret kaydedildi');
-
-      // 4. Outcome-based navigation
-      const opt = outcomes.find((o) => o.key === outcome);
-      if (opt?.requiresOrder || outcome === 'order_taken') {
-        navigate(`/orders/new?customerId=${visit.account_id}`, { replace: true });
-      } else if (outcome === 'sample_given' || outcome === 'sample_left') {
-        navigate(`/samples?customerId=${visit.account_id}`, { replace: true });
-      } else {
-        navigate('/history', { replace: true });
-      }
+      doNavigate();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Ziyaret kaydedilirken hata oluştu.';
-      toast.error(msg);
+      const msg = err instanceof Error ? err.message : String(err);
+      const isNetworkError =
+        msg.includes('fetch') ||
+        msg.includes('network') ||
+        msg.includes('Failed to fetch') ||
+        msg.includes('NetworkError') ||
+        !navigator.onLine;
+      if (isNetworkError) {
+        try {
+          await enqueueOp('visit.update', { id, ...updatePayload });
+          toast.success('Bağlantı hatası — ziyaret kaydedildi, bağlantı geldiğinde gönderilecek');
+          doNavigate();
+          return;
+        } catch {
+          toast.error('Ziyaret çevrim dışı kuyruğa eklenemedi.');
+          return;
+        }
+      }
+      toast.error(msg || 'Ziyaret kaydedilirken hata oluştu.');
     } finally {
       setSubmitting(false);
     }

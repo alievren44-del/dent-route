@@ -1,5 +1,10 @@
 apply plugin: 'com.android.application'
 
+// Release signing — keystore.properties is in android/ (rootProject dir)
+def kpFile = rootProject.file("keystore.properties")
+def kp = new Properties()
+if (kpFile.exists()) { kp.load(new FileInputStream(kpFile)) }
+
 android {
     namespace = "com.parla.saha"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -18,14 +23,11 @@ android {
     }
     signingConfigs {
         release {
-            def storePassEnv = System.getenv("KEYSTORE_PASS")
-            def keyPassEnv = System.getenv("KEY_PASS")
-            // Sadece env var'lar set ise release signing aktif
-            if (storePassEnv != null && keyPassEnv != null) {
-                storeFile file("saha-release.keystore")
-                storePassword storePassEnv
-                keyAlias "saha-release"
-                keyPassword keyPassEnv
+            if (kpFile.exists()) {
+                storeFile file(kp['storeFile'])
+                storePassword kp['storePassword']
+                keyAlias kp['keyAlias']
+                keyPassword kp['keyPassword']
             }
         }
     }
@@ -33,8 +35,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            // Env var'lar varsa imzala
-            if (System.getenv("KEYSTORE_PASS") != null) {
+            if (kpFile.exists()) {
                 signingConfig signingConfigs.release
             }
         }

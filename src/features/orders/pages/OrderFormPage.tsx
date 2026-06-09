@@ -24,11 +24,13 @@ import {
   Bookmark,
   Save,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { SupabaseCRMAdapter } from '@core/adapters/builtin/SupabaseCRMAdapter';
 import { getSupabaseClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 import type { NewOrderItem, Product } from '@core/adapters/types';
 import { needsApproval, nextApproverRole, thresholdFor } from '@features/orders/lib/approvalRules';
+import { enqueueOp } from '@core/offline/syncQueue';
 
 const adapter = new SupabaseCRMAdapter();
 
@@ -52,10 +54,10 @@ interface OrderTemplate {
 
 interface CustomerOption {
   id: string;
-  ad_soyad: string | null;
-  klinik_adi: string | null;
-  email: string | null;
-  city: string | null;
+  /** Görünen ad (klinik adı). */
+  name: string;
+  /** Alt satır — adres / şehir. */
+  subtitle: string | null;
 }
 
 function formatTL(n: number): string {
@@ -98,27 +100,35 @@ function OrderFormPage(): JSX.Element {
   const debouncedProductSearch = useDebounced(productSearch, 300);
   const debouncedCustomerSearch = useDebounced(customerSearch, 300);
 
-  // Initial customer label
+  // Initial customer label — önce klinik (yeni akış), bulunamazsa profil (eski akış).
   useQuery({
     queryKey: ['order-form-customer', initialCustomerId],
     enabled: !!initialCustomerId,
     queryFn: async () => {
       const supabase = getSupabaseClient();
-      const { data, error: err } = await supabase
+      const { data: clinic } = await supabase
+        .from('saha_clinics')
+        .select('id, name')
+        .eq('id', initialCustomerId)
+        .maybeSingle();
+      if (clinic?.id) {
+        setCustomerLabel((clinic as { name: string | null }).name ?? clinic.id);
+        return clinic;
+      }
+      const { data: prof } = await supabase
         .from('profiles')
         .select('id, ad_soyad, klinik_adi, email')
         .eq('id', initialCustomerId)
         .maybeSingle();
-      if (err) throw err;
-      const row = (data ?? null) as CustomerOption | null;
-      if (row) {
-        setCustomerLabel(row.klinik_adi ?? row.ad_soyad ?? row.email ?? row.id);
+      if (prof) {
+        const p = prof as { id: string; ad_soyad: string | null; klinik_adi: string | null; email: string | null };
+        setCustomerLabel(p.klinik_adi ?? p.ad_soyad ?? p.email ?? p.id);
       }
-      return row;
+      return prof;
     },
   });
 
-  // Customer autocomplete
+  // Müşteri arama — saha_clinics (3116 klinik) üzerinde isimle.
   const { data: customerOptions, isFetching: customerSearching } = useQuery({
     queryKey: ['order-form-customer-search', debouncedCustomerSearch],
     enabled: customerPickerOpen && debouncedCustomerSearch.trim().length >= 2,
@@ -126,12 +136,18 @@ function OrderFormPage(): JSX.Element {
       const supabase = getSupabaseClient();
       const term = `%${debouncedCustomerSearch}%`;
       const { data, error: err } = await supabase
-        .from('profiles')
-        .select('id, ad_soyad, klinik_adi, email, city')
-        .or(`klinik_adi.ilike.${term},ad_soyad.ilike.${term},email.ilike.${term}`)
+        .from('saha_clinics')
+        .select('id, name, address')
+        .ilike('name', term)
+        .order('name')
         .limit(20);
       if (err) throw err;
-      return (data ?? []) as CustomerOption[];
+      const rows = (data ?? []) as Array<{ id: string; name: string | null; address: string | null }>;
+      return rows.map((r) => ({
+        id: r.id,
+        name: r.name ?? 'İsimsiz klinik',
+        subtitle: r.address,
+      }));
     },
   });
 
@@ -249,7 +265,7 @@ function OrderFormPage(): JSX.Element {
 
   function pickCustomer(c: CustomerOption): void {
     setCustomerId(c.id);
-    setCustomerLabel(c.klinik_adi ?? c.ad_soyad ?? c.email ?? c.id);
+    setCustomerLabel(c.name);
     setCustomerPickerOpen(false);
     setCustomerSearch('');
   }
@@ -265,8 +281,48 @@ function OrderFormPage(): JSX.Element {
       return;
     }
     setSubmitting(true);
+
+    // Her submit için deterministik idempotency key üret (uuid tabanlı).
+    const idempotencyKey =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `order-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    // Offline veya ağ hatası durumunda kuyruğa alınacak payload.
+    // adapter.createOrder'ın beklediği alanlarla uyumlu (syncQueue executeOp 'order.create').
+    const offlinePayload: Record<string, unknown> = {
+      idempotency_key: idempotencyKey,
+      customer_id: customerId,
+      notes: notes.trim() || null,
+      items: cart.map((c) => ({
+        productId: c.productId,
+        quantity: c.quantity,
+        unitPriceSnapshot: c.unitPriceSnapshot,
+        ...(c.unitPriceOverride !== undefined ? { unitPriceOverride: c.unitPriceOverride } : {}),
+      })),
+      // Snapshot — replay sırasında adapter fiyatı DB'den tekrar çeker.
+      subtotal_snapshot: subtotal,
+      grand_total_snapshot: grandTotal,
+      requires_approval: requiresApproval,
+      sales_rep_id: profile?.id ?? null,
+    };
+
+    // Çevrim dışıysa doğrudan kuyruğa al.
+    if (!navigator.onLine) {
+      try {
+        await enqueueOp('order.create', offlinePayload, idempotencyKey);
+        toast.success('Sipariş kaydedildi — bağlantı geldiğinde gönderilecek');
+        navigate('/orders/history');
+      } catch {
+        setError('Sipariş çevrim dışı kuyruğa eklenemedi.');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // Çevrim içi: normal akış dene, başarısız olursa kuyruğa al.
     try {
-      const idempotencyKey = `order-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const items: NewOrderItem[] = cart.map((c) => ({
         productId: c.productId,
         quantity: c.quantity,
@@ -313,9 +369,28 @@ function OrderFormPage(): JSX.Element {
         }
       }
 
-      navigate(`/clinics/${customerId}`);
+      navigate('/orders/history');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sipariş oluşturulamadı.');
+      // Ağ/sunucu hatası → kuyruğa al, kullanıcıyı bilgilendir.
+      const msg = err instanceof Error ? err.message : String(err);
+      const isNetworkError =
+        msg.includes('fetch') ||
+        msg.includes('network') ||
+        msg.includes('Failed to fetch') ||
+        msg.includes('NetworkError') ||
+        !navigator.onLine;
+      if (isNetworkError) {
+        try {
+          await enqueueOp('order.create', offlinePayload, idempotencyKey);
+          toast.success('Bağlantı hatası — sipariş kaydedildi, bağlantı geldiğinde gönderilecek');
+          navigate('/orders/history');
+          return;
+        } catch {
+          setError('Sipariş çevrim dışı kuyruğa eklenemedi.');
+          return;
+        }
+      }
+      setError(msg || 'Sipariş oluşturulamadı.');
     } finally {
       setSubmitting(false);
     }
@@ -389,10 +464,10 @@ function OrderFormPage(): JSX.Element {
                       onClick={() => pickCustomer(c)}
                       className="w-full text-left px-3 py-2.5 min-h-tap-min hover:bg-muted/60 border-b border-border last:border-b-0"
                     >
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {c.klinik_adi ?? c.ad_soyad ?? c.email ?? c.id}
-                      </p>
-                      {c.city && <p className="text-xs text-muted-foreground truncate">{c.city}</p>}
+                      <p className="text-sm font-medium text-foreground truncate">{c.name}</p>
+                      {c.subtitle && (
+                        <p className="text-xs text-muted-foreground truncate">{c.subtitle}</p>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -580,7 +655,7 @@ function OrderFormPage(): JSX.Element {
               <span className="font-medium text-foreground">{formatTL(subtotal)}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">KDV (%20)</span>
+              <span className="text-muted-foreground">KDV</span>
               <span className="font-medium text-foreground">{formatTL(vatTotal)}</span>
             </div>
             <div className="border-t border-border pt-1.5 mt-1.5 flex items-center justify-between">

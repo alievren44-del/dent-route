@@ -25,6 +25,7 @@ import { haversineMeters } from '@features/discovery/dedup';
 import { getSupabaseClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 import { useVertical } from '@core/verticals/useVertical';
+import { enqueueOp } from '@core/offline/syncQueue';
 
 interface AccountRow {
   id: string;
@@ -196,7 +197,12 @@ function CheckInPage(): JSX.Element {
       }
       if (!effectiveRepId) throw new Error('Rep ID bulunamadı.');
 
-      const payload = {
+      const idempotencyKey =
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `checkin-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+      const payload: Record<string, unknown> = {
         account_id: id,
         rep_id: effectiveRepId,
         check_in_at: new Date().toISOString(),
@@ -204,8 +210,20 @@ function CheckInPage(): JSX.Element {
         check_in_lng: position.lng,
         check_in_accuracy_m: position.accuracy,
         distance_to_account_m: distanceM,
-        status: 'in_progress' as const,
+        status: 'in_progress',
+        idempotency_key: idempotencyKey,
       };
+
+      // Çevrim dışıysa kuyruğa al, geçici visit id oluştur.
+      if (!navigator.onLine) {
+        await enqueueOp('visit.create', payload, idempotencyKey);
+        toast.success('Check-in kaydedildi — bağlantı geldiğinde senkronize edilecek');
+        // Offline: geçici id ile ziyaret formuna yönlendir.
+        // Gerçek visit_id bağlantıda oluşacak; şimdilik history'ye yönlendir.
+        navigate('/history', { replace: true });
+        return;
+      }
+
       const { data, error } = await supabase
         .from('saha_visits')
         .insert(payload)
@@ -216,8 +234,47 @@ function CheckInPage(): JSX.Element {
       toast.success('Check-in başarılı');
       navigate(`/visits/${visitId}`, { replace: true });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Check-in sırasında hata oluştu.';
-      toast.error(msg);
+      const msg = err instanceof Error ? err.message : String(err);
+      const isNetworkError =
+        msg.includes('fetch') ||
+        msg.includes('network') ||
+        msg.includes('Failed to fetch') ||
+        msg.includes('NetworkError') ||
+        !navigator.onLine;
+      if (isNetworkError) {
+        try {
+          let effectiveRepId2 = repId;
+          if (!effectiveRepId2) {
+            const { data } = await supabase.auth.getUser();
+            effectiveRepId2 = data.user?.id ?? null;
+          }
+          const idempotencyKey2 =
+            typeof crypto !== 'undefined' && 'randomUUID' in crypto
+              ? crypto.randomUUID()
+              : `checkin-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+          await enqueueOp(
+            'visit.create',
+            {
+              account_id: id,
+              rep_id: effectiveRepId2 ?? '',
+              check_in_at: new Date().toISOString(),
+              check_in_lat: position!.lat,
+              check_in_lng: position!.lng,
+              check_in_accuracy_m: position!.accuracy,
+              distance_to_account_m: distanceM,
+              status: 'in_progress',
+              idempotency_key: idempotencyKey2,
+            },
+            idempotencyKey2,
+          );
+          toast.success('Bağlantı hatası — check-in kaydedildi, bağlantı geldiğinde gönderilecek');
+          navigate('/history', { replace: true });
+        } catch {
+          toast.error('Check-in çevrim dışı kuyruğa eklenemedi.');
+        }
+        return;
+      }
+      toast.error(msg || 'Check-in sırasında hata oluştu.');
     } finally {
       setSubmitting(false);
     }
