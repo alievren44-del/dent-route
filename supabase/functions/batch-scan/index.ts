@@ -51,8 +51,22 @@ const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? 'http://localhost:51
 const RATE_DELAY_MS = 3000;
 const MAX_ITEMS_PER_INVOCATION = 200; // savunma: tek invocation'da bu kadar ilçe işle, kalanı bir sonraki call'a bırak
 
+// ---------------------------------------------------------------------------
+// Budget: intensity × grid-point çarpanları → tahmini Google Places sorgusu
+// ---------------------------------------------------------------------------
+// buildGridPoints mantığına göre: ≤2 km → 1, ≤5 km → 5, ≤10 km → 9, >10 km → 13 nokta
+// Orta radius (10 km default) → 9 nokta; 1 type sorgusu × 9 = 9/district (standard)
+// high: type + 2 keyword → 3 sorgu × 9 = 27/district
+// max:  type + 4 keyword → 5 sorgu × 9 = 45/district
+const INTENSITY_QUERY_MULTIPLIER: Record<string, number> = {
+  standard: 1,
+  high: 3,
+  max: 5,
+};
+// Not: DEFAULT_GRID_POINTS kullanılmıyor — estimateQueriesForDistrict içinde hesaplanıyor.
+
 function buildCorsHeaders(reqOrigin: string | null): Record<string, string> {
-  const allowed = reqOrigin && ALLOWED_ORIGINS.includes(reqOrigin) ? reqOrigin : ALLOWED_ORIGINS[0] ?? 'null';
+  const allowed = reqOrigin && (ALLOWED_ORIGINS.includes(reqOrigin) || reqOrigin === 'https://localhost' || reqOrigin === 'capacitor://localhost') ? reqOrigin : ALLOWED_ORIGINS[0] ?? 'null';
   return {
     'Access-Control-Allow-Origin': allowed,
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -70,6 +84,71 @@ function jsonResponse(body: unknown, status: number, cors: Record<string, string
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+// ---------------------------------------------------------------------------
+// estimateQueriesForDistrict — bir ilçe için tahmini Google Places sorgu sayısı
+// ---------------------------------------------------------------------------
+function estimateQueriesForDistrict(
+  intensity: 'standard' | 'high' | 'max',
+  radiusKm: number,
+): number {
+  // Grid-point sayısı (buildGridPoints kuralına göre)
+  let gridPoints: number;
+  const radiusM = radiusKm * 1000;
+  if (radiusM <= 2000) gridPoints = 1;
+  else if (radiusM <= 5000) gridPoints = 5;
+  else if (radiusM <= 10000) gridPoints = 9;
+  else gridPoints = 13;
+
+  const queryMultiplier = INTENSITY_QUERY_MULTIPLIER[intensity] ?? 1;
+  return gridPoints * queryMultiplier;
+}
+
+// ---------------------------------------------------------------------------
+// checkScanBudget — DB RPC çağrısı; FALSE → bütçe aşılacak
+// ---------------------------------------------------------------------------
+// deno-lint-ignore no-explicit-any
+async function checkScanBudget(
+  supabase: any,
+  estimatedQueries: number,
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.rpc('check_scan_budget', {
+      p_estimated_queries: estimatedQueries,
+    });
+    if (error) {
+      // RPC yoksa veya hata varsa: soft-fail → izin ver (prod-safe)
+      console.warn('check_scan_budget rpc error (soft-fail):', error.message);
+      return true;
+    }
+    return data === true;
+  } catch (e) {
+    console.warn('check_scan_budget exception (soft-fail):', (e as Error).message);
+    return true;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// recordScanQueries — bir district scan'ı tamamlandıktan sonra sorgu sayısını logla
+// ---------------------------------------------------------------------------
+// deno-lint-ignore no-explicit-any
+async function recordScanQueries(
+  supabase: any,
+  userId: string,
+  queries: number,
+  meta: Record<string, unknown>,
+): Promise<void> {
+  try {
+    const { error } = await supabase.rpc('record_scan_queries', {
+      p_user_id: userId,
+      p_queries: queries,
+      p_meta: meta,
+    });
+    if (error) console.warn('record_scan_queries error:', error.message);
+  } catch (e) {
+    console.warn('record_scan_queries exception:', (e as Error).message);
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -278,6 +357,66 @@ Deno.serve(async (req) => {
     }
 
     // ------------------------------------------------------------------------
+    // 1b. Budget & risk guard — scope materialization'dan ÖNCE.
+    // ------------------------------------------------------------------------
+    const jobIntensity: 'standard' | 'high' | 'max' =
+      job.scan_intensity === 'high' || job.scan_intensity === 'max' ? job.scan_intensity : 'standard';
+    const jobRadiusKm = Number(job.radius_km ?? 10);
+
+    // whole_country + max: çok yüksek maliyet; ADMIN olmayan MANAGER redded
+    if (job.scope_type === 'whole_country' && jobIntensity === 'max') {
+      // Config'den admin onayını kontrol et
+      const { data: budgetCfg } = await supabase
+        .from('saha_scan_budget_config')
+        .select('whole_country_max_ok')
+        .eq('id', 1)
+        .maybeSingle();
+
+      if (!budgetCfg?.whole_country_max_ok) {
+        console.warn('budget_guard: whole_country+max rejected — admin override not set');
+        // Job'u "paused" bırak, kuyruğa almak yerine hata döndür
+        await supabase
+          .from('saha_scan_jobs')
+          .update({ status: 'paused', last_error: 'whole_country_max_requires_admin_approval' })
+          .eq('id', jobId);
+        return jsonResponse(
+          {
+            status: 'error',
+            error: 'whole_country_max_requires_admin_approval',
+            hint: 'Set saha_scan_budget_config.whole_country_max_ok = true to allow this combination.',
+            jobId,
+          },
+          403,
+          cors,
+        );
+      }
+    }
+
+    // Upfront bütçe kontrolü: tek ilçelik scan için hemen reddet
+    // (çok-ilçeli scan'lerde her ilçe öncesi de kontrol edilir — bkz. döngü içi)
+    {
+      const perDistrictEstimate = estimateQueriesForDistrict(jobIntensity, jobRadiusKm);
+      const budgetOk = await checkScanBudget(supabase, perDistrictEstimate);
+      if (!budgetOk) {
+        console.warn(`budget_guard: daily query limit would be exceeded (estimated ${perDistrictEstimate} queries/district)`);
+        await supabase
+          .from('saha_scan_jobs')
+          .update({ status: 'paused', last_error: 'daily_budget_exceeded' })
+          .eq('id', jobId);
+        return jsonResponse(
+          {
+            status: 'error',
+            error: 'daily_budget_exceeded',
+            hint: 'Daily Google Places query limit reached. Try again tomorrow or raise the limit in saha_scan_budget_config.',
+            jobId,
+          },
+          429,
+          cors,
+        );
+      }
+    }
+
+    // ------------------------------------------------------------------------
     // 2. Item materialization (eğer henüz oluşturulmadıysa).
     // ------------------------------------------------------------------------
     const { count: existingItemsCount, error: countErr } = await supabase
@@ -412,6 +551,21 @@ Deno.serve(async (req) => {
         lng: number;
       };
 
+      // ── Per-district budget gate ─────────────────────────────────────────
+      {
+        const districtEstimate = estimateQueriesForDistrict(scanIntensity, radiusM / 1000);
+        const budgetOk = await checkScanBudget(supabase, districtEstimate);
+        if (!budgetOk) {
+          console.warn(`budget_gate: daily limit hit at district ${item.province_slug}/${item.district_slug}, pausing job`);
+          await supabase
+            .from('saha_scan_jobs')
+            .update({ status: 'paused', last_error: 'daily_budget_exceeded_mid_run' })
+            .eq('id', jobId);
+          breakReason = 'daily_budget_exceeded';
+          break;
+        }
+      }
+
       // Mark running
       const startedIso = new Date().toISOString();
       const { error: setRunningErr } = await supabase
@@ -495,6 +649,26 @@ Deno.serve(async (req) => {
       });
       if (rpcErr) {
         console.warn('increment rpc error:', rpcErr.message);
+      }
+
+      // ── Budget usage log ─────────────────────────────────────────────────
+      // Gerçek kullanılan sorgu sayısını kaydet. clinic-scan errors array'inden
+      // google_grid_calls bilgisi varsa onu kullan; yoksa tahmini kullan.
+      {
+        let actualQueries = estimateQueriesForDistrict(scanIntensity, radiusM / 1000);
+        // clinic-scan "google_grid_calls:N" bilgisini errors[] içinde raporlar
+        const gcEntry = result.errors?.find((e) => e.startsWith('google_grid_calls:'));
+        if (gcEntry) {
+          const parsed = parseInt(gcEntry.split(':')[1] ?? '', 10);
+          if (!isNaN(parsed)) actualQueries = parsed;
+        }
+        await recordScanQueries(supabase, userId, actualQueries, {
+          job_id: jobId,
+          item_id: item.id,
+          province: item.province_slug,
+          district: item.district_slug,
+          intensity: scanIntensity,
+        });
       }
 
       processedThisRun++;
