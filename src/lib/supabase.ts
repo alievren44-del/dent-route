@@ -10,6 +10,7 @@
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '../types/database.types';
 import { getEnv } from '@config/env';
 import { pushDebug } from '@/lib/debugLog';
 
@@ -106,8 +107,26 @@ function safe(v: unknown): string {
 }
 
 /**
+ * A5 additive — strongly-typed Supabase client helper.
+ *
+ * Aynı runtime singleton'ı tip-cast ile döndürür.
+ * Sıfır runtime davranış değişikliği; yeni call site'lar (SupabaseCRMAdapter pilot)
+ * bu helper üzerinden tam DB şema tiplerini alır.
+ *
+ * Usage:
+ *   const sb = getTypedClient();
+ *   const { data } = await sb.from('saha_clinics').select('id, name'); // tam tipli
+ */
+let _typed: SupabaseClient<Database> | null = null;
+export function getTypedClient(): SupabaseClient<Database> {
+  if (!_typed) _typed = getSupabaseClient() as unknown as SupabaseClient<Database>;
+  return _typed;
+}
+
+/**
  * Test için cache temizler.
  */
 export function resetSupabaseClient(): void {
   cachedClient = null;
+  _typed = null;
 }

@@ -523,15 +523,22 @@ function SampleFormMobile({
 
       // 5. Increment quota
       if (totalCost > 0) {
-        try {
-          await supabase.rpc('saha_increment_sample_spent', {
-            _rep_id: repId,
-            _year_month: currentYearMonth(),
-            _amount: totalCost,
-          });
-        } catch (rpcErr) {
-          // RPC yoksa şimdilik sessiz geç
-          console.warn('saha_increment_sample_spent RPC missing', rpcErr);
+        // RPC auth.uid()'den rep_id türetir; client sadece year_month + amount geçer.
+        const { error: quotaErr } = await supabase.rpc('saha_increment_sample_spent', {
+          p_year_month: currentYearMonth(),
+          p_amount: totalCost,
+        });
+        if (quotaErr) {
+          if (quotaErr.message?.includes('budget_exceeded')) {
+            setSubmitError('Aylık numune bütçesi aşıldı. Bu numune kaydedilemedi.');
+            setSubmitting(false);
+            return;
+          }
+          // Generic quota error — log but don't block the already-saved record
+          console.error('saha_increment_sample_spent error', quotaErr);
+          setSubmitError('Numune kaydedildi ancak kota güncellenemedi. Lütfen yöneticinize bildirin.');
+          setSubmitting(false);
+          return;
         }
       }
 

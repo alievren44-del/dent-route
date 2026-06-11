@@ -8,7 +8,8 @@
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
+import type { Database } from '@/types/database.types';
 import type { ICRMAdapter } from '../ICRMAdapter';
 import type {
   AdapterCapabilities,
@@ -42,16 +43,18 @@ export interface SupabaseCRMAdapterDeps {
 export class SupabaseCRMAdapter implements ICRMAdapter {
   readonly type = 'supabase' as const;
   readonly version = '1.0.0';
-  private readonly supabase: SupabaseClient;
+  // A5 pilot: typed client — sıfır runtime değişiklik, yalnızca tip katmanı.
+  private readonly supabase: SupabaseClient<Database>;
 
   constructor(deps: SupabaseCRMAdapterDeps = {}) {
     if (deps.client) {
-      this.supabase = deps.client;
+      // Test inject: untyped client'ı typed olarak cast et (test DB şemasını karşılar).
+      this.supabase = deps.client as unknown as SupabaseClient<Database>;
     } else if (deps.url && deps.anonKey) {
-      this.supabase = createClient(deps.url, deps.anonKey) as SupabaseClient;
+      this.supabase = createClient<Database>(deps.url, deps.anonKey);
     } else {
-      // Default: shared client (Parla session ile paylaşır)
-      this.supabase = getSupabaseClient();
+      // Default: paylaşımlı typed singleton (Parla session ile ortak).
+      this.supabase = getTypedClient();
     }
   }
 
@@ -178,7 +181,9 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       });
     }
 
-    const rows = (data ?? []) as ClinicRow[];
+    // saha_search_nearby_clinics RPC dönüş tipi status içermez — yalnızca active döndürdüğü
+    // garantili. ClinicRow.status optional olduğundan unknown üzerinden cast güvenlidir.
+    const rows = (data ?? []) as unknown as ClinicRow[];
     return rows.map(clinicRowToCustomer);
   }
 
@@ -214,7 +219,9 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
 
   async updateCustomer(id: string, patch: Partial<Customer>): Promise<Customer> {
     const primary = patch.addresses?.[0];
-    const row: Record<string, unknown> = {};
+    // Typed Update shape — excess property check'i geçmek için DB tipini kullan.
+    type ClinicUpdate = Database['public']['Tables']['saha_clinics']['Update'];
+    const row: ClinicUpdate = {};
     if (patch.name !== undefined) row.name = patch.name;
     if (patch.phone !== undefined) row.phone = patch.phone ?? null;
     if (patch.region !== undefined) row.province_slug = patch.region ?? null;
@@ -329,10 +336,11 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       };
     } catch {
       // saha_cariler yok ya da erişilemiyor — wallet_transactions fallback.
+      // DB şemasında kolon adı profile_id (user_id değil).
       const { data, error } = await this.supabase
         .from('wallet_transactions')
         .select('amount, type, created_at')
-        .eq('user_id', customerId);
+        .eq('profile_id', customerId);
 
       if (error) {
         return {
@@ -404,18 +412,19 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       unit_price: number | null;
       line_total: number | null;
     };
+    // DB'de status: string | null — null'ı mapOrderStatus boş string gibi işler.
     type OrderRow = {
       id: string;
       order_number: string | null;
       user_id: string | null;
       cari_id: string | null;
       clinic_id: string | null;
-      status: string;
+      status: string | null;
       total: number | null;
       total_amount: number | null;
       notes: string | null;
       sales_rep_id: string | null;
-      created_at: string;
+      created_at: string | null;
       order_items: OrderItemRow[] | null;
     };
 
@@ -436,7 +445,7 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
         currency: 'TRY',
         notes: r.notes ?? undefined,
         createdBy: r.sales_rep_id ?? r.user_id ?? '',
-        createdAt: r.created_at,
+        createdAt: r.created_at ?? new Date().toISOString(),
       })),
       total: count ?? undefined,
     };
@@ -465,18 +474,19 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       unit_price: number | null;
       line_total: number | null;
     };
+    // DB'de status/created_at nullable — null-safe dönüşüm yapılır.
     type OrderRow = {
       id: string;
       order_number: string | null;
       user_id: string | null;
       cari_id: string | null;
       clinic_id: string | null;
-      status: string;
+      status: string | null;
       total: number | null;
       total_amount: number | null;
       notes: string | null;
       sales_rep_id: string | null;
-      created_at: string;
+      created_at: string | null;
       order_items: OrderItemRow[] | null;
     };
     const r = data as OrderRow;
@@ -496,7 +506,7 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       currency: 'TRY',
       notes: r.notes ?? undefined,
       createdBy: r.sales_rep_id ?? r.user_id ?? '',
-      createdAt: r.created_at,
+      createdAt: r.created_at ?? new Date().toISOString(),
     };
   }
 
@@ -600,9 +610,13 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       cariId = resolvedCari as string;
     }
 
+    // order_number DB şemasında NOT NULL required. Trigger yoksa timestamp tabanlı
+    // benzersiz kod üret; DB trigger varsa override eder.
+    const orderNumber = `SAH-${Date.now()}`;
     const { data: newOrder, error: insErr } = await this.supabase
       .from('orders')
       .insert({
+        order_number: orderNumber,
         user_id: userId,
         cari_id: cariId,
         clinic_id: clinicId,
@@ -722,10 +736,11 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       throw new AdapterError('UNKNOWN', error.message, { originalError: error });
     }
 
+    // v_saha_products view'unda id/name nullable (view'lar için tüm kolonlar null olabilir).
     type ProductRow = {
-      id: string;
+      id: string | null;
       sku: string | null;
-      name: string;
+      name: string | null;
       description: string | null;
       category_id: string | null;
       base_price: number | null;
@@ -737,10 +752,10 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
     };
 
     return {
-      items: (data ?? []).map((r: ProductRow) => ({
-        id: r.id,
+      items: (data ?? []).filter((r: ProductRow) => r.id != null).map((r: ProductRow) => ({
+        id: r.id ?? '',
         sku: r.sku ?? undefined,
-        name: r.name,
+        name: r.name ?? '',
         description: r.description ?? undefined,
         category: r.category_id ?? undefined,
         unit: 'adet',
@@ -770,10 +785,11 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       throw AdapterError.notFound('Product', id);
     }
 
+    // v_saha_products view'unda id/name nullable.
     type ProductRow = {
-      id: string;
+      id: string | null;
       sku: string | null;
-      name: string;
+      name: string | null;
       description: string | null;
       category_id: string | null;
       base_price: number | null;
@@ -785,9 +801,9 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
     };
     const r = data as ProductRow;
     return {
-      id: r.id,
+      id: r.id ?? '',
       sku: r.sku ?? undefined,
-      name: r.name,
+      name: r.name ?? '',
       description: r.description ?? undefined,
       category: r.category_id ?? undefined,
       unit: 'adet',
@@ -814,10 +830,11 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       throw new AdapterError('UNKNOWN', error.message, { originalError: error });
     }
 
+    // v_saha_products view'unda id/name nullable.
     type ProductRow = {
-      id: string;
+      id: string | null;
       sku: string | null;
-      name: string;
+      name: string | null;
       description: string | null;
       category_id: string | null;
       base_price: number | null;
@@ -827,10 +844,10 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       is_active: boolean | null;
       main_image: string | null;
     };
-    return (data ?? []).map((r: ProductRow) => ({
-      id: r.id,
+    return (data ?? []).filter((r: ProductRow) => r.id != null).map((r: ProductRow) => ({
+      id: r.id ?? '',
       sku: r.sku ?? undefined,
-      name: r.name,
+      name: r.name ?? '',
       description: r.description ?? undefined,
       category: r.category_id ?? undefined,
       unit: 'adet',
@@ -858,6 +875,8 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       throw new AdapterError('UNKNOWN', error.message, { originalError: error });
     }
 
+    // DB'de reward/target_product Json tipinde; runtime'da nesne ya da null gelir.
+    // Tip-katmanı cast — runtime davranışı değişmez.
     type CampaignRow = {
       id: string;
       name: string;
@@ -869,7 +888,7 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       target_product: { discountType?: string; discountValue?: number } | null;
     };
 
-    return (data ?? []).map((r: CampaignRow) => mapCampaignRow(r));
+    return (data ?? []).map((r) => mapCampaignRow(r as unknown as CampaignRow));
   }
 
   // ─── Order approval (programmatic) ────────────────────

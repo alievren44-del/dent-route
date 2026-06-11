@@ -37,7 +37,7 @@ export default defineConfig({
     },
     build: {
         target: 'es2022',
-        sourcemap: true,
+        sourcemap: false,
         rollupOptions: {
             output: {
                 manualChunks: {
@@ -58,6 +58,8 @@ export default defineConfig({
         globals: true,
         environment: 'jsdom',
         setupFiles: ['./tests/setup.ts'],
+        // Playwright E2E spec'leri vitest tarafından toplanmamalı (ayrı runner).
+        exclude: ['**/node_modules/**', '**/dist/**', '**/tests/e2e/**'],
         coverage: {
             reporter: ['text', 'html'],
             include: ['src/**/*.{ts,tsx}'],
