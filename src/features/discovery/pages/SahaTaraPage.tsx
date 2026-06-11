@@ -24,6 +24,7 @@ import {
   Star,
   ShoppingCart,
   Crosshair,
+  Globe,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -36,6 +37,8 @@ import { getDailyUsage } from '@/lib/saha-rate-limit';
 import { useRouteBasket } from '@features/routes/store/routeBasketStore';
 import { DistrictPicker } from '@features/routes/components/DistrictPicker';
 import districts from '@/data/tr-locations/districts.json';
+import { normalizeRegionSlug } from '@/data/tr-locations/geo-helpers';
+import { useAuthStore } from '@/core/auth/authStore';
 
 const STORAGE_KEY = 'saha-scan-mode-v1';
 const FRESH_DAILY_LIMIT = 5;
@@ -97,9 +100,35 @@ function freshnessLabel(iso: string | null): { text: string; warn: boolean } {
   return { text: `${days}g önce — eski`, warn: true };
 }
 
+interface RepRegion {
+  provinces: string[];
+  districts: string[];
+}
+
+/** Soft territory enforcement: rep'in atanmış bölgesini __region_meta__ satırından çeker. */
+async function fetchRepRegion(repId: string): Promise<RepRegion> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('saha_assignments')
+    .select('region_provinces, region_districts')
+    .eq('profile_id', repId)
+    .eq('account_id', '__region_meta__')
+    .single();
+  if (error || !data) return { provinces: [], districts: [] };
+  return {
+    provinces: ((data.region_provinces ?? []) as string[]).map(normalizeRegionSlug),
+    districts: ((data.region_districts ?? []) as string[]).map(normalizeRegionSlug),
+  };
+}
+
 export default function SahaTaraPage() {
   const navigate = useNavigate();
   const geo = useGeolocation();
+  const repId = useAuthStore((s) => s.session?.userId ?? null);
+
+  // Soft territory filter state
+  const [repRegion, setRepRegion] = useState<RepRegion>({ provinces: [], districts: [] });
+  const [regionFilterEnabled, setRegionFilterEnabled] = useState(true);
 
   const [mode, setMode] = useState<'db' | 'fresh'>(() => {
     if (typeof window === 'undefined') return 'db';
@@ -140,6 +169,16 @@ export default function SahaTaraPage() {
       /* yutulur */
     }
   }, [mode]);
+
+  // Rep'in bölge atamasını çek (soft territory filter için)
+  useEffect(() => {
+    if (!repId) return;
+    void fetchRepRegion(repId).then((region) => {
+      setRepRegion(region);
+      // Bölge ataması varsa filtre default ON; yoksa filtre anlamsız (OFF)
+      if (region.provinces.length === 0) setRegionFilterEnabled(false);
+    });
+  }, [repId]);
 
   // GPS gelince reverse geocode → district info (sadece GPS modunda)
   useEffect(() => {
@@ -343,6 +382,30 @@ export default function SahaTaraPage() {
     }
   }, [geo.position, districtInfo, usage.remaining, radius, loadDb]);
 
+  // Soft territory filter: klinik listesini rep'in bölgesine göre filtrele.
+  // districtInfo (mevcut ilçe) normalizeRegionSlug ile karşılaştırılır.
+  // Kullanıcı 'Tüm bölgeler' toggle ile filtreyi kapatabilir (SOFT — RLS yok).
+  const displayClinics = useMemo(() => {
+    if (!regionFilterEnabled || repRegion.provinces.length === 0) return clinics;
+    // districtInfo varsa ilçe bazlı dar filtre; yoksa il bazlı filtre.
+    if (districtInfo) {
+      const normProv = normalizeRegionSlug(districtInfo.il_ad);
+      const normDist = normalizeRegionSlug(districtInfo.ad);
+      const distKey = `${normProv}|${normDist}`;
+      // Önce ilçe bazlı kontrol; ilçe listesi boşsa il bazlı kontrol
+      if (repRegion.districts.length > 0) {
+        if (repRegion.districts.includes(distKey)) return clinics;
+        // İlçe listesinde yoksa il listesinde var mı bak (il bazlı atama)
+        if (repRegion.provinces.includes(normProv)) return clinics;
+        return [];
+      }
+      if (repRegion.provinces.includes(normProv)) return clinics;
+      return [];
+    }
+    // districtInfo yoksa (GPS henüz çözümlenmedi) filtreyi uygulama
+    return clinics;
+  }, [clinics, regionFilterEnabled, repRegion, districtInfo]);
+
   const addToBasket = useCallback((c: NearbyClinic) => {
     const basket = useRouteBasket.getState();
     const res = basket.add({
@@ -513,17 +576,53 @@ export default function SahaTaraPage() {
         </div>
       )}
 
-      {!loading && clinics.length === 0 && geo.position && (
+      {/* Soft territory filter toggle — sadece rep bölgesi atanmışsa göster */}
+      {repRegion.provinces.length > 0 && (
+        <section className="rounded-xl bg-white p-3 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-sm text-slate-700">
+              <MapPin size={14} className="text-emerald-600" />
+              <span>
+                <strong>Bölge filtresi:</strong>{' '}
+                {repRegion.provinces.join(', ')}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setRegionFilterEnabled((v) => !v)}
+              className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition ${
+                regionFilterEnabled
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {regionFilterEnabled ? (
+                <>
+                  <MapPin size={11} /> Bölgem
+                </>
+              ) : (
+                <>
+                  <Globe size={11} /> Tüm bölgeler
+                </>
+              )}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {!loading && displayClinics.length === 0 && geo.position && (
         <p className="text-sm text-slate-500">
           {mode === 'db'
-            ? "Bu yarıçapta klinik yok. Taze tara ile Google'a sor."
+            ? regionFilterEnabled && repRegion.provinces.length > 0
+              ? 'Bu yarıçapta atanmış bölgende klinik yok. Bölge filtresini kapat veya taze tara.'
+              : "Bu yarıçapta klinik yok. Taze tara ile Google'a sor."
             : 'Tara butonuna bas.'}
         </p>
       )}
 
-      {clinics.length > 0 && (
+      {displayClinics.length > 0 && (
         <ul className="space-y-2">
-          {clinics.map((c) => {
+          {displayClinics.map((c) => {
             const fresh = freshnessLabel(c.last_verified_at);
             return (
               <li key={c.id} className="rounded-lg bg-white p-3 shadow-sm">
@@ -577,7 +676,7 @@ export default function SahaTaraPage() {
         </ul>
       )}
 
-      {clinics.length > 0 && (
+      {displayClinics.length > 0 && (
         <button
           type="button"
           onClick={() => navigate('/routes/plan')}

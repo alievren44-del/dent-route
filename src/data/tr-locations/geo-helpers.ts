@@ -57,6 +57,32 @@ export function slugify(text: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
+/**
+ * normalizeRegionSlug — region_provinces/region_districts değerlerini
+ * kararlı slug formatına getirir (Türkçe karakter + boşluk/tire düzleştirme).
+ *
+ * Amaç: 'Çankaya' vs 'cankaya' drift'ini bitirmek.
+ * Idempotent: normalizeRegionSlug(normalizeRegionSlug(x)) === normalizeRegionSlug(x)
+ *
+ * Örnekler:
+ *   'İstanbul'  → 'istanbul'
+ *   'Çankaya'   → 'cankaya'
+ *   'Şişli'     → 'sisli'
+ *   'DİYARBAKIR' → 'diyarbakir'
+ *   'ankara|çankaya' compound key → 'ankara|cankaya'
+ *
+ * Compound district key formatı: '<il>|<ilçe>' — sadece her parçayı normalize et,
+ * pipe karakteri korunur (province ve district ayrımı).
+ */
+export function normalizeRegionSlug(value: string): string {
+  if (!value) return '';
+  if (value.includes('|')) {
+    const parts = value.split('|');
+    return parts.map((p) => slugify(p)).join('|');
+  }
+  return slugify(value);
+}
+
 function normalize(text: string): string {
   return slugify(text).replace(/-/g, ' ').trim();
 }

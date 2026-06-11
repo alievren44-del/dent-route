@@ -14,6 +14,7 @@ import { getSupabaseClient } from '@/lib/supabase';
 import {
   getProvinces,
   getDistrictsByProvince,
+  normalizeRegionSlug,
   type Province,
 } from '@/data/tr-locations/geo-helpers';
 
@@ -54,9 +55,10 @@ async function fetchAssignment(repId: string): Promise<AssignmentDraft> {
   if (error) throw error;
   const meta = data?.find((r) => r.account_id === REGION_META_ACCOUNT_ID);
   const first = meta ?? data?.[0];
+  // Normalize on load — any legacy mixed-case values are slugified before use
   return {
-    provinces: (first?.region_provinces ?? []) as string[],
-    districts: (first?.region_districts ?? []) as string[],
+    provinces: ((first?.region_provinces ?? []) as string[]).map(normalizeRegionSlug),
+    districts: ((first?.region_districts ?? []) as string[]).map(normalizeRegionSlug),
     rowId: first?.id ?? null,
   };
 }
@@ -67,12 +69,13 @@ async function saveAssignment(
   districts: string[],
 ): Promise<void> {
   const supabase = getSupabaseClient();
+  // Normalize on save — ensures stored values are always slugs (e.g. 'cankaya' not 'Çankaya')
   const { error } = await supabase.from('saha_assignments').upsert(
     {
       profile_id: repId,
       account_id: REGION_META_ACCOUNT_ID,
-      region_provinces: provinces,
-      region_districts: districts,
+      region_provinces: provinces.map(normalizeRegionSlug),
+      region_districts: districts.map(normalizeRegionSlug),
     },
     { onConflict: 'profile_id,account_id' },
   );
@@ -150,13 +153,14 @@ export default function RegionAssignmentPage() {
   }
 
   function toggleProvince(provinceAd: string) {
+    const normProv = normalizeRegionSlug(provinceAd);
     const districts = getDistrictsByProvince(provinceAd);
-    const districtKeys = districts.map((d) => `${provinceAd}|${d.ad}`);
-    if (provinceSet.has(provinceAd)) {
-      setDraftProvinces((prev) => prev.filter((p) => p !== provinceAd));
+    const districtKeys = districts.map((d) => normalizeRegionSlug(`${provinceAd}|${d.ad}`));
+    if (provinceSet.has(normProv)) {
+      setDraftProvinces((prev) => prev.filter((p) => p !== normProv));
       setDraftDistricts((prev) => prev.filter((d) => !districtKeys.includes(d)));
     } else {
-      setDraftProvinces((prev) => [...prev, provinceAd]);
+      setDraftProvinces((prev) => [...prev, normProv]);
       setDraftDistricts((prev) => {
         const merged = new Set([...prev, ...districtKeys]);
         return Array.from(merged);
@@ -165,7 +169,8 @@ export default function RegionAssignmentPage() {
   }
 
   function toggleDistrict(provinceAd: string, districtAd: string) {
-    const key = `${provinceAd}|${districtAd}`;
+    const normProv = normalizeRegionSlug(provinceAd);
+    const key = normalizeRegionSlug(`${provinceAd}|${districtAd}`);
     setDraftDistricts((prev) => {
       if (prev.includes(key)) return prev.filter((k) => k !== key);
       return [...prev, key];
@@ -175,13 +180,13 @@ export default function RegionAssignmentPage() {
       const willHaveAny = districtSet.has(key)
         ? Array.from(districtSet)
             .filter((k) => k !== key)
-            .some((k) => k.startsWith(`${provinceAd}|`))
+            .some((k) => k.startsWith(`${normProv}|`))
         : true;
-      if (willHaveAny && !prev.includes(provinceAd)) {
-        return [...prev, provinceAd];
+      if (willHaveAny && !prev.includes(normProv)) {
+        return [...prev, normProv];
       }
-      if (!willHaveAny && prev.includes(provinceAd)) {
-        return prev.filter((p) => p !== provinceAd);
+      if (!willHaveAny && prev.includes(normProv)) {
+        return prev.filter((p) => p !== normProv);
       }
       return prev;
     });
@@ -308,11 +313,12 @@ export default function RegionAssignmentPage() {
               ) : (
                 <ul className="max-h-[70vh] overflow-y-auto">
                   {filteredProvinces.map((province) => {
+                    const normProv = normalizeRegionSlug(province.ad);
                     const expanded = expandedProvinces.has(province.ad);
-                    const provinceChecked = provinceSet.has(province.ad);
+                    const provinceChecked = provinceSet.has(normProv);
                     const districts = expanded ? getDistrictsByProvince(province.ad) : [];
                     const selectedDistrictCount = Array.from(districtSet).filter((k) =>
-                      k.startsWith(`${province.ad}|`),
+                      k.startsWith(`${normProv}|`),
                     ).length;
                     return (
                       <li key={province.plaka} className="border-b border-slate-100">
@@ -350,7 +356,7 @@ export default function RegionAssignmentPage() {
                         {expanded && (
                           <ul className="grid grid-cols-1 gap-1 bg-slate-50 px-10 py-2 sm:grid-cols-2 lg:grid-cols-3">
                             {districts.map((district) => {
-                              const key = `${province.ad}|${district.ad}`;
+                              const key = normalizeRegionSlug(`${province.ad}|${district.ad}`);
                               const checked = districtSet.has(key);
                               return (
                                 <li key={district.slug}>
