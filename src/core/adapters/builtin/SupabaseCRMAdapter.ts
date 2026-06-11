@@ -875,18 +875,41 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
   // ─── Order approval (programmatic) ────────────────────
 
   /**
-   * Siparişi onaylar (orders.status = 'approved', approved_at = now()).
-   * OrderApprovalPage'in approve mutation'ını yansıtır; trg_order_status_change
-   * trigger'ı stok + order-to-cash akışını otomatik tetikler.
+   * Siparişi onaylar. Doğrudan UPDATE YERİNE server-side yetki kapısı
+   * `approve_order_if_authorized` (SECURITY DEFINER) RPC'sini çağırır — neden:
+   * eskiden client-side approvalRules tek kontroldü → REP kendi >5000₺ siparişini
+   * adapter/REST ile onaylayabiliyordu (#70). RPC eşik uygular
+   * (REP<=5000, MANAGER<=50000, ADMIN sınırsız). RPC void döner; status='approved' +
+   * approved_at fonksiyon içinde set edilir, trg_order_status_change trigger'ı
+   * stok + order-to-cash akışını otomatik tetikler (eskisi gibi).
+   *
+   * Hata ayrımı (UI anlamlı toast gösterebilsin diye AdapterError.code ile):
+   *  - 'over_approval_limit:rep' / ':manager' → FORBIDDEN (+ details.reason='over_approval_limit')
+   *  - 'not_authorized'                       → FORBIDDEN (+ details.reason='not_authorized')
+   *  - diğer                                  → UNKNOWN
    */
   async approveOrder(orderId: string): Promise<void> {
-    const { error } = await this.supabase
-      .from('orders')
-      .update({ status: 'approved', approved_at: new Date().toISOString() })
-      .eq('id', orderId);
+    const { error } = await this.supabase.rpc('approve_order_if_authorized', {
+      p_order_id: orderId,
+    });
 
     if (error) {
-      throw new AdapterError('UNKNOWN', `approveOrder başarısız: ${error.message}`, {
+      const msg = error.message ?? '';
+      if (msg.includes('over_approval_limit')) {
+        // REP/MANAGER limit aşımı: yetki var ama tutar sınırı geçildi.
+        throw new AdapterError('FORBIDDEN', `Onay limiti aşıldı: ${msg}`, {
+          originalError: error,
+          details: { reason: 'over_approval_limit' },
+        });
+      }
+      if (msg.includes('not_authorized')) {
+        // Rol yok / onay yetkisi yok.
+        throw new AdapterError('FORBIDDEN', 'Onay yetkiniz yok.', {
+          originalError: error,
+          details: { reason: 'not_authorized' },
+        });
+      }
+      throw new AdapterError('UNKNOWN', `approveOrder başarısız: ${msg}`, {
         originalError: error,
       });
     }

@@ -119,15 +119,15 @@ function OrderApprovalPage(): JSX.Element {
 
   const approveMutation = useMutation({
     mutationFn: async (orderId: string) => {
+      // Doğrudan UPDATE yerine server-side yetki kapısı RPC'si — neden: eskiden
+      // bu mutation doğrudan orders.status='approved' yazıyordu, REP kendi
+      // >5000₺ siparişini onaylayabiliyordu (#70). RPC eşik uygular ve
+      // status='approved' + approved_at'ı kendi içinde set eder; trigger stok +
+      // order-to-cash'i tetikler.
       const supabase = getSupabaseClient();
-      const { error: err } = await supabase
-        .from('orders')
-        .update({
-          status: 'approved',
-          approved_by: profile?.id ?? null,
-          approved_at: new Date().toISOString(),
-        })
-        .eq('id', orderId);
+      const { error: err } = await supabase.rpc('approve_order_if_authorized', {
+        p_order_id: orderId,
+      });
       if (err) throw err;
     },
     onSuccess: () => {
@@ -135,7 +135,17 @@ function OrderApprovalPage(): JSX.Element {
       void queryClient.invalidateQueries({ queryKey: ['order-approval-list'] });
     },
     onError: (err: unknown) => {
-      toast.error(err instanceof Error ? err.message : 'Onay başarısız.');
+      // RPC exception mesajına göre anlamlı toast — backend otorite.
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.includes('over_approval_limit')) {
+        toast.error(
+          'Bu tutar için onay yetkiniz yok (REP limiti 5.000₺ / MANAGER 50.000₺).',
+        );
+      } else if (msg.includes('not_authorized')) {
+        toast.error('Onay yetkiniz yok.');
+      } else {
+        toast.error(msg || 'Onay başarısız.');
+      }
     },
   });
 

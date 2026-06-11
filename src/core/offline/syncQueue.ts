@@ -85,6 +85,17 @@ export async function retryFailed(): Promise<void> {
   }
 }
 
+/**
+ * #86: Tek bir op'u kuyruktan kalıcı olarak siler. Rep, düzeltilemez (ör. hatalı
+ * payload) bir failed kaydı UI'dan elle kaldırabilsin diye eklendi. Yalnızca
+ * tamamlanmamış/başarısız kayıtların manuel temizliği içindir; flush mantığına
+ * dokunmaz. id'siz (henüz persist edilmemiş) op için no-op.
+ */
+export async function removeOp(id: number | undefined): Promise<void> {
+  if (id === undefined) return;
+  await offlineDB.ops.delete(id);
+}
+
 export async function processQueue(): Promise<{ success: number; failed: number }> {
   const pending = await listPending();
   let success = 0;
@@ -183,6 +194,10 @@ export function initSyncQueue(): void {
   }
   // Initial check
   if (navigator.onLine) {
+    // Açılışta yalnız PENDING'i flush et. Kalıcı-failed op'lara açılışta otomatik
+    // retryCount-sıfırlama YAPMA (denetmen MAJOR): her başlatmada failed→pending+
+    // retryCount:0 sonsuz-deneme döngüsü + bozuk insert yükü yaratıyordu. Failed,
+    // kullanıcı "Tekrar Dene"ye basana kadar terminal kalır (banner kırmızı, görünür).
     void processQueue();
   }
 }
