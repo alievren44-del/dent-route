@@ -79,5 +79,15 @@
     "supabaseUrlEnvVar": "VITE_SUPABASE_URL",
     "supabaseAnonKeyEnvVar": "VITE_SUPABASE_ANON_KEY",
     "environment": "production"
+  },
+
+  "einvoice": {
+    "provider": "manual",
+    "seller": {
+      "vkn": "0000000000",
+      "unvan": "Parla Diş Deposu",
+      "vergiDairesi": "",
+      "adres": ""
+    }
   }
 }

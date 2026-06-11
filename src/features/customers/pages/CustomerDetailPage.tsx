@@ -9,15 +9,18 @@
 
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { Phone, MessageCircle, ShoppingCart, ArrowLeft, CalendarPlus, Receipt } from 'lucide-react';
 import { getSupabaseClient } from '@lib/supabase';
+import { useAuthStore } from '@core/auth/authStore';
 
 import CariBalanceCard from '@features/invoicing/components/CariBalanceCard';
 import CustomerVisitTimeline from '@features/visits/components/CustomerVisitTimeline';
 import RecentOrdersCard from '@features/orders/components/RecentOrdersCard';
+import CustomerActivityTimeline from '@features/customers/components/CustomerActivityTimeline';
 
-type TabKey = 'overview' | 'visits' | 'samples';
+type TabKey = 'overview' | 'activity' | 'visits' | 'samples' | 'notes';
 
 interface ProfileRow {
   id: string;
@@ -35,6 +38,14 @@ interface SampleRow {
   status: string | null;
   follow_up_at: string | null;
   notes: string | null;
+}
+
+interface AccountNoteRow {
+  id: string;
+  account_id: string;
+  rep_id: string;
+  body: string;
+  created_at: string;
 }
 
 const SAMPLE_STATUS_STYLES: Record<string, string> = {
@@ -60,6 +71,8 @@ function formatDate(iso: string | null | undefined): string {
 function CustomerDetailPage(): JSX.Element {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const currentUserId = useAuthStore((s) => s.session?.userId ?? null);
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
 
   const { data: customerData, isLoading: custLoading } = useQuery({
@@ -90,6 +103,44 @@ function CustomerDetailPage(): JSX.Element {
         .limit(10);
       if (error) throw error;
       return (data ?? []) as SampleRow[];
+    },
+  });
+
+  const { data: notes, isLoading: notesLoading } = useQuery({
+    queryKey: ['customer-notes', id],
+    enabled: !!id && activeTab === 'notes',
+    queryFn: async (): Promise<AccountNoteRow[]> => {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from('saha_account_notes')
+        .select('*')
+        .eq('account_id', id!)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as AccountNoteRow[];
+    },
+  });
+
+  const addNoteMutation = useMutation({
+    mutationFn: async (body: string): Promise<void> => {
+      const supabase = getSupabaseClient();
+      let repId = currentUserId;
+      if (!repId) {
+        const { data } = await supabase.auth.getUser();
+        repId = data.user?.id ?? null;
+      }
+      if (!repId) throw new Error('Oturum bulunamadı. Lütfen tekrar giriş yapın.');
+      const { error } = await supabase
+        .from('saha_account_notes')
+        .insert({ account_id: id, rep_id: repId, body });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Not eklendi');
+      void queryClient.invalidateQueries({ queryKey: ['customer-notes', id] });
+    },
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : 'Not eklenirken hata oluştu.');
     },
   });
 
@@ -190,8 +241,10 @@ function CustomerDetailPage(): JSX.Element {
       <div className="flex border-b border-border bg-background sticky top-[60px] z-[5]">
         {[
           { key: 'overview' as const, label: 'Özet' },
+          { key: 'activity' as const, label: 'Zaman Çizelgesi' },
           { key: 'visits' as const, label: 'Ziyaretler' },
           { key: 'samples' as const, label: 'Numuneler' },
+          { key: 'notes' as const, label: 'Notlar' },
         ].map((t) => {
           const isActive = activeTab === t.key;
           return (
@@ -220,8 +273,19 @@ function CustomerDetailPage(): JSX.Element {
             </section>
           </>
         )}
+        {activeTab === 'activity' && (
+          <CustomerActivityTimeline accountId={id} active={activeTab === 'activity'} />
+        )}
         {activeTab === 'visits' && <CustomerVisitTimeline customerId={id} limit={20} />}
         {activeTab === 'samples' && <SamplesTab loading={samplesLoading} samples={samples ?? []} />}
+        {activeTab === 'notes' && (
+          <NotesTab
+            loading={notesLoading}
+            notes={notes ?? []}
+            onAdd={(body) => addNoteMutation.mutate(body)}
+            submitting={addNoteMutation.isPending}
+          />
+        )}
       </div>
 
       {/* Sticky bottom CTA */}
@@ -269,6 +333,80 @@ function SamplesTab({ loading, samples }: { loading: boolean; samples: SampleRow
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('tr-TR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function NotesTab({
+  loading,
+  notes,
+  onAdd,
+  submitting,
+}: {
+  loading: boolean;
+  notes: AccountNoteRow[];
+  onAdd: (body: string) => void;
+  submitting: boolean;
+}): JSX.Element {
+  const [body, setBody] = useState('');
+
+  const handleSubmit = (): void => {
+    const trimmed = body.trim();
+    if (!trimmed) {
+      toast.error('Lütfen bir not girin.');
+      return;
+    }
+    onAdd(trimmed);
+    setBody('');
+  };
+
+  return (
+    <div className="space-y-3">
+      <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          placeholder="Not ekle…"
+          rows={3}
+          className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+        />
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={submitting}
+          className="mt-2 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold min-h-tap-min disabled:opacity-60"
+        >
+          {submitting ? 'Ekleniyor…' : 'Not Ekle'}
+        </button>
+      </section>
+
+      {loading ? (
+        <p className="text-sm text-muted-foreground py-6 text-center">Yükleniyor…</p>
+      ) : notes.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-6 text-center">Not yok.</p>
+      ) : (
+        <div className="space-y-2">
+          {notes.map((n) => (
+            <div key={n.id} className="p-3 rounded-lg border border-border bg-card">
+              <p className="text-sm text-foreground whitespace-pre-wrap">{n.body}</p>
+              <p className="text-xs text-muted-foreground mt-2">{formatDateTime(n.created_at)}</p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

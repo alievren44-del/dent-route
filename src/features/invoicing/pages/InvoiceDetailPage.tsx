@@ -11,10 +11,13 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Download, FileCode, Edit2, XCircle } from 'lucide-react';
 
+import { toast } from 'sonner';
+
 import { getSupabaseClient } from '@lib/supabase';
+import { loadSahaConfig } from '@config/loadConfig';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
 import { printInvoice, type PdfKalem } from '@features/invoicing/pdf/invoicePdf';
-import { downloadUblXml, generateUblInvoiceXml } from '@features/invoicing/efatura/ublXml';
+import { createEInvoiceProvider } from '@features/invoicing/efatura/factory';
 
 interface InvoiceFull {
   id: string;
@@ -134,6 +137,52 @@ function InvoiceDetailPage(): JSX.Element {
     },
   });
 
+  const ublMutation = useMutation({
+    mutationFn: async () => {
+      if (!invoice || !cari) throw new Error('Fatura veya cari yüklenmedi.');
+
+      // Provider'ı config'e göre kur (default: ManualEInvoiceProvider).
+      // Canlı entegratör (parasut/izibiz/...) için API anahtarı + mali mühür
+      // gerekir — o adım BLOKE; manual lokal UBL XML üretir + indirir.
+      const config = loadSahaConfig();
+      const provider = createEInvoiceProvider(config.einvoice);
+
+      const result = await provider.createInvoice({
+        invoice: {
+          id: invoice.id,
+          fatura_no: invoice.fatura_no,
+          tarih: invoice.tarih,
+          vade_tarihi: invoice.vade_tarihi,
+          tip: invoice.tip,
+          ara_toplam: Number(invoice.ara_toplam),
+          iskonto_toplam: Number(invoice.iskonto_toplam),
+          kdv_tutari: Number(invoice.kdv_tutari),
+          toplam: Number(invoice.toplam),
+          para_birimi: invoice.para_birimi,
+        },
+        cari,
+        kalemler: pdfKalemler,
+      });
+
+      // PERSIST: ETTN + durum saha_faturalar'a yazılır.
+      const supabase = getSupabaseClient();
+      const { error } = await supabase
+        .from('saha_faturalar')
+        .update({ efatura_uuid: result.ettn, efatura_durum: result.status })
+        .eq('id', invoice.id);
+      if (error) throw error;
+
+      return result;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['invoice', id] });
+      toast.success('E-Fatura XML üretildi ve indirildi.');
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'E-Fatura XML üretilemedi.');
+    },
+  });
+
   const cancelMutation = useMutation({
     mutationFn: async () => {
       const supabase = getSupabaseClient();
@@ -189,23 +238,7 @@ function InvoiceDetailPage(): JSX.Element {
 
   function handleUbl(): void {
     if (!invoice || !cari) return;
-    const xml = generateUblInvoiceXml(
-      {
-        id: invoice.id,
-        fatura_no: invoice.fatura_no,
-        tarih: invoice.tarih,
-        vade_tarihi: invoice.vade_tarihi,
-        tip: invoice.tip,
-        ara_toplam: Number(invoice.ara_toplam),
-        iskonto_toplam: Number(invoice.iskonto_toplam),
-        kdv_tutari: Number(invoice.kdv_tutari),
-        toplam: Number(invoice.toplam),
-        para_birimi: invoice.para_birimi,
-      },
-      cari,
-      pdfKalemler,
-    );
-    downloadUblXml(xml, `${invoice.fatura_no ?? invoice.id}.xml`);
+    ublMutation.mutate();
   }
 
   function handleCancel(): void {
@@ -345,7 +378,8 @@ function InvoiceDetailPage(): JSX.Element {
           <button
             type="button"
             onClick={handleUbl}
-            className="px-3 py-2.5 rounded-lg border border-border text-sm font-medium flex items-center justify-center gap-1.5 min-h-tap-min"
+            disabled={ublMutation.isPending}
+            className="px-3 py-2.5 rounded-lg border border-border text-sm font-medium flex items-center justify-center gap-1.5 min-h-tap-min disabled:opacity-50"
           >
             <FileCode className="h-4 w-4" />
             E-Fatura XML

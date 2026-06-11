@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -28,11 +28,13 @@ import {
   Phone,
   Sparkles,
   ShoppingCart,
+  Trash2,
+  ArrowRightCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { decodePolyline } from '@/lib/polyline';
 import { computeDetour } from '@features/routes/lib/detour-calc';
-import { useRouteBasket } from '@features/routes/store/routeBasketStore';
+import { useRouteBasket, MAX_BASKET } from '@features/routes/store/routeBasketStore';
 
 import { getSupabaseClient } from '@lib/supabase';
 import { getEnv } from '@config/env';
@@ -176,12 +178,17 @@ function formatKm(km: number | null): string {
 
 export default function ActiveRoutePage(): JSX.Element {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const session = useAuthStore((s) => s.session);
   const profile = useAuthStore((s) => s.profile);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
+  // #57: durak marker'ları + canlı konum marker'ı ayrı tutulur (re-draw'da temizlenir).
+  const markersRef = useRef<mapboxgl.Marker[]>([]);
+  const userMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const mapReadyRef = useRef<boolean>(false);
 
   const [currentStopIndex, setCurrentStopIndex] = useState<number>(0);
   const [showFinishModal, setShowFinishModal] = useState<boolean>(false);
@@ -230,11 +237,19 @@ export default function ActiveRoutePage(): JSX.Element {
 
   // Export için başlangıç noktası = kullanıcının canlı GPS konumu
   const geolocation = useGeolocation();
+  const { startWatching, stopWatching } = geolocation;
+  // #56: Aktif rota boyunca SÜREKLI konum takibi (watchPosition, fresh=true).
+  // Tek-seferlik request() konumu bayatlatıyordu → canlı GPS marker (#57) hareket
+  // etmiyor, mesafe/check-in doğrulaması eski koordinatla yapılıyordu. Rota bitince
+  // / ekrandan çıkınca stopWatching cleanup (çift-abonelik + pil sızıntısı önlemi).
   useEffect(() => {
-    if (route && !geolocation.position && geolocation.status !== 'denied') {
-      geolocation.request();
-    }
-  }, [route, geolocation]);
+    if (!route) return;
+    if (geolocation.status === 'denied') return;
+    startWatching(true);
+    return () => stopWatching();
+    // status kasıtlı dep-dışı: granted geçişinde watch'ı yeniden başlatma döngüsü olmasın.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route, startWatching, stopWatching]);
 
   const totalStops = route?.account_ids.length ?? 0;
   const stopsVisited = Math.min(currentStopIndex, totalStops);
@@ -340,6 +355,23 @@ export default function ActiveRoutePage(): JSX.Element {
     return route.profile_id === session.userId;
   }, [route, session]);
 
+  // İlçe (district) batch — bitirilen rotadan sonra "Sonraki 12"ye geçiş.
+  const districtQueueLen = useRouteBasket((s) => s.districtQueue.length);
+  const districtBatchStart = useRouteBasket((s) => s.districtBatchStart);
+  const hasNextDistrictBatch = districtBatchStart < districtQueueLen;
+
+  const handleLoadNextDistrictBatch = (): void => {
+    const basket = useRouteBasket.getState();
+    if (!basket.hasNextDistrictBatch()) {
+      toast.info('Sıradaki grup yok');
+      return;
+    }
+    basket.clear();
+    basket.loadNextDistrictBatch();
+    toast.success('Sonraki gruba geçildi');
+    navigate('/routes/plan');
+  };
+
   const [actualKmInput, setActualKmInput] = useState<string>('');
   const [fuelLitersInput, setFuelLitersInput] = useState<string>('');
   const [fuelCostInput, setFuelCostInput] = useState<string>('');
@@ -351,6 +383,7 @@ export default function ActiveRoutePage(): JSX.Element {
   }, [route, actualKmInput]);
 
   // Mapbox init
+  const [mapReady, setMapReady] = useState(false);
   useEffect(() => {
     if (!containerRef.current || !route) return;
 
@@ -364,12 +397,99 @@ export default function ActiveRoutePage(): JSX.Element {
     });
 
     mapRef.current = map;
+    mapReadyRef.current = false;
+    // Layer/source ekleyebilmek için style yüklenmesini bekle.
+    map.on('load', () => {
+      mapReadyRef.current = true;
+      setMapReady(true);
+    });
 
     return () => {
+      markersRef.current.forEach((mk) => mk.remove());
+      markersRef.current = [];
+      userMarkerRef.current?.remove();
+      userMarkerRef.current = null;
       map.remove();
       mapRef.current = null;
+      mapReadyRef.current = false;
+      setMapReady(false);
     };
   }, [route]);
+
+  // #57: Duraklar yüklenince sıralı polyline + numaralı marker çiz + fitBounds.
+  // (DistrictAutoRoutePage / RoutePlannerPage'deki desenin aynısı.)
+  const stops = stopCoordsQuery.data;
+  useEffect(() => {
+    const m = mapRef.current;
+    if (!m || !mapReady || !stops || stops.length === 0) return;
+
+    // Eski marker + layer/source'u temizle (re-draw idempotent olsun).
+    markersRef.current.forEach((mk) => mk.remove());
+    markersRef.current = [];
+    if (m.getLayer('route-stops-line')) m.removeLayer('route-stops-line');
+    if (m.getSource('route-stops-src')) m.removeSource('route-stops-src');
+
+    const lineCoords: Array<[number, number]> = stops.map(
+      (s) => [s.lng, s.lat] as [number, number],
+    );
+
+    m.addSource('route-stops-src', {
+      type: 'geojson',
+      data: {
+        type: 'Feature',
+        properties: {},
+        geometry: { type: 'LineString', coordinates: lineCoords },
+      },
+    });
+    m.addLayer({
+      id: 'route-stops-line',
+      type: 'line',
+      source: 'route-stops-src',
+      paint: { 'line-color': '#2563eb', 'line-width': 4 },
+    });
+
+    // Numaralı duraklar
+    stops.forEach((s, i) => {
+      const el = document.createElement('div');
+      el.style.cssText =
+        'width:24px;height:24px;border-radius:50%;background:#2563eb;color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;border:2px solid white;';
+      el.textContent = String(i + 1);
+      const mark = new mapboxgl.Marker({ element: el }).setLngLat([s.lng, s.lat]).addTo(m);
+      markersRef.current.push(mark);
+    });
+
+    const bounds = new mapboxgl.LngLatBounds();
+    lineCoords.forEach((c) => bounds.extend(c));
+    if (geolocation.position) {
+      bounds.extend([geolocation.position.lng, geolocation.position.lat]);
+    }
+    if (!bounds.isEmpty()) {
+      m.fitBounds(bounds, { padding: 60, maxZoom: 14 });
+    }
+  }, [stops, mapReady, geolocation.position]);
+
+  // #57: Canlı konum marker'ı — GPS pozisyonu değişince güncelle (durakları yeniden
+  // çizmeden, ayrı marker ref üzerinden). Mor nokta = kullanıcı.
+  useEffect(() => {
+    const m = mapRef.current;
+    if (!m || !mapReady) return;
+    const pos = geolocation.position;
+    if (!pos) {
+      userMarkerRef.current?.remove();
+      userMarkerRef.current = null;
+      return;
+    }
+    if (userMarkerRef.current) {
+      userMarkerRef.current.setLngLat([pos.lng, pos.lat]);
+    } else {
+      const el = document.createElement('div');
+      el.style.cssText =
+        'width:14px;height:14px;border-radius:50%;background:#a855f7;border:3px solid white;box-shadow:0 0 0 2px #a855f7;';
+      userMarkerRef.current = new mapboxgl.Marker({ element: el })
+        .setLngLat([pos.lng, pos.lat])
+        .addTo(m);
+    }
+  }, [geolocation.position, mapReady]);
 
   const finishMutation = useMutation<void, Error, CompleteRoutePayload>({
     mutationFn: completeRoute,
@@ -389,6 +509,72 @@ export default function ActiveRoutePage(): JSX.Element {
     } else if (currentStopIndex === totalStops - 1) {
       setCurrentStopIndex(totalStops);
     }
+  };
+
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
+  // route.account_ids'i verilen diziye eşitleyen ortak yazıcı (kaldır + geri-al).
+  const persistAccountIds = useCallback(
+    async (newIds: string[]): Promise<void> => {
+      if (!route) return;
+      const supabase = getSupabaseClient();
+      const { error: updErr } = await supabase
+        .from('saha_routes')
+        .update({ account_ids: newIds })
+        .eq('id', route.id);
+      if (updErr) throw updErr;
+      await queryClient.invalidateQueries({ queryKey: ['active-route', id] });
+      await queryClient.invalidateQueries({ queryKey: ['active-route-stops', id] });
+    },
+    [route, queryClient, id],
+  );
+
+  // #61: window.confirm yerine Sonner toast + "Geri Al" action.
+  // Durak hemen kaldırılır (optimistik), kullanıcı 6 sn içinde geri alabilir.
+  const handleRemoveStop = (accountId: string, idx: number): void => {
+    if (!route) return;
+    const stopName =
+      stopCoordsQuery.data?.find((s) => s.id === accountId)?.name ?? accountId.slice(0, 8);
+    const prevIds = route.account_ids;
+
+    void (async () => {
+      setRemovingId(accountId);
+      try {
+        const newIds = prevIds.filter((_, i) => i !== idx);
+        await persistAccountIds(newIds);
+
+        // Progress index'i tutarlı tut.
+        if (idx < currentStopIndex) {
+          setCurrentStopIndex((i) => Math.max(0, i - 1));
+        } else {
+          // Mevcut durağı veya sonrasını kaldırdıysak index sınırını kıs.
+          setCurrentStopIndex((i) => Math.min(i, Math.max(0, newIds.length)));
+        }
+
+        toast.success(`${stopName} rotadan kaldırıldı`, {
+          action: {
+            label: 'Geri Al',
+            onClick: () => {
+              // Orijinal sırayı (prevIds) geri yaz — durak aynı index'e döner.
+              void (async () => {
+                try {
+                  await persistAccountIds(prevIds);
+                  toast.success('Durak geri eklendi');
+                } catch (e) {
+                  toast.error(
+                    'Geri alınamadı: ' + (e instanceof Error ? e.message : String(e)),
+                  );
+                }
+              })();
+            },
+          },
+        });
+      } catch (e) {
+        toast.error('Durak kaldırılamadı: ' + (e instanceof Error ? e.message : String(e)));
+      } finally {
+        setRemovingId(null);
+      }
+    })();
   };
 
   const handleOpenGoogleMaps = (): void => {
@@ -477,11 +663,21 @@ export default function ActiveRoutePage(): JSX.Element {
       {/* Status banner */}
       {isStale && (
         <div
-          className={`px-4 py-2 text-sm font-medium ${
+          className={`flex flex-col gap-2 px-4 py-2 text-sm font-medium sm:flex-row sm:items-center sm:justify-between ${
             isCompleted ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900'
           }`}
         >
-          {isCompleted ? 'Bu rota tamamlandı.' : 'Bu rota artık aktif değil.'}
+          <span>{isCompleted ? 'Bu rota tamamlandı.' : 'Bu rota artık aktif değil.'}</span>
+          {isCompleted && hasNextDistrictBatch && (
+            <button
+              type="button"
+              onClick={handleLoadNextDistrictBatch}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 h-9 text-xs font-semibold text-white shadow hover:bg-emerald-700"
+            >
+              <ArrowRightCircle className="h-4 w-4" aria-hidden="true" />
+              Sonraki {Math.min(MAX_BASKET, districtQueueLen - districtBatchStart)} kliniğe geç
+            </button>
+          )}
         </div>
       )}
 
@@ -593,6 +789,17 @@ export default function ActiveRoutePage(): JSX.Element {
                         <StickyNote className="h-2.5 w-2.5" />
                         Not Yaz
                       </button>
+                      {!isStale && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveStop(accountId, idx)}
+                          disabled={removingId === accountId}
+                          className="inline-flex items-center gap-0.5 rounded bg-red-100 px-1.5 py-0.5 text-red-700 hover:bg-red-200 disabled:opacity-50"
+                        >
+                          <Trash2 className="h-2.5 w-2.5" />
+                          {removingId === accountId ? 'Kaldırılıyor…' : 'Kaldır'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </li>

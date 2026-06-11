@@ -221,22 +221,30 @@ export default function DistrictAutoRoutePage() {
   const sendToBasket = useCallback(() => {
     if (!routeState) return;
     const basket = useRouteBasket.getState();
-    basket.clear();
-    let added = 0;
-    for (const c of routeState.ordered.slice(0, MAX_BASKET)) {
-      const res = basket.add({
+    // TÜM sıralı klinikleri kuyruğa al (12+ dahil) — fazlası kaybolmasın,
+    // sonraki batch'lerde devralınsın.
+    basket.setDistrictQueue(
+      routeState.ordered.map((c) => ({
         id: c.id,
         name: c.name,
         lat: c.lat,
         lng: c.lng,
-        source: 'saha',
+        source: 'saha' as const,
         customerType: c.clinic_segment,
         address: c.address ?? undefined,
         phone: c.phone ?? undefined,
-      });
-      if (res.ok) added++;
-    }
-    toast.success(`${added} klinik sepete eklendi`);
+      })),
+    );
+    // İlk batch'i seed et: sepeti temizleyip ilk MAX_BASKET kliniği doldur.
+    basket.clear();
+    basket.loadNextDistrictBatch();
+    const seeded = Math.min(routeState.ordered.length, MAX_BASKET);
+    const remaining = Math.max(0, routeState.ordered.length - MAX_BASKET);
+    toast.success(
+      remaining > 0
+        ? `${seeded} klinik sepete eklendi (${remaining} klinik sonraki gruplarda)`
+        : `${seeded} klinik sepete eklendi`,
+    );
     navigate('/routes/plan');
   }, [routeState, navigate]);
 

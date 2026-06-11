@@ -160,6 +160,35 @@ function VisitFormPage(): JSX.Element {
     enabled: Boolean(accountId),
     queryFn: async (): Promise<AccountRow | null> => {
       if (!accountId) return null;
+
+      // #58 fix: Rota check-in'leri saha_clinics ID yazıyor; eski kod sadece
+      // profiles sorguladığı için klinik adı boş kalıp 'Klinik' fallback'e
+      // düşüyordu. CheckInPage iki-pass deseni: önce saha_clinics (modern),
+      // bulunamazsa profiles (DOCTOR / Parla mevcut müşterileri) fallback.
+
+      // 1) saha_clinics — modern akış (Discovery / rota sepeti clinic id yazar).
+      const clinicRes = await supabase
+        .from('saha_clinics')
+        .select('id, name, address, province_slug')
+        .eq('id', accountId)
+        .maybeSingle();
+      if (clinicRes.data) {
+        const c = clinicRes.data as {
+          id: string;
+          name: string;
+          address: string | null;
+          province_slug: string | null;
+        };
+        return {
+          id: c.id,
+          klinik_adi: c.name,
+          ad_soyad: null,
+          email: null,
+          city: c.province_slug ?? c.address,
+        };
+      }
+
+      // 2) profiles fallback (eski akış / DOCTOR rolü).
       const { data, error } = await supabase
         .from('profiles')
         .select('id, klinik_adi, ad_soyad, email, city')

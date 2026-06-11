@@ -40,6 +40,25 @@ interface ProfileRow {
   is_approved?: boolean | null | undefined;
 }
 
+/**
+ * Ağ/offline hatası mı? Supabase getUser() offline'da AuthRetryableFetchError
+ * (status 0) atar veya "Failed to fetch" mesajlı TypeError fırlatır. Bunları
+ * gerçek 401 "geçersiz oturum"dan ayırmak gerek — offline'da kullanıcıyı
+ * logout etmemek için (offline-first okuma).
+ */
+function isNetworkError(err: unknown): boolean {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+  if (!err || typeof err !== 'object') return false;
+  const status = (err as { status?: number }).status;
+  const name = (err as { name?: string }).name ?? '';
+  const message = (err as { message?: string }).message ?? '';
+  return (
+    status === 0 ||
+    name === 'AuthRetryableFetchError' ||
+    /failed to fetch|networkerror|network request failed|load failed/i.test(message)
+  );
+}
+
 export class AuthError extends Error {
   constructor(
     public code: 'INVALID_CREDENTIALS' | 'NOT_AUTHORIZED' | 'INACTIVE' | 'UNKNOWN',
@@ -92,11 +111,17 @@ export class AuthClient {
    * Supabase yeni ES256 JWT'lerinde session_id claim DB lookup ister.
    * Session DB'den silinmişse getUser() error döner → çağıran signOut etmeli.
    */
-  async validateSession(): Promise<{ valid: boolean; error: string | null }> {
-    const { data, error } = await this.supabase.auth.getUser();
-    if (error) return { valid: false, error: error.message };
-    if (!data.user) return { valid: false, error: 'no user' };
-    return { valid: true, error: null };
+  async validateSession(): Promise<{ valid: boolean; error: string | null; offline: boolean }> {
+    try {
+      const { data, error } = await this.supabase.auth.getUser();
+      if (error) return { valid: false, error: error.message, offline: isNetworkError(error) };
+      if (!data.user) return { valid: false, error: 'no user', offline: false };
+      return { valid: true, error: null, offline: false };
+    } catch (e) {
+      // getUser() ağ hatasında throw edebilir (Failed to fetch).
+      const msg = e instanceof Error ? e.message : String(e);
+      return { valid: false, error: msg, offline: isNetworkError(e) };
+    }
   }
 
   async fetchProfile(userId: string): Promise<SahaProfile> {

@@ -33,6 +33,7 @@ import {
 import { useVertical } from '@core/verticals/useVertical';
 import { useAuthStore } from '@core/auth/authStore';
 import { getSupabaseClient } from '@lib/supabase';
+import { SupabaseCRMAdapter } from '@core/adapters/builtin/SupabaseCRMAdapter';
 import { useGeolocation } from '@features/map/hooks/useGeolocation';
 import ClinicCard from '@features/discovery/components/ClinicCard';
 import {
@@ -47,25 +48,10 @@ import CustomerFilters, {
 } from '@features/customers/components/CustomerFilters';
 import { exportToXlsx, type AccountRow as ExportRow } from '@features/customers/lib/customerExport';
 
-type SortKey = 'name' | 'distance' | 'last_visit' | 'reviews' | 'balance';
+// Built-in CRM adapter — module scope (OrderFormPage/DiscoveryPage ile aynı desen).
+const adapter = new SupabaseCRMAdapter();
 
-interface ClinicRaw {
-  id: string;
-  name: string;
-  lat: number | null;
-  lng: number | null;
-  address: string | null;
-  phone: string | null;
-  rating: number | string | null;
-  user_ratings_total: number | null;
-  types: string[] | null;
-  province_slug: string | null;
-  district_slug: string | null;
-  clinic_segment: string | null;
-  status: string | null;
-  raw_payload: Record<string, unknown> | null;
-  last_verified_at: string | null;
-}
+type SortKey = 'name' | 'distance' | 'last_visit' | 'reviews' | 'balance';
 
 interface VisitRow {
   account_id: string;
@@ -229,24 +215,47 @@ async function fetchAccounts(geo: { lat: number; lng: number } | null): Promise<
     }
   }
 
-  // Fallback: düz saha_clinics query (lat/lng dahil)
-  const { data: clinicsData, error: clinicsErr } = await supabase
-    .from('saha_clinics')
-    .select(
-      'id, name, lat, lng, address, phone, rating, user_ratings_total, types, province_slug, district_slug, clinic_segment, status, raw_payload, last_verified_at',
-    )
-    .eq('status', 'active')
-    .order('name', { ascending: true })
-    .limit(1000);
+  // Fallback (GPS yok): built-in adapter.listCustomers ile aktif müşteri listesi.
+  // saha_clinics → Customer mapping adapter içinde; burada CustomerListRow'a indiriyoruz.
+  // Not: neighborhood/balance yalnızca raw_payload'dan gelir (Customer modelinde yok);
+  // bunlar zaten geo (RPC) yolunda da null — fallback'te de null bırakılıyor.
+  const { items: customers } = await adapter.listCustomers({ limit: 1000 });
+  if (customers.length === 0) return [];
 
-  if (clinicsErr) throw clinicsErr;
-  const clinics = (clinicsData ?? []) as ClinicRaw[];
-  if (clinics.length === 0) return [];
-
-  const ids = clinics.map((c) => c.id);
+  const ids = customers.map((c) => c.id);
   const lastVisitByClinic = await fetchLastVisitMap(ids);
 
-  return clinics.map<CustomerListRow>((c) => rowToCustomerListRow(c, lastVisitByClinic.get(c.id)));
+  return customers.map<CustomerListRow>((c) => {
+    const visit = lastVisitByClinic.get(c.id);
+    const primary = c.addresses?.[0];
+    const cf = c.customFields ?? {};
+    const ratingRaw = cf['rating'];
+    const ratingNum =
+      typeof ratingRaw === 'number'
+        ? ratingRaw
+        : typeof ratingRaw === 'string'
+          ? Number.parseFloat(ratingRaw)
+          : null;
+    const reviews = typeof cf['user_ratings_total'] === 'number' ? cf['user_ratings_total'] : null;
+    return {
+      id: c.id,
+      name: c.name,
+      type: c.type ?? null,
+      phone: c.phone ?? null,
+      whatsapp: null,
+      address: primary?.addressLine ?? null,
+      city: c.region ?? primary?.city ?? null,
+      district: primary?.district ?? null,
+      neighborhood: null,
+      lat: primary?.location?.lat ?? null,
+      lng: primary?.location?.lng ?? null,
+      rating: ratingNum != null && Number.isFinite(ratingNum) ? ratingNum : null,
+      reviews,
+      balance: null,
+      lastVisitAt: visit?.check_in_at ?? null,
+      lastVisitOutcome: visit?.outcome ?? null,
+    };
+  });
 }
 
 /**

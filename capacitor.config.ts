@@ -6,10 +6,9 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   server: {
     androidScheme: 'https',
-    // Remote URL — anında güncel web app, APK hafif, startup hızlı.
-    // Saha tamamen online çalışır (Supabase + Mapbox zaten ağ gerektirir),
-    // offline mod için bundled webDir'a dönmek istersen bu satırı yoruma al.
-    url: 'https://saha.parladisdeposu.com',
+    // LOCAL TEST: bundled dist (https://localhost secure context → geolocation çalışır).
+    // Canlı/remote'a dönmek için aşağıdaki url satırının yorumunu kaldır + cap sync.
+    // url: 'https://saha.parladisdeposu.com',
     cleartext: false,
     // Deep-link/OAuth callback için izinli host'lar (CapacitorHttp bypass):
     allowNavigation: [

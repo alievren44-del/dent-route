@@ -74,7 +74,7 @@ function ClinicCard({
   const waPhoneSource = phone ?? whatsapp;
   const waHref = waLink(waPhoneSource);
   const hasPhone = Boolean(phone);
-  const showAdd = !isExistingCustomer && typeof onAdd === 'function';
+  const showAdd = typeof onAdd === 'function';
   const directionsHref =
     typeof lat === 'number' && typeof lng === 'number'
       ? googleMapsDirectionsUrl(lat, lng, name)

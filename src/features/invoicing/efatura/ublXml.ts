@@ -17,7 +17,7 @@
  *   - https://docs.oasis-open.org/ubl/UBL-2.1.html
  */
 
-interface UblCari {
+export interface UblCari {
   cari_kodu: string;
   fatura_unvani: string;
   vergi_no?: string | null;
@@ -27,7 +27,7 @@ interface UblCari {
   ilce?: string | null;
 }
 
-interface UblKalem {
+export interface UblKalem {
   sira: number;
   urun_adi: string;
   birim: string;
@@ -40,7 +40,7 @@ interface UblKalem {
   satir_toplam: number;
 }
 
-interface UblInvoice {
+export interface UblInvoice {
   id: string;
   fatura_no?: string | null;
   tarih: string;
@@ -53,6 +53,40 @@ interface UblInvoice {
   para_birimi: string;
 }
 
+/**
+ * Satıcı (gönderen) tarafı bilgileri. Config'in `einvoice.seller` bloğundan
+ * gelir. Verilmezse aşağıdaki DEFAULT_SELLER placeholder'ı kullanılır.
+ */
+export interface UblSeller {
+  vkn: string;
+  unvan: string;
+  vergiDairesi?: string;
+  adres?: string;
+}
+
+const DEFAULT_SELLER: UblSeller = {
+  vkn: '0000000000',
+  unvan: 'Parla Diş Deposu',
+  vergiDairesi: undefined,
+  adres: undefined,
+};
+
+/**
+ * UBL-TR profil seçenekleri.
+ *   - 'TEMELFATURA' / 'TICARIFATURA' → e-Fatura (alıcı GİB mükellefi)
+ *   - 'EARSIVFATURA'                  → e-Arşiv (alıcı GİB mükellefi değil)
+ *   - 'IADEFATURA'                    → iade
+ */
+export type UblProfile = 'TEMELFATURA' | 'TICARIFATURA' | 'EARSIVFATURA' | 'IADEFATURA';
+
+export interface UblOptions {
+  seller?: UblSeller;
+  /** ProfileID override. Verilmezse fatura tip'ine göre otomatik seçilir. */
+  profile?: UblProfile;
+  /** generateUblInvoiceXml içinde üretilen ETTN'i geri vermek için. */
+  uuid?: string;
+}
+
 function xmlEscape(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -62,7 +96,7 @@ function xmlEscape(s: string): string {
     .replace(/'/g, '&apos;');
 }
 
-function uuidV4(): string {
+export function uuidV4(): string {
   // crypto.randomUUID() yoksa fallback
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -90,10 +124,16 @@ export function generateUblInvoiceXml(
   invoice: UblInvoice,
   cari: UblCari,
   kalemler: UblKalem[],
+  options?: UblOptions,
 ): string {
-  const uuid = uuidV4();
+  const uuid = options?.uuid ?? uuidV4();
+  const seller = options?.seller ?? DEFAULT_SELLER;
   const tipCode = invoice.tip === 'iade' ? 'IADE' : 'SATIS';
-  const profile = invoice.tip === 'iade' ? 'IADEFATURA' : 'TEMELFATURA';
+  // ProfileID: önce override, yoksa fatura tip'ine göre otomatik seçim.
+  const profile: UblProfile =
+    options?.profile ?? (invoice.tip === 'iade' ? 'IADEFATURA' : 'TEMELFATURA');
+  // Satıcı VKN/TCKN şema seçimi (10 hane VKN, 11 hane TCKN).
+  const sellerScheme = seller.vkn.length === 11 ? 'TCKN' : 'VKN';
 
   const lines = kalemler
     .map((k) => {
@@ -146,6 +186,20 @@ export function generateUblInvoiceXml(
          xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
          xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <!-- ==================================================================== -->
+  <!-- UBLExtensions — XAdES mali mühür imzası BURAYA gelir.                 -->
+  <!-- GİB onaylı entegratör (Paraşüt/İzibiz/Uyumsoft/EDM...) ya da Supabase -->
+  <!-- Edge Function, mali mühür sertifikası + secret ile bu <ext:UBLExtension>-->
+  <!-- bloğunun içine <ds:Signature> (XAdES-BES) ENVELOPED imza ekleyecek.    -->
+  <!-- Bu scaffold imzasız boş zarf üretir; canlı GİB gönderimi BLOKE.        -->
+  <!-- ==================================================================== -->
+  <ext:UBLExtensions>
+    <ext:UBLExtension>
+      <ext:ExtensionContent>
+        <!-- XAdES <ds:Signature> placeholder — integrator inserts here. -->
+      </ext:ExtensionContent>
+    </ext:UBLExtension>
+  </ext:UBLExtensions>
   <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
   <cbc:CustomizationID>TR1.2</cbc:CustomizationID>
   <cbc:ProfileID>${xmlEscape(profile)}</cbc:ProfileID>
@@ -161,12 +215,13 @@ export function generateUblInvoiceXml(
   <cac:AccountingSupplierParty>
     <cac:Party>
       <cac:PartyIdentification>
-        <cbc:ID schemeID="VKN">0000000000</cbc:ID>
+        <cbc:ID schemeID="${sellerScheme}">${xmlEscape(seller.vkn)}</cbc:ID>
       </cac:PartyIdentification>
       <cac:PartyName>
-        <cbc:Name>Parla Diş Deposu</cbc:Name>
+        <cbc:Name>${xmlEscape(seller.unvan)}</cbc:Name>
       </cac:PartyName>
       <cac:PostalAddress>
+        ${seller.adres ? `<cbc:StreetName>${xmlEscape(seller.adres)}</cbc:StreetName>` : ''}
         <cbc:CityName>İstanbul</cbc:CityName>
         <cbc:Country>
           <cbc:IdentificationCode>TR</cbc:IdentificationCode>
@@ -174,7 +229,7 @@ export function generateUblInvoiceXml(
       </cac:PostalAddress>
       <cac:PartyTaxScheme>
         <cac:TaxScheme>
-          <cbc:Name>—</cbc:Name>
+          <cbc:Name>${xmlEscape(seller.vergiDairesi ?? '—')}</cbc:Name>
         </cac:TaxScheme>
       </cac:PartyTaxScheme>
     </cac:Party>

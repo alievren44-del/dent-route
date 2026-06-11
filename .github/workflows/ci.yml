@@ -82,7 +82,10 @@ jobs:
       # Saha migration'ları idempotent yazılmış (CREATE TABLE IF NOT EXISTS,
       # CREATE OR REPLACE FUNCTION, DROP POLICY IF EXISTS). Parla shared DB
       # geçmişine dokunmamak için supabase CLI yerine direkt psql kullanıyoruz.
-      # Sadece bu sprint'te değişen 2 dosyayı apply ediyoruz.
+      # #110: Eskiden sadece 4 dosya hardcoded'dı → yeni migration eklenince
+      # CI'da unutuluyordu. Artık tüm supabase/migrations/*.sql dosyaları
+      # leksikografik (timestamp) sırayla apply ediliyor; idempotent oldukları
+      # için tekrar çalıştırmak güvenli.
       # GitHub Actions IPv4-only; Supabase direct DB IPv6 sadece.
       # Supavisor pooler (aws-1-eu-central-1.pooler.supabase.com:6543) IPv4
       # transaction mode. Migration dosyaları BEGIN/COMMIT içeriyor → tek tx OK.
@@ -95,11 +98,9 @@ jobs:
           PGPORT: '6543'
         run: |
           set -euo pipefail
-          for f in \
-            supabase/migrations/20260528000007_saha_route_assignment.sql \
-            supabase/migrations/20260528000008_saha_auth_trigger.sql \
-            supabase/migrations/20260528000009_saha_cari_sales_rep.sql \
-            supabase/migrations/20260528000010_saha_scan_logs_v3_rep.sql; do
+          # Tüm migration dosyalarını timestamp sırasıyla uygula (ls | sort).
+          shopt -s nullglob
+          for f in $(ls supabase/migrations/*.sql | sort); do
               echo "::group::Apply $f"
               psql --set ON_ERROR_STOP=on -v ON_ERROR_STOP=1 -f "$f"
               echo "::endgroup::"

@@ -22,6 +22,7 @@ applyBranding(config.branding);
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
+      networkMode: 'offlineFirst', // persisted cache'i offline'da hard-error vermeden servis et
       staleTime: 60_000,
       gcTime: 24 * 60 * 60 * 1000, // 24h persist
       retry: (failureCount, error) => {
@@ -52,7 +53,7 @@ createRoot(rootEl).render(
   <StrictMode>
     <PersistQueryClientProvider
       client={queryClient}
-      persistOptions={{ persister, maxAge: 24 * 60 * 60 * 1000 }}
+      persistOptions={{ persister, maxAge: 24 * 60 * 60 * 1000, buster: 'v0.1.0' }}
     >
       <VerticalProvider vertical={config.vertical}>
         <BrowserRouter>

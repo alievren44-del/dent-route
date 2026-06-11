@@ -386,10 +386,10 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
     const { data, error, count } = await this.supabase
       .from('orders')
       .select(
-        'id, order_number, user_id, status, total, total_amount, notes, sales_rep_id, created_at, order_items(product_id, quantity, unit_price, line_total)',
+        'id, order_number, user_id, cari_id, clinic_id, status, total, total_amount, notes, sales_rep_id, created_at, order_items(product_id, product_name, quantity, unit_price, line_total)',
         { count: 'exact' },
       )
-      .eq('user_id', customerId)
+      .or(`user_id.eq.${customerId},clinic_id.eq.${customerId}`)
       .order('created_at', { ascending: false })
       .limit(opts?.limit ?? 50);
 
@@ -407,7 +407,9 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
     type OrderRow = {
       id: string;
       order_number: string | null;
-      user_id: string;
+      user_id: string | null;
+      cari_id: string | null;
+      clinic_id: string | null;
       status: string;
       total: number | null;
       total_amount: number | null;
@@ -421,7 +423,7 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       items: (data ?? []).map((r: OrderRow) => ({
         id: r.id,
         externalId: r.order_number ?? undefined,
-        customerId: r.user_id,
+        customerId: r.clinic_id ?? r.user_id ?? '',
         status: mapOrderStatus(r.status),
         items: (r.order_items ?? []).map((li: OrderItemRow) => ({
           productId: li.product_id ?? undefined,
@@ -433,7 +435,7 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
         totalAmount: Number(r.total ?? r.total_amount ?? 0),
         currency: 'TRY',
         notes: r.notes ?? undefined,
-        createdBy: r.sales_rep_id ?? r.user_id,
+        createdBy: r.sales_rep_id ?? r.user_id ?? '',
         createdAt: r.created_at,
       })),
       total: count ?? undefined,
@@ -444,7 +446,7 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
     const { data, error } = await this.supabase
       .from('orders')
       .select(
-        'id, order_number, user_id, status, total, total_amount, notes, sales_rep_id, created_at, order_items(product_id, quantity, unit_price, line_total)',
+        'id, order_number, user_id, cari_id, clinic_id, status, total, total_amount, notes, sales_rep_id, created_at, order_items(product_id, product_name, quantity, unit_price, line_total)',
       )
       .eq('id', id)
       .maybeSingle();
@@ -466,7 +468,9 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
     type OrderRow = {
       id: string;
       order_number: string | null;
-      user_id: string;
+      user_id: string | null;
+      cari_id: string | null;
+      clinic_id: string | null;
       status: string;
       total: number | null;
       total_amount: number | null;
@@ -479,7 +483,7 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
     return {
       id: r.id,
       externalId: r.order_number ?? undefined,
-      customerId: r.user_id,
+      customerId: r.clinic_id ?? r.user_id ?? '',
       status: mapOrderStatus(r.status),
       items: (r.order_items ?? []).map((li: OrderItemRow) => ({
         productId: li.product_id ?? undefined,
@@ -491,7 +495,7 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       totalAmount: Number(r.total ?? r.total_amount ?? 0),
       currency: 'TRY',
       notes: r.notes ?? undefined,
-      createdBy: r.sales_rep_id ?? r.user_id,
+      createdBy: r.sales_rep_id ?? r.user_id ?? '',
       createdAt: r.created_at,
     };
   }
@@ -512,24 +516,102 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       }
     }
 
-    // Calculate total client-side (server-side validation Parla'da)
+    // Fiyat + meta snapshot — v_saha_products tek kaynak (quoteOrder ile aynı mantık).
+    // Eskiden sadece unitPriceOverride'a bakılıyordu; sepetten override gelmediği için
+    // fiyatlar 0 yazılıyordu. Artık fiyat/vergi DB'den çekilir.
+    const productIds = order.items.map((it) => it.productId);
+    const { data: productRows } = await this.supabase
+      .from('v_saha_products')
+      .select('id, name, sku, base_price, sale_price, tax_rate')
+      .in('id', productIds);
+    const priceMap = new Map<
+      string,
+      { name: string | null; sku: string | null; price: number; taxRate: number }
+    >(
+      (
+        (productRows ?? []) as Array<{
+          id: string;
+          name: string | null;
+          sku: string | null;
+          base_price: number | string | null;
+          sale_price: number | string | null;
+          tax_rate: number | string | null;
+        }>
+      ).map((p) => {
+        // tax_rate DB'de yüzde (ör. 10.00). Null → %10 varsayılan (dental standart).
+        const taxPct = p.tax_rate != null ? Number(p.tax_rate) : 10;
+        return [
+          p.id,
+          {
+            name: p.name,
+            sku: p.sku,
+            price: Number(p.sale_price ?? p.base_price ?? 0),
+            taxRate: Number.isFinite(taxPct) ? taxPct / 100 : 0.1,
+          },
+        ] as const;
+      }),
+    );
+
+    // Tutarları hesapla (server-side doğrulama Parla'da).
     let subtotal = 0;
+    let vatTotal = 0;
     const lineItems = order.items.map((it) => {
-      const unitPrice = it.unitPriceOverride ?? 0;
+      const meta = priceMap.get(it.productId);
+      const unitPrice = it.unitPriceOverride ?? meta?.price ?? 0;
       const lineTotal = unitPrice * it.quantity;
       subtotal += lineTotal;
-      return { ...it, unitPrice, lineTotal };
+      vatTotal += lineTotal * (meta?.taxRate ?? 0.1);
+      return {
+        ...it,
+        unitPrice,
+        lineTotal,
+        sku: meta?.sku ?? '-',
+        productName: meta?.name ?? 'Ürün',
+      };
     });
+    vatTotal = Math.round(vatTotal * 100) / 100;
+    const grandTotal = subtotal + vatTotal;
+
+    // Müşteri kimliği iki dünyadan gelebilir:
+    //  - saha_clinics (3116 prospect) → cari find-or-create, sipariş cariye+kliniğe bağlanır.
+    //  - profiles (eski ziyaret/müşteri-detay akışları) → legacy user_id.
+    const { data: clinicRow } = await this.supabase
+      .from('saha_clinics')
+      .select('id')
+      .eq('id', order.customerId)
+      .maybeSingle();
+
+    let clinicId: string | null = null;
+    let cariId: string | null = null;
+    let userId: string | null = order.customerId;
+
+    if (clinicRow?.id) {
+      clinicId = clinicRow.id;
+      userId = null;
+      const { data: resolvedCari, error: cariErr } = await this.supabase.rpc(
+        'saha_get_or_create_cari_for_clinic',
+        { p_clinic_id: clinicId },
+      );
+      if (cariErr || !resolvedCari) {
+        throw new AdapterError('UNKNOWN', cariErr?.message ?? 'cari oluşturulamadı', {
+          originalError: cariErr,
+        });
+      }
+      cariId = resolvedCari as string;
+    }
 
     const { data: newOrder, error: insErr } = await this.supabase
       .from('orders')
       .insert({
-        user_id: order.customerId,
+        user_id: userId,
+        cari_id: cariId,
+        clinic_id: clinicId,
         sales_rep_id: salesRepId,
         status: 'pending',
         subtotal,
-        total: subtotal,
-        total_amount: subtotal,
+        vat_amount: vatTotal,
+        total: grandTotal,
+        total_amount: grandTotal,
         notes: order.notes ?? null,
         idempotency_key: order.idempotencyKey ?? null,
       })
@@ -542,16 +624,22 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       });
     }
 
+    // order_items — sku/product_name/fiyat snapshot lineItems'tan (yukarıda v_saha_products'tan çekildi).
     const itemsPayload = lineItems.map((it) => ({
       order_id: newOrder.id,
       product_id: it.productId,
+      sku: it.sku,
+      product_name: it.productName,
       quantity: it.quantity,
       unit_price: it.unitPrice,
       line_total: it.lineTotal,
     }));
     const { error: itemsErr } = await this.supabase.from('order_items').insert(itemsPayload);
     if (itemsErr) {
-      console.warn('order_items insert warning:', itemsErr.message);
+      // Kalemsiz sipariş sessizce oluşmasın — hatayı yüzeye çıkar.
+      throw new AdapterError('UNKNOWN', `Sipariş kalemleri eklenemedi: ${itemsErr.message}`, {
+        originalError: itemsErr,
+      });
     }
 
     return this.getOrder(newOrder.id);

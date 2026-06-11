@@ -116,6 +116,28 @@ const sahaConfigSchema: z.ZodType<SahaConfig> = z.object({
     supabaseAnonKeyEnvVar: z.string(),
     environment: z.enum(['development', 'staging', 'production']),
   }),
+  // E-Fatura — opsiyonel. Secret'lar yalnızca *EnvVar isimleri olarak tutulur.
+  einvoice: z
+    .object({
+      provider: z.enum(['manual', 'parasut', 'mukellef', 'izibiz', 'uyumsoft', 'edm']),
+      baseUrl: z.string().url().optional(),
+      auth: z
+        .object({
+          usernameEnvVar: z.string().optional(),
+          passwordEnvVar: z.string().optional(),
+          apiKeyEnvVar: z.string().optional(),
+        })
+        .optional(),
+      seller: z
+        .object({
+          vkn: z.string(),
+          unvan: z.string(),
+          vergiDairesi: z.string().optional(),
+          adres: z.string().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 // ─── Loader ────────────────────────────────────────────

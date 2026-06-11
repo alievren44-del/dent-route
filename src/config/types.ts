@@ -17,6 +17,32 @@ export interface SahaConfig {
   geo: GeoConfig;
   legal: LegalConfig;
   deployment: DeploymentConfig;
+  /** E-Fatura entegrasyonu (opsiyonel). Yoksa 'manual' davranışı geçerli. */
+  einvoice?: EInvoiceConfig;
+}
+
+/**
+ * E-Fatura yapılandırması.
+ *
+ * Secret'lar JSON'a yazılmaz — yalnızca *EnvVar isimleri tutulur
+ * (CustomRESTCRMConfig.auth.tokenEnvVar precedent'i ile aynı kural).
+ * Canlı entegratörler (parasut/izibiz/...) için baseUrl + auth EnvVar'ları
+ * ve mali mühür dış kimlik bilgilerine bağlıdır (BLOKE).
+ */
+export interface EInvoiceConfig {
+  provider: 'manual' | 'parasut' | 'mukellef' | 'izibiz' | 'uyumsoft' | 'edm';
+  baseUrl?: string;
+  auth?: {
+    usernameEnvVar?: string;
+    passwordEnvVar?: string;
+    apiKeyEnvVar?: string;
+  };
+  seller?: {
+    vkn: string;
+    unvan: string;
+    vergiDairesi?: string;
+    adres?: string;
+  };
 }
 
 export interface TenantConfig {

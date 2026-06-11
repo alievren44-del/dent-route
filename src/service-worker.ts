@@ -43,16 +43,37 @@ registerRoute(
   }),
 );
 
-// ─── Background Sync için event hook ────────────────────────
-// Sprint 6'da burada sync_queue flush mantığı çağrılacak.
+// ─── Background Sync için event hook (#49/#55/#74) ──────────
+// Dexie kuyruğu Supabase client ile flush'lanır; ancak bizim Supabase
+// client'ımız `window.fetch` + `window.localStorage` (persistSession) kullanır
+// ve SW context'inde `window` YOKTUR. Bu yüzden flush'ı doğrudan SW'de
+// çalıştırmak yerine, açık olan client(ler)e mesaj atıp orada processQueue'yu
+// tetikliyoruz (güvenli/minimal yaklaşım). Hiç client açık değilse, client
+// bir sonraki açılışında 'online' event'i + initSyncQueue zaten flush eder.
+const SYNC_TAG = 'saha-sync-queue';
+
+async function flushSyncQueue(): Promise<void> {
+  const clientList = await self.clients.matchAll({
+    type: 'window',
+    includeUncontrolled: true,
+  });
+  if (clientList.length === 0) {
+    // Açık pencere yok — kuyruk client açılışında flush edilecek.
+    console.info('[SW] sync: açık client yok, flush ertelendi:', SYNC_TAG);
+    return;
+  }
+  for (const client of clientList) {
+    client.postMessage({ type: 'saha-sync-flush', tag: SYNC_TAG });
+  }
+}
+
 interface SyncEvent extends Event {
   readonly tag: string;
   waitUntil(p: Promise<unknown>): void;
 }
 self.addEventListener('sync', ((event: SyncEvent) => {
-  if (event.tag === 'saha-sync-queue') {
-    // event.waitUntil(flushSyncQueue());
-    console.info('[SW] Background sync triggered:', event.tag);
+  if (event.tag === SYNC_TAG) {
+    event.waitUntil(flushSyncQueue());
   }
 }) as EventListener);
 

@@ -13,8 +13,15 @@ const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? 'http://localhost:51
   .map((s) => s.trim())
   .filter(Boolean);
 
+// Capacitor native app origin'leri — bundled APK https://localhost,
+// iOS capacitor://localhost üzerinden çalışır. Bunlar uygulamanın kendi
+// first-party origin'i; env allowlist'ten bağımsız her zaman kabul edilir.
+const NATIVE_APP_ORIGINS = ['https://localhost', 'capacitor://localhost'];
+
 function buildCorsHeaders(reqOrigin: string | null): Record<string, string> {
-  const allowed = reqOrigin && ALLOWED_ORIGINS.includes(reqOrigin) ? reqOrigin : ALLOWED_ORIGINS[0] ?? 'null';
+  const isAllowed =
+    reqOrigin && (ALLOWED_ORIGINS.includes(reqOrigin) || NATIVE_APP_ORIGINS.includes(reqOrigin));
+  const allowed = isAllowed ? reqOrigin : ALLOWED_ORIGINS[0] ?? 'null';
   return {
     'Access-Control-Allow-Origin': allowed,
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',

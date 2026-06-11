@@ -52,6 +52,7 @@
         "npm:react-hook-form@^7.52.0",
         "npm:react-router-dom@^6.24.0",
         "npm:react@^18.3.1",
+        "npm:recharts@^2.15.4",
         "npm:sonner@^1.5.0",
         "npm:supabase@^2.101.0",
         "npm:tailwindcss@^3.4.4",

@@ -35,20 +35,42 @@ export type AddResult =
   | { ok: false; reason: 'duplicate' }
   | { ok: false; reason: 'full' };
 
+/**
+ * Bir BasketStop'un addedAt hariç tüm alanları — district kuyruğunda
+ * sıralı tüm klinikleri tam veriyle taşımak için.
+ */
+export type QueuedStop = Omit<BasketStop, 'addedAt'>;
+
 interface RouteBasketState {
   items: BasketStop[];
+
+  /** İlçe (district) auto modunda sıralı TÜM klinikler (12+ dahil). */
+  districtQueue: QueuedStop[];
+  /** districtQueue içinde bir sonraki batch'in başlangıç index'i. */
+  districtBatchStart: number;
 
   has(id: string): boolean;
   count(): number;
   add(stop: Omit<BasketStop, 'addedAt'>): AddResult;
   remove(id: string): void;
   clear(): void;
+
+  /** Tüm sıralı district listesini kaydet, cursor'ı sıfırla. */
+  setDistrictQueue(stops: QueuedStop[]): void;
+  /** Sıradaki MAX_BASKET kliniği sepete doldur, cursor'ı ilerlet. */
+  loadNextDistrictBatch(): void;
+  /** Kuyrukta daha doldurulmamış klinik var mı? */
+  hasNextDistrictBatch(): boolean;
+  /** District kuyruğunu tamamen temizle. */
+  clearDistrictQueue(): void;
 }
 
 export const useRouteBasket = create<RouteBasketState>()(
   persist(
     (set, get) => ({
       items: [],
+      districtQueue: [],
+      districtBatchStart: 0,
 
       has(id) {
         return get().items.some((s) => s.id === id);
@@ -78,13 +100,49 @@ export const useRouteBasket = create<RouteBasketState>()(
       clear() {
         set({ items: [] });
       },
+
+      setDistrictQueue(stops) {
+        set({ districtQueue: stops, districtBatchStart: 0 });
+      },
+
+      loadNextDistrictBatch() {
+        const { districtQueue, districtBatchStart } = get();
+        const batch = districtQueue.slice(
+          districtBatchStart,
+          districtBatchStart + MAX_BASKET,
+        );
+        const now = Date.now();
+        const items: BasketStop[] = batch.map((s, i) => ({
+          ...s,
+          // addedAt'leri sıralı tut ki sepet sırası kuyruk sırasını korusun.
+          addedAt: now + i,
+        }));
+        set({
+          items,
+          districtBatchStart: districtBatchStart + batch.length,
+        });
+      },
+
+      hasNextDistrictBatch() {
+        const { districtQueue, districtBatchStart } = get();
+        return districtBatchStart < districtQueue.length;
+      },
+
+      clearDistrictQueue() {
+        set({ districtQueue: [], districtBatchStart: 0 });
+      },
     }),
     {
       name: 'route-basket-v1',
       storage: createJSONStorage(() => localStorage),
-      // Sadece items'ı persist et — fonksiyonlar zaten her render'da yeniden oluşur.
-      partialize: (state) => ({ items: state.items }),
-      version: 1,
+      // Sadece items + district kuyruğunu persist et — fonksiyonlar zaten her
+      // render'da yeniden oluşur.
+      partialize: (state) => ({
+        items: state.items,
+        districtQueue: state.districtQueue,
+        districtBatchStart: state.districtBatchStart,
+      }),
+      version: 2,
     },
   ),
 );

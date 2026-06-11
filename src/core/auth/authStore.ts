@@ -33,6 +33,28 @@ function getClient(injected?: AuthClient): AuthClient {
 
 let authStateSubscription: { unsubscribe: () => void } | null = null;
 
+// Profil offline cache — offline açılışta (uygulamayı kapat-aç) session
+// localStorage'dan gelir ama profiles query ağ ister. Son başarılı profili
+// saklayıp offline'da buradan okuruz (offline-first okuma).
+const PROFILE_CACHE_KEY = 'saha-profile-cache';
+function cacheProfile(profile: SahaProfile): void {
+  try {
+    localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile));
+  } catch {
+    /* yutulur */
+  }
+}
+function readCachedProfile(userId: string): SahaProfile | null {
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as SahaProfile;
+    return p && p.id === userId ? p : null;
+  } catch {
+    return null;
+  }
+}
+
 export const useAuthStore = create<AuthStoreState>((set, get) => ({
   session: null,
   profile: null,
@@ -54,6 +76,14 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       // 401 "Session from session_id claim does not exist".
       const validity = await authClient.validateSession();
       if (!validity.valid) {
+        // Offline (Failed to fetch) → logout etme; persisted session + cached
+        // profil ile devam et, veri katmanı cache'ten okusun.
+        if (validity.offline) {
+          const cachedProfile = readCachedProfile(session.userId);
+          set({ session, profile: cachedProfile, loading: false, error: null });
+          return;
+        }
+        // Gerçek geçersiz oturum (401) → signOut.
         await authClient.signOut().catch(() => {
           /* yutulur */
         });
@@ -67,6 +97,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       }
 
       const profile = await authClient.fetchProfile(session.userId);
+      cacheProfile(profile);
       set({ session, profile, loading: false });
 
       // Subscribe to future auth changes — eski subscription varsa kapat
@@ -79,7 +110,10 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
         }
         void authClient
           .fetchProfile(newSession.userId)
-          .then((newProfile) => set({ session: newSession, profile: newProfile }))
+          .then((newProfile) => {
+            cacheProfile(newProfile);
+            set({ session: newSession, profile: newProfile });
+          })
           .catch((err: unknown) =>
             set({ error: err instanceof Error ? err.message : String(err) }),
           );
@@ -100,6 +134,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
     try {
       const session = await authClient.signInWithEmail(email, password);
       const profile = await authClient.fetchProfile(session.userId);
+      cacheProfile(profile);
       set({ session, profile, loading: false });
     } catch (err) {
       set({
@@ -115,6 +150,11 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
   async signOut(client) {
     const authClient = getClient(client);
     await authClient.signOut();
+    try {
+      localStorage.removeItem(PROFILE_CACHE_KEY);
+    } catch {
+      /* yutulur */
+    }
     set({ session: null, profile: null, error: null });
   },
 

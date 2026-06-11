@@ -73,6 +73,10 @@ interface OrderHistoryRow {
     klinik_adi: string | null;
     email: string | null;
   } | null;
+  cari?: {
+    id: string;
+    fatura_unvani: string | null;
+  } | null;
   rep?: {
     id: string;
     ad_soyad: string | null;
@@ -96,9 +100,11 @@ function formatDate(iso: string | null): string {
   });
 }
 
-function customerName(c: OrderHistoryRow['customer']): string {
-  if (!c) return '—';
-  return c.klinik_adi ?? c.ad_soyad ?? c.email ?? c.id.slice(0, 8);
+function customerName(r: Pick<OrderHistoryRow, 'customer' | 'cari'>): string {
+  const c = r.customer;
+  if (c) return c.klinik_adi ?? c.ad_soyad ?? c.email ?? c.id.slice(0, 8);
+  if (r.cari?.fatura_unvani) return r.cari.fatura_unvani;
+  return '—';
 }
 
 function repName(r: OrderHistoryRow['rep']): string {
@@ -122,7 +128,7 @@ function exportOrdersToXlsx(rows: OrderHistoryRow[]): void {
     aoa.push([
       r.order_number ?? r.id.slice(0, 8),
       formatDate(r.created_at),
-      customerName(r.customer ?? null),
+      customerName(r),
       repName(r.rep ?? null),
       Number(r.total ?? r.total_amount ?? 0),
       STATUS_LABELS[String(r.status ?? '').toLowerCase()] ?? r.status ?? '',
@@ -217,9 +223,10 @@ function OrderHistoryPage(): JSX.Element {
     queryKey,
     queryFn: async (): Promise<{ rows: OrderHistoryRow[]; total: number }> => {
       const supabase = getSupabaseClient();
-      const baseSelect = `id, order_number, user_id, sales_rep_id, status, total, total_amount,
+      const baseSelect = `id, order_number, user_id, cari_id, clinic_id, sales_rep_id, status, total, total_amount,
          shipping_status, tracking_number, notes, created_at,
          customer:profiles!orders_user_id_fkey (id, ad_soyad, klinik_adi, email),
+         cari:saha_cariler!orders_cari_id_fkey (id, fatura_unvani),
          rep:profiles!orders_sales_rep_id_fkey (id, ad_soyad, email)`;
 
       const buildQuery = (selectStr: string) => {
@@ -261,7 +268,7 @@ function OrderHistoryPage(): JSX.Element {
       const term = customerSearch.trim().toLowerCase();
       if (term) {
         typed = typed.filter((r) => {
-          const name = customerName(r.customer ?? null).toLowerCase();
+          const name = customerName(r).toLowerCase();
           return name.includes(term);
         });
       }
@@ -497,7 +504,7 @@ function OrderHistoryPage(): JSX.Element {
                           {o.order_number ?? `#${o.id.slice(0, 8)}`}
                         </p>
                         <p className="text-xs text-muted-foreground truncate mt-0.5">
-                          {customerName(o.customer ?? null)}
+                          {customerName(o)}
                         </p>
                         <p className="text-[11px] text-muted-foreground mt-0.5">
                           {formatDate(o.created_at)}
@@ -560,7 +567,7 @@ function OrderHistoryPage(): JSX.Element {
               <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Müşteri</dt>
                 <dd className="text-right text-foreground">
-                  {customerName(detailFor.customer ?? null)}
+                  {customerName(detailFor)}
                 </dd>
               </div>
               <div className="flex justify-between gap-3">

@@ -15,6 +15,8 @@ import { Trash2, MapPin, Home, Play, Sparkles, Car, Footprints, Activity } from 
 import { toast } from 'sonner';
 import { usePermissions } from '@core/auth/usePermissions';
 import { AssignRouteModal } from '@features/routes/components/AssignRouteModal';
+import { AddressSearchInput } from '@features/routes/components/AddressSearchInput';
+import type { GeocodeResult } from '@/lib/mapboxGeocode';
 
 import { getSupabaseClient } from '@/lib/supabase';
 import { getEnv } from '@config/env';
@@ -123,7 +125,10 @@ export default function RoutePlannerPage() {
     [basketItems],
   );
 
-  const [startPoint, setStartPoint] = useState<'gps' | 'home'>('gps');
+  // #64: GPS reddedilirse tüm sayfa kullanılamaz hâle geliyordu. 'manual'
+  // seçeneği AddressSearchInput ile geocode edilen bir başlangıç noktası verir.
+  const [startPoint, setStartPoint] = useState<'gps' | 'manual'>('gps');
+  const [manualStart, setManualStart] = useState<GeocodeResult | null>(null);
   const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
   const [optimizing, setOptimizing] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -160,6 +165,14 @@ export default function RoutePlannerPage() {
     }
   }, [startPoint, geolocation]);
 
+  // #64: GPS izni reddedildiyse otomatik 'manual' moduna geç ki kullanıcı
+  // adres yazarak başlangıç noktası belirleyebilsin (sayfa kilitlenmesin).
+  useEffect(() => {
+    if (startPoint === 'gps' && geolocation.status === 'denied') {
+      setStartPoint('manual');
+    }
+  }, [startPoint, geolocation.status]);
+
   const removeFromBasket = useCallback(
     (id: string) => {
       basketRemove(id);
@@ -172,8 +185,12 @@ export default function RoutePlannerPage() {
     if (startPoint === 'gps' && geolocation.position) {
       return [geolocation.position.lng, geolocation.position.lat];
     }
+    // #64: manuel adres modunda geocode sonucu [lng, lat] başlangıç olur.
+    if (startPoint === 'manual' && manualStart) {
+      return [manualStart.lng, manualStart.lat];
+    }
     return null;
-  }, [startPoint, geolocation.position]);
+  }, [startPoint, geolocation.position, manualStart]);
 
   const canOptimize = basket.length >= 2 && startCoord !== null && !optimizing;
 
@@ -673,19 +690,41 @@ export default function RoutePlannerPage() {
                 <span className="ml-auto text-xs text-emerald-600">Hazır</span>
               )}
             </label>
-            <label className="flex cursor-not-allowed items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 opacity-50">
+            {/* #64: Manuel adres — GPS reddedildiğinde/yoksa fallback başlangıç. */}
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2">
               <input
                 type="radio"
                 name="startPoint"
-                value="home"
-                disabled
-                checked={false}
-                onChange={() => undefined}
+                value="manual"
+                checked={startPoint === 'manual'}
+                onChange={() => setStartPoint('manual')}
                 className="h-4 w-4"
               />
               <Home size={16} className="text-purple-600" />
-              <span className="text-sm text-slate-800">Ev/Ofis (yakında)</span>
+              <span className="text-sm text-slate-800">Adres gir (manuel)</span>
+              {startPoint === 'manual' && manualStart && (
+                <span className="ml-auto text-xs text-emerald-600">Hazır</span>
+              )}
             </label>
+            {startPoint === 'manual' && (
+              <div className="pl-1">
+                <AddressSearchInput
+                  placeholder="Başlangıç adresi veya klinik ara…"
+                  value={manualStart}
+                  onChange={setManualStart}
+                  proximity={
+                    geolocation.position
+                      ? { lat: geolocation.position.lat, lng: geolocation.position.lng }
+                      : undefined
+                  }
+                />
+                {geolocation.status === 'denied' && (
+                  <p className="mt-1 text-xs text-amber-700">
+                    Konum izni reddedildi — başlangıç noktasını adres yazarak seç.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </section>
 
