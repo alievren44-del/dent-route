@@ -227,9 +227,9 @@ function OrderHistoryPage(): JSX.Element {
       const supabase = getSupabaseClient();
       const baseSelect = `id, order_number, user_id, cari_id, clinic_id, sales_rep_id, status, invoice_status, total, total_amount,
          shipping_status, tracking_number, notes, created_at,
-         customer:profiles!orders_user_id_fkey (id, ad_soyad, klinik_adi, email),
+         customer:profiles!orders_user_id_profiles_fkey (id, ad_soyad, klinik_adi, email),
          cari:saha_cariler!orders_cari_id_fkey (id, fatura_unvani),
-         rep:profiles!orders_sales_rep_id_fkey (id, ad_soyad, email)`;
+         rep:profiles!orders_sales_rep_id_profiles_fkey (id, ad_soyad, email)`;
 
       const buildQuery = (selectStr: string) => {
         let q = supabase

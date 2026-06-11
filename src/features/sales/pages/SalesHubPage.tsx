@@ -107,7 +107,7 @@ function SalesHubPage(): JSX.Element {
     queryFn: async (): Promise<OrderLite[]> => {
       const supabase = getSupabaseClient();
       const baseSelect = `id, order_number, status, total, total_amount, created_at,
-        customer:profiles!orders_user_id_fkey (ad_soyad, klinik_adi, email)`;
+        customer:profiles!orders_user_id_profiles_fkey (ad_soyad, klinik_adi, email)`;
       const run = (selectStr: string) => {
         let q = supabase
           .from('orders')

@@ -72,8 +72,8 @@ async function fetchPendingOrders(): Promise<PendingOrderRow[]> {
     .from('orders')
     .select(
       `id, order_number, user_id, sales_rep_id, total, total_amount, notes, created_at,
-       customer:profiles!orders_user_id_fkey (id, ad_soyad, klinik_adi, email),
-       rep:profiles!orders_sales_rep_id_fkey (id, ad_soyad, email)`,
+       customer:profiles!orders_user_id_profiles_fkey (id, ad_soyad, klinik_adi, email),
+       rep:profiles!orders_sales_rep_id_profiles_fkey (id, ad_soyad, email)`,
     )
     .eq('status', 'approval_pending')
     .order('created_at', { ascending: true });

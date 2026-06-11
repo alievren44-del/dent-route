@@ -265,20 +265,26 @@ async function fetchAccounts(geo: { lat: number; lng: number } | null): Promise<
 async function fetchLastVisitMap(ids: string[]): Promise<Map<string, VisitRow>> {
   const result = new Map<string, VisitRow>();
   if (ids.length === 0) return result;
+  // device-test 400 fix: tüm id'leri tek .in() URL'i çok uzun → PostgREST "Bad Request".
+  // IN listesini parçala (her account_id tek batch'te olduğundan per-account en-yeni doğru).
+  const CHUNK = 80;
   try {
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase
-      .from('saha_visits')
-      .select('account_id, check_in_at, outcome')
-      .in('account_id', ids)
-      .order('check_in_at', { ascending: false });
-    if (error) {
-      console.warn('saha_visits join atlandı:', error.message);
-      return result;
-    }
-    for (const v of (data ?? []) as VisitRow[]) {
-      if (!result.has(v.account_id)) {
-        result.set(v.account_id, v);
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const batch = ids.slice(i, i + CHUNK);
+      const { data, error } = await supabase
+        .from('saha_visits')
+        .select('account_id, check_in_at, outcome')
+        .in('account_id', batch)
+        .order('check_in_at', { ascending: false });
+      if (error) {
+        console.warn('saha_visits join atlandı (batch):', error.message);
+        continue;
+      }
+      for (const v of (data ?? []) as VisitRow[]) {
+        if (!result.has(v.account_id)) {
+          result.set(v.account_id, v);
+        }
       }
     }
   } catch (e) {
