@@ -61,7 +61,14 @@ interface CariAging {
 interface AgingData {
   byCari: CariAging[];
   totals: Record<BucketKey, number> & { total: number };
+  /** #72: unbounded fetch'i kapatmak için fatura çekimi limitlendi.
+   *  Limit'e ulaşıldıysa true → kullanıcıya "kısmi rapor" uyarısı (sessiz kesme YASAK). */
+  truncated: boolean;
 }
+
+/** #72: ölçekte (binlerce açık fatura) limitsiz fetch OOM/jank yaratıyordu.
+ *  Güvenli üst sınır; aşılırsa UI'da uyarı gösterilir. */
+const FATURA_FETCH_LIMIT = 500;
 
 const BUCKET_META: { key: BucketKey; label: string; color: string }[] = [
   { key: 'current', label: 'Vadesi Gelmemiş', color: '#10b981' },
@@ -102,14 +109,20 @@ function bucketFor(days: number): BucketKey {
 async function fetchAging(): Promise<AgingData> {
   const supabase = getSupabaseClient();
 
+  // #72: limitsiz çekim yerine üst sınır + deterministik sıralama (en geç vadeli
+  // = en kritik açık alacaklar önce). limit+1 istemiyoruz; cap'e ulaşıldıysa
+  // truncated bayrağı ile UI'da uyarı gösteriyoruz (sessiz kesme YASAK).
   const { data: faturalar, error } = await supabase
     .from('saha_faturalar')
     .select('id, cari_id, tip, toplam, odenen, kalan, vade_tarihi, durum')
     .gt('kalan', 0)
-    .not('durum', 'in', '(odendi,iptal)');
+    .not('durum', 'in', '(odendi,iptal)')
+    .order('vade_tarihi', { ascending: true, nullsFirst: false })
+    .limit(FATURA_FETCH_LIMIT);
   if (error) throw error;
 
   const rows = (faturalar ?? []) as FaturaRow[];
+  const truncated = rows.length >= FATURA_FETCH_LIMIT;
 
   // Cari isimlerini çek
   const cariIds = Array.from(new Set(rows.map((r) => r.cari_id).filter(Boolean)));
@@ -164,7 +177,7 @@ async function fetchAging(): Promise<AgingData> {
   }
 
   const byCari = Array.from(accMap.values()).sort((a, b) => b.total - a.total);
-  return { byCari, totals };
+  return { byCari, totals, truncated };
 }
 
 export default function AgingReportPage() {
@@ -197,6 +210,17 @@ export default function AgingReportPage() {
       {agingQuery.isError && (
         <div className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">
           Veri yüklenemedi: {(agingQuery.error as Error | null)?.message ?? 'bilinmeyen hata'}
+        </div>
+      )}
+
+      {/* #72: limit'e ulaşıldıysa kısmi rapor uyarısı — sessiz kesme YASAK. */}
+      {data?.truncated && (
+        <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>
+            Çok sayıda açık fatura var; performans için yalnızca ilk {FATURA_FETCH_LIMIT} fatura
+            (en eski vadeden başlayarak) gösteriliyor. Toplamlar bu alt kümeyi yansıtır.
+          </span>
         </div>
       )}
 

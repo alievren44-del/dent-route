@@ -113,10 +113,16 @@ async function fetchKpi(ym: string): Promise<KpiData> {
       .select('rep_id, saha_sample_lines(qty, unit_cost_tl)')
       .gte('given_at', startIso)
       .lt('given_at', endIso),
+    // #73: routesCompleted ay-bazlı olmalı. saha_routes.completed_at (timestamptz)
+    // seçili ayın aralığına göre filtrelenir; aksi halde kariyer-toplamı sayılıp
+    // KPI yanlış çıkar. completed_at NULL olan eski tamamlanmış rotalar bu ayda
+    // sayılmaz (doğru davranış: ay-içi tamamlananları gösteriyoruz).
     supabase
       .from('saha_routes')
-      .select('profile_id, status')
-      .eq('status', 'completed'),
+      .select('profile_id, status, completed_at')
+      .eq('status', 'completed')
+      .gte('completed_at', startIso)
+      .lt('completed_at', endIso),
     supabase.from('saha_rep_targets').select('rep_id, visit_target, order_target_tl, collection_target_tl').eq('year_month', ym),
   ]);
 
@@ -166,7 +172,7 @@ async function fetchKpi(ym: string): Promise<KpiData> {
     for (const l of lines) b.sampleCostTl += num(l.qty) * num(l.unit_cost_tl);
   }
 
-  // routes: best-effort (status='completed'; ay filtresi yok — kolon belirsiz)
+  // routes: status='completed' + completed_at seçili ay aralığında (#73 fix).
   if (!routes.error) {
     for (const r of (routes.data ?? []) as Array<{ profile_id: string | null }>) {
       if (!r.profile_id) continue;

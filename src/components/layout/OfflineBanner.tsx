@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { WifiOff, CloudUpload, AlertCircle, RotateCcw } from 'lucide-react';
 import { listPending, listFailed, retryFailed } from '@core/offline/syncQueue';
 
@@ -8,7 +8,6 @@ export function OfflineBanner() {
     typeof navigator !== 'undefined' ? navigator.onLine : true,
   );
   const [retrying, setRetrying] = useState(false);
-  const queryClient = useQueryClient();
 
   useEffect(() => {
     const onOnline = () => setIsOnline(true);
@@ -21,26 +20,19 @@ export function OfflineBanner() {
     };
   }, []);
 
-  const { data: pending } = useQuery({
-    queryKey: ['offline-pending'],
-    queryFn: async () => (await listPending()).length,
-    refetchInterval: 10_000,
-  });
-
-  const { data: failedCount } = useQuery({
-    queryKey: ['offline-failed'],
-    queryFn: async () => (await listFailed()).length,
-    refetchInterval: 15_000,
-  });
+  // #66: Poll yerine Dexie liveQuery — IndexedDB değişim event'ine abone olur,
+  // sürekli tarama (jank) kalkar. listPending/listFailed Dexie sorgusu olduğu için
+  // useLiveQuery sorguyu izler ve ilgili tablo değişince otomatik yeniden çalışır.
+  const pending = useLiveQuery(async () => (await listPending()).length, []);
+  const failedCount = useLiveQuery(async () => (await listFailed()).length, []);
 
   async function handleRetry(): Promise<void> {
     if (retrying) return;
     setRetrying(true);
     try {
+      // #66: retryFailed Dexie kayıtlarını günceller; useLiveQuery sayaçları
+      // otomatik tazeler — manuel invalidate gerekmez.
       await retryFailed();
-      // Sayaçları tazele
-      await queryClient.invalidateQueries({ queryKey: ['offline-pending'] });
-      await queryClient.invalidateQueries({ queryKey: ['offline-failed'] });
     } finally {
       setRetrying(false);
     }

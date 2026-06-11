@@ -346,26 +346,57 @@ function OrderFormPage(): JSX.Element {
           console.warn('[OrderFormPage] approval_pending status set edilemedi:', updErr.message);
         }
 
-        // Notifications tablosuna kayıt — şema farklı olabilir (recipient_role kolonu
-        // bizim Parla baseline'da yok; user_id + type + title + message kullanır).
+        // #79 — Onay bildirimi fan-out.
+        // ESKİ BUG: 'notifications' tablosuna user_id OLMADAN, recipient_role'ü
+        // data JSON'a gömülü yazılıyordu → (1) yanlış tablo: NAV feed'i
+        // 'saha_notifications'tan okur, (2) user_id'siz: hiçbir alıcı sorgusu
+        // okuyamıyor → bildirim TESLİM EDİLMİYOR.
+        // FİX: MANAGER/ADMIN profillerini sorgula, her alıcı için user_id'li
+        // ayrı 'saha_notifications' satırı insert et (fan-out). saha_notifications
+        // şeması: user_id + type('order_approval') + title + body + payload(jsonb).
+        // INSERT policy: saha_notifications_admin_insert (saha_is_rep_or_admin()).
         try {
           const message = `Yeni onay bekleyen sipariş: ${created.externalId ?? created.id.slice(0, 8)} — ${grandTotal.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}`;
-          const { error: notErr } = await supabase.from('notifications').insert({
-            type: 'new_order',
-            title: 'Onay bekleyen sipariş',
-            message,
-            data: {
-              ref_id: created.id,
-              recipient_role: approverRole ?? 'ADMIN',
-              total: grandTotal,
-              sales_rep_id: profile?.id ?? null,
-            },
-          });
-          if (notErr) {
-            console.warn('[OrderFormPage] notifications insert atlandı:', notErr.message);
+
+          // Alıcılar: onaycı rolüne sahip kullanıcılar. approverRole bir üst
+          // onaycıyı verir (REP→MANAGER, MANAGER→ADMIN). ADMIN her zaman dahil
+          // (limitsiz onay yetkisi) ki MANAGER yoksa da bildirim ulaşsın.
+          const recipientRoles = Array.from(
+            new Set([approverRole ?? 'ADMIN', 'ADMIN']),
+          );
+          const { data: recipients, error: recErr } = await supabase
+            .from('profiles')
+            .select('id')
+            .in('role', recipientRoles);
+          if (recErr) {
+            console.warn('[OrderFormPage] onaycı sorgusu başarısız:', recErr.message);
+          }
+
+          const recipientIds = (recipients ?? [])
+            .map((r) => (r as { id: string }).id)
+            .filter((id): id is string => Boolean(id));
+
+          if (recipientIds.length > 0) {
+            const rows = recipientIds.map((uid) => ({
+              user_id: uid,
+              type: 'order_approval' as const,
+              title: 'Onay bekleyen sipariş',
+              body: message,
+              payload: {
+                order_id: created.id,
+                total: grandTotal,
+                sales_rep_id: profile?.id ?? null,
+              },
+            }));
+            const { error: notErr } = await supabase.from('saha_notifications').insert(rows);
+            if (notErr) {
+              console.warn('[OrderFormPage] saha_notifications fan-out atlandı:', notErr.message);
+            }
+          } else {
+            console.warn('[OrderFormPage] onaycı bulunamadı — bildirim gönderilmedi.');
           }
         } catch (notErr) {
-          console.warn('[OrderFormPage] notifications tablosu yok / hata:', notErr);
+          console.warn('[OrderFormPage] bildirim fan-out hatası:', notErr);
         }
       }
 

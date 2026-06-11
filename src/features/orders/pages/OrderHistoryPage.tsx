@@ -61,6 +61,8 @@ interface OrderHistoryRow {
   user_id: string | null;
   sales_rep_id: string | null;
   status: string | null;
+  // #46/#103 — sipariş zaten faturalandıysa "Faturaya Gönder" butonunu gizlemek için gerekli.
+  invoice_status: string | null;
   total: number | string | null;
   total_amount: number | string | null;
   shipping_status: string | null;
@@ -223,7 +225,7 @@ function OrderHistoryPage(): JSX.Element {
     queryKey,
     queryFn: async (): Promise<{ rows: OrderHistoryRow[]; total: number }> => {
       const supabase = getSupabaseClient();
-      const baseSelect = `id, order_number, user_id, cari_id, clinic_id, sales_rep_id, status, total, total_amount,
+      const baseSelect = `id, order_number, user_id, cari_id, clinic_id, sales_rep_id, status, invoice_status, total, total_amount,
          shipping_status, tracking_number, notes, created_at,
          customer:profiles!orders_user_id_fkey (id, ad_soyad, klinik_adi, email),
          cari:saha_cariler!orders_cari_id_fkey (id, fatura_unvani),
@@ -255,7 +257,7 @@ function OrderHistoryPage(): JSX.Element {
       if (error) {
         // FK alias hatası olursa sade select ile dene
         const fallback = await buildQuery(
-          'id, order_number, user_id, sales_rep_id, status, total, total_amount, shipping_status, tracking_number, notes, created_at',
+          'id, order_number, user_id, sales_rep_id, status, invoice_status, total, total_amount, shipping_status, tracking_number, notes, created_at',
         );
         if (fallback.error) throw fallback.error;
         rows = fallback.data;
@@ -310,7 +312,15 @@ function OrderHistoryPage(): JSX.Element {
       toast.success('Sipariş faturaya gönderildi (parla kuyruğu).');
       setDetailFor(null);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Faturaya gönderilemedi.');
+      // #46/#103 — backend (request_order_invoice) çift-fatura denemesinde
+      // 'already_invoiced' exception atıyor; kullanıcıya anlamlı mesaj göster.
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('already_invoiced')) {
+        toast.info('Bu sipariş zaten faturalandı.');
+        setDetailFor(null);
+      } else {
+        toast.error(err instanceof Error ? err.message : 'Faturaya gönderilemedi.');
+      }
     } finally {
       setInvoicingId(null);
     }
@@ -586,6 +596,20 @@ function OrderHistoryPage(): JSX.Element {
                   {STATUS_LABELS[String(detailFor.status ?? '').toLowerCase()] ?? detailFor.status}
                 </dd>
               </div>
+              {/* #46/#103 — fatura durumu privileged kullanıcıya gösterilir (buton gizliyse neden). */}
+              {isPrivileged &&
+                ['invoiced', 'invoice_requested'].includes(
+                  String(detailFor.invoice_status ?? '').toLowerCase(),
+                ) && (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Fatura</dt>
+                    <dd className="text-right text-foreground">
+                      {String(detailFor.invoice_status).toLowerCase() === 'invoiced'
+                        ? 'Faturalandı'
+                        : 'Fatura kuyruğunda'}
+                    </dd>
+                  </div>
+                )}
               {detailFor.shipping_status && (
                 <div className="flex justify-between gap-3">
                   <dt className="text-muted-foreground">Kargo</dt>
@@ -609,6 +633,11 @@ function OrderHistoryPage(): JSX.Element {
             {isPrivileged &&
               ['approved', 'confirmed', 'shipped', 'delivered'].includes(
                 String(detailFor.status ?? '').toLowerCase(),
+              ) &&
+              // #46/#103 — zaten faturalanmış / fatura kuyruğuna alınmış siparişte
+              // butonu gizle (çift-fatura denemesi backend exception veriyordu).
+              !['invoiced', 'invoice_requested'].includes(
+                String(detailFor.invoice_status ?? '').toLowerCase(),
               ) && (
                 <button
                   type="button"
