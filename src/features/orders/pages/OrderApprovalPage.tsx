@@ -136,7 +136,14 @@ function OrderApprovalPage(): JSX.Element {
     },
     onError: (err: unknown) => {
       // RPC exception mesajına göre anlamlı toast — backend otorite.
-      const msg = err instanceof Error ? err.message : '';
+      // NOT: supabase-js postgrest hatası Error instance DEĞİL, düz {message,code,...} objesi;
+      // bu yüzden hem Error hem düz-obje message'ını oku (yoksa spesifik toast ölü kod kalır).
+      const msg =
+        err instanceof Error
+          ? err.message
+          : err && typeof err === 'object' && 'message' in err
+            ? String((err as { message?: unknown }).message ?? '')
+            : '';
       if (msg.includes('over_approval_limit')) {
         toast.error(
           'Bu tutar için onay yetkiniz yok (REP limiti 5.000₺ / MANAGER 50.000₺).',
