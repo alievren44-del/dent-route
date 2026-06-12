@@ -12,7 +12,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Banknote, CheckCircle, XCircle } from 'lucide-react';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
 
 type Durum = 'portfoyde' | 'tahsile_verildi' | 'tahsil_edildi' | 'karsiliksiz';
@@ -54,7 +54,7 @@ function CekSenetListPage(): JSX.Element {
   const { data: items, isLoading } = useQuery({
     queryKey: ['cek-senetler', tab],
     queryFn: async (): Promise<CekSenetRow[]> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error } = await supabase
         .from('saha_cek_senetler')
         .select('*')
@@ -136,7 +136,7 @@ function CekSenetCard({ item }: { item: CekSenetRow }): JSX.Element {
 
   const mutation = useMutation({
     mutationFn: async (patch: Partial<CekSenetRow>) => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error } = await supabase.from('saha_cek_senetler').update(patch).eq('id', item.id);
       if (error) throw error;
     },

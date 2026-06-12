@@ -19,7 +19,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Plus, Trash2, Search, Save, Send, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import {
   calcInvoiceTotals,
   calcLineTotal,
@@ -99,7 +99,7 @@ function InvoiceFormPage(): JSX.Element {
     queryKey: ['invoice-initial-cari', initialCariId],
     enabled: !!initialCariId,
     queryFn: async () => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error: err } = await supabase
         .from('saha_cariler')
         .select('id, cari_kodu, fatura_unvani, odeme_vadesi_gun')
@@ -121,7 +121,7 @@ function InvoiceFormPage(): JSX.Element {
     queryKey: ['invoice-cari-search', debouncedCariSearch],
     enabled: cariOpen && debouncedCariSearch.trim().length >= 2,
     queryFn: async (): Promise<CariOption[]> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const term = `%${debouncedCariSearch}%`;
       const { data, error: err } = await supabase
         .from('saha_cariler')
@@ -168,7 +168,7 @@ function InvoiceFormPage(): JSX.Element {
 
   const submitMutation = useMutation({
     mutationFn: async (action: 'taslak' | 'gonderildi') => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       if (!cariId) throw new Error('Cari seçilmedi.');
       const validKalemler = kalemler.filter((k) => k.urun_adi.trim() && k.miktar > 0);
       if (validKalemler.length === 0) throw new Error('En az bir kalem ekleyin.');
@@ -456,7 +456,7 @@ function KalemRow({
     queryKey: ['invoice-product-search', debounced],
     enabled: productOpen && debounced.trim().length >= 2,
     queryFn: async (): Promise<ProductOption[]> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const term = `%${debounced}%`;
       const { data, error } = await supabase
         .from('products')

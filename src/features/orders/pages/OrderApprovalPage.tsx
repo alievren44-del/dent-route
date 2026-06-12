@@ -17,7 +17,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ArrowLeft, Check, ChevronDown, ChevronUp, Inbox, X } from 'lucide-react';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
 
@@ -67,7 +67,7 @@ function repLabel(r: PendingOrderRow['rep']): string {
 }
 
 async function fetchPendingOrders(): Promise<PendingOrderRow[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data, error } = await supabase
     .from('orders')
     .select(
@@ -105,7 +105,7 @@ function OrderApprovalPage(): JSX.Element {
 
   // Realtime: orders status=approval_pending değişimleri
   useEffect(() => {
-    const supabase = getSupabaseClient();
+    const supabase = getTypedClient();
     const channel = supabase
       .channel('order-approval-list')
       .on('postgres_changes' as never, { event: '*', schema: 'public', table: 'orders' }, () => {
@@ -124,7 +124,7 @@ function OrderApprovalPage(): JSX.Element {
       // >5000₺ siparişini onaylayabiliyordu (#70). RPC eşik uygular ve
       // status='approved' + approved_at'ı kendi içinde set eder; trigger stok +
       // order-to-cash'i tetikler.
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error: err } = await supabase.rpc('approve_order_if_authorized', {
         p_order_id: orderId,
       });
@@ -158,7 +158,7 @@ function OrderApprovalPage(): JSX.Element {
 
   const rejectMutation = useMutation({
     mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error: err } = await supabase
         .from('orders')
         .update({

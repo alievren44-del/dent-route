@@ -54,6 +54,8 @@ const fromMock = vi.fn((table: string) => makeBuilder(table));
 
 vi.mock('@lib/supabase', () => ({
   getSupabaseClient: () => ({ from: fromMock }),
+  // #106 typed-flip: CollectionListPage artik getTypedClient kullaniyor (ayni client)
+  getTypedClient: () => ({ from: fromMock }),
 }));
 
 import CollectionListPage from '@features/rep-ops/pages/CollectionListPage';

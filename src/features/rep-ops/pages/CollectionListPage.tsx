@@ -12,7 +12,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Banknote, Plus, Loader2, Search, X, Check } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 import {
   type RepCollection,
@@ -44,7 +44,7 @@ interface ClinicOption {
 }
 
 async function fetchCollections(repId: string): Promise<RepCollection[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data, error } = await supabase
     .from('rep_collections')
     .select('*')
@@ -60,7 +60,7 @@ async function fetchCollections(repId: string): Promise<RepCollection[]> {
 async function fetchClientNames(ids: string[]): Promise<Record<string, string>> {
   const map: Record<string, string> = {};
   if (ids.length === 0) return map;
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
 
   // 1) saha_clinics (modern akış).
   const clinicRes = await supabase.from('saha_clinics').select('id, name').in('id', ids);
@@ -131,7 +131,7 @@ export default function CollectionListPage() {
     queryKey: ['collection-client-search', debouncedClientSearch],
     enabled: showForm && debouncedClientSearch.trim().length >= 2,
     queryFn: async (): Promise<ClinicOption[]> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const term = `%${debouncedClientSearch.trim()}%`;
       const { data, error } = await supabase
         .from('saha_clinics')
@@ -164,7 +164,10 @@ export default function CollectionListPage() {
 
   const create = useMutation({
     mutationFn: async (data: FormState) => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
+      // Typed-client guard: rep_id NOT NULL — session yoksa insert malformed satır
+      // yazardı (undefined → boş). Oturum yoksa erken hata ver.
+      if (!userId) throw new Error('Oturum bulunamadı — tekrar giriş yapın.');
       const { error } = await supabase.from('rep_collections').insert({
         rep_id: userId,
         client_id: data.client_id.trim(),

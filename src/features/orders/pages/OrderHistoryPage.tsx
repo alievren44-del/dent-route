@@ -21,7 +21,7 @@ import * as XLSX from 'xlsx';
 import { ArrowLeft, Calendar, FileSpreadsheet, Filter, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 import { mapParlaToSahaRole } from '@core/auth/types';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
@@ -191,7 +191,7 @@ function OrderHistoryPage(): JSX.Element {
     queryKey: ['order-history-reps'],
     enabled: isPrivileged,
     queryFn: async (): Promise<RepOption[]> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error } = await supabase
         .from('profiles')
         .select('id, ad_soyad, email, role')
@@ -224,7 +224,7 @@ function OrderHistoryPage(): JSX.Element {
   const { data, isLoading, isError } = useQuery({
     queryKey,
     queryFn: async (): Promise<{ rows: OrderHistoryRow[]; total: number }> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const baseSelect = `id, order_number, user_id, cari_id, clinic_id, sales_rep_id, status, invoice_status, total, total_amount,
          shipping_status, tracking_number, notes, created_at,
          customer:profiles!orders_user_id_profiles_fkey (id, ad_soyad, klinik_adi, email),
@@ -306,7 +306,7 @@ function OrderHistoryPage(): JSX.Element {
   async function requestInvoice(o: OrderHistoryRow): Promise<void> {
     setInvoicingId(o.id);
     try {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error: rpcErr } = await supabase.rpc('request_order_invoice', { p_order_id: o.id });
       if (rpcErr) throw rpcErr;
       toast.success('Sipariş faturaya gönderildi (parla kuyruğu).');

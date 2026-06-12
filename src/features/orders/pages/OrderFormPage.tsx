@@ -26,7 +26,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { SupabaseCRMAdapter } from '@core/adapters/builtin/SupabaseCRMAdapter';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
+import type { Json } from '@/types/database.types';
 import { useAuthStore } from '@core/auth/authStore';
 import type { NewOrderItem, Product } from '@core/adapters/types';
 import { needsApproval, nextApproverRole, thresholdFor } from '@features/orders/lib/approvalRules';
@@ -105,7 +106,7 @@ function OrderFormPage(): JSX.Element {
     queryKey: ['order-form-customer', initialCustomerId],
     enabled: !!initialCustomerId,
     queryFn: async () => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data: clinic } = await supabase
         .from('saha_clinics')
         .select('id, name')
@@ -133,7 +134,7 @@ function OrderFormPage(): JSX.Element {
     queryKey: ['order-form-customer-search', debouncedCustomerSearch],
     enabled: customerPickerOpen && debouncedCustomerSearch.trim().length >= 2,
     queryFn: async (): Promise<CustomerOption[]> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const term = `%${debouncedCustomerSearch}%`;
       const { data, error: err } = await supabase
         .from('saha_clinics')
@@ -181,13 +182,14 @@ function OrderFormPage(): JSX.Element {
     queryKey: ['order-templates', repId],
     enabled: Boolean(repId),
     queryFn: async (): Promise<OrderTemplate[]> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error: err } = await supabase
         .from('saha_order_templates')
         .select('id, name, lines')
         .order('name');
       if (err) return [];
-      return (data ?? []) as OrderTemplate[];
+      // lines DB'de jsonb (Json) — uygulama TemplateLine[] olarak saklar/okur.
+      return (data ?? []) as unknown as OrderTemplate[];
     },
   });
 
@@ -201,10 +203,14 @@ function OrderFormPage(): JSX.Element {
       qty: c.quantity,
       unit_price: c.unitPriceSnapshot,
     }));
-    const supabase = getSupabaseClient();
+    const supabase = getTypedClient();
     const { error: err } = await supabase
       .from('saha_order_templates')
-      .upsert({ rep_id: repId, name, lines }, { onConflict: 'rep_id,name' });
+      // lines DB'de jsonb — TemplateLine[]→Json cast (yapısal jsonb payload).
+      .upsert(
+        { rep_id: repId, name, lines: lines as unknown as Json },
+        { onConflict: 'rep_id,name' },
+      );
     if (err) {
       setError(`Şablon kaydedilemedi: ${err.message}`);
       return;
@@ -337,7 +343,7 @@ function OrderFormPage(): JSX.Element {
 
       // Onay gerekirse: status'u 'approval_pending' olarak güncelle ve notify.
       if (requiresApproval) {
-        const supabase = getSupabaseClient();
+        const supabase = getTypedClient();
         const { error: updErr } = await supabase
           .from('orders')
           .update({ status: 'approval_pending', idempotency_key: idempotencyKey })
