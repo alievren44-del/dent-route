@@ -143,8 +143,10 @@ export async function initPush(): Promise<void> {
   }
   if (perm.receive !== 'granted') return;
 
-  await PushNotifications.register();
-
+  // Listener'ları register()'dan ÖNCE ekle: cihazda FCM token cache'liyse (örn. ayni
+  // cihazda PARLA kayit olmussa) 'registration' event'i register() cagrisinda ANINDA
+  // fire olur; listener sonra eklenirse "No listeners found" ile token DUSER (cihaz-testte
+  // logcat ile yakalandi). Capacitor önerisi de listener-once.
   await PushNotifications.addListener('registration', (token: Token) => {
     void saveToken(token.value);
   });
@@ -157,6 +159,9 @@ export async function initPush(): Promise<void> {
   await PushNotifications.addListener('pushNotificationActionPerformed', (action: ActionPerformed) => {
     handleTapNavigation(action.notification.data as Record<string, unknown> | undefined);
   });
+
+  // Listener'lar hazır → ŞİMDİ register (token event'i kesin yakalanır, race kapandı).
+  await PushNotifications.register();
 
   // Login olunca (anonim iken alınan) token'ı kaydet.
   getSupabaseClient().auth.onAuthStateChange((event) => {

@@ -66,3 +66,8 @@ android/captures/
 # APK çıktıları (public/apk hariç — production dağıtım)
 *.apk
 !public/apk/saha-latest.apk
+
+# Firebase / FCM credentials -- ASLA commit (kimlik bilgisi)
+android/app/google-services.json
+google-services*.json
+*firebase-adminsdk*.json
