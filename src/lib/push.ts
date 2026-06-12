@@ -163,9 +163,17 @@ export async function initPush(): Promise<void> {
   // Listener'lar hazır → ŞİMDİ register (token event'i kesin yakalanır, race kapandı).
   await PushNotifications.register();
 
-  // Login olunca (anonim iken alınan) token'ı kaydet.
-  getSupabaseClient().auth.onAuthStateChange((event) => {
-    if (event === 'SIGNED_IN' && lastToken) {
+  // Token'ı session HAZIR olunca kaydet. SADECE SIGNED_IN dinlemek YETMEZ:
+  // app-restore'da (zaten girişli kullanıcı tekrar açar) event INITIAL_SESSION'dır,
+  // SIGNED_IN DEĞİL → token asla kaydedilmezdi. Ayrıca registration event'i session
+  // client'a bağlanmadan önce fire ederse ilk saveToken anon gider (RLS 403); bu listener
+  // session-bağlı anda (event session taşır) güvenle retry eder. (Cihaz-testte yakalandı.)
+  getSupabaseClient().auth.onAuthStateChange((event, session) => {
+    if (
+      (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') &&
+      session?.user &&
+      lastToken
+    ) {
       void saveToken(lastToken);
     }
   });
