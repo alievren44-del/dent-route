@@ -13,7 +13,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import {
   type AuthSession,
   type ParlaUserRole,
@@ -72,7 +72,7 @@ export class AuthError extends Error {
 export class AuthClient {
   private readonly supabase: SupabaseClient;
 
-  constructor(supabase: SupabaseClient = getSupabaseClient()) {
+  constructor(supabase: SupabaseClient = getTypedClient()) {
     this.supabase = supabase;
   }
 

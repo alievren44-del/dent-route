@@ -15,7 +15,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, MoreVertical, FileText, Search } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { useVertical } from '@core/verticals/useVertical';
 import { useAuthStore } from '@core/auth/authStore';
 import type { SampleStatus } from '@core/sampling/types';
@@ -156,7 +156,7 @@ function SampleListView({
   const samplesQuery = useQuery<SampleRow[]>({
     queryKey: ['samples', effectiveRepId ?? null, activeStatuses, cutoffIso],
     queryFn: async (): Promise<SampleRow[]> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       let q = supabase
         .from('saha_samples')
         .select(
@@ -188,7 +188,7 @@ function SampleListView({
     queryFn: async (): Promise<Map<string, AccountRow>> => {
       const map = new Map<string, AccountRow>();
       if (accountIds.length === 0) return map;
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error } = await supabase
         .from('saha_clinics')
         .select('id, name, types')
@@ -228,7 +228,7 @@ function SampleListView({
 
   const updateStatus = useMutation({
     mutationFn: async (args: { sampleId: string; newStatus: SampleStatus }): Promise<void> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error } = await supabase
         .from('saha_samples')
         .update({ status: args.newStatus })

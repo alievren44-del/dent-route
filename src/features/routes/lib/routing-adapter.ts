@@ -10,7 +10,7 @@
  * frontend birden çok call ile gerçek koridor çeşitliliği üretir.
  */
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { selectVariationCities, polylineSimilarityKm, type CityVariation } from './city-variations';
 import { decodePolyline } from '@/lib/polyline';
 
@@ -61,7 +61,7 @@ export async function computeRouteAlternatives(opts: {
   const provider = opts.provider ?? getStoredProvider();
   const maxRoutes = opts.maxRoutes ?? 3;
   const profile = opts.profile;
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
 
   // ---- Google: alternatives flag ile tek call
   if (provider === 'google') {
@@ -177,7 +177,7 @@ export async function computeRouteAlternatives(opts: {
 }
 
 async function invokeMapbox(
-  supabase: ReturnType<typeof getSupabaseClient>,
+  supabase: ReturnType<typeof getTypedClient>,
   coords: LatLng[],
   profile: RouteProfile,
   alternatives: boolean,

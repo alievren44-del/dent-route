@@ -5,7 +5,7 @@
  *   "Bugün 4/5 kullandın, kalan 1" gibi.
  */
 
-import { getSupabaseClient } from '@/lib/supabase';
+import { getTypedClient } from '@/lib/supabase';
 
 export interface UsageStat {
   used: number;
@@ -14,7 +14,7 @@ export interface UsageStat {
 }
 
 export async function getDailyUsage(endpoint: string, defaultLimit = 5): Promise<UsageStat> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data: userData } = await supabase.auth.getUser();
   const userId = userData?.user?.id;
   if (!userId) return { used: 0, limit: defaultLimit, remaining: defaultLimit };

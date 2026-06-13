@@ -15,7 +15,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, RefreshCw, Loader2, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 
 interface ScanJobRow {
   id: string;
@@ -69,7 +69,7 @@ const STATUS_CHIPS: Array<{ key: 'all' | ScanJobItemRow['status']; label: string
 ];
 
 async function fetchJob(id: string): Promise<ScanJobRow | null> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data, error } = await supabase
     .from('saha_scan_jobs')
     .select('*')
@@ -84,7 +84,7 @@ async function fetchItems(
   statusFilter: 'all' | ScanJobItemRow['status'],
   page: number,
 ): Promise<{ rows: ScanJobItemRow[]; total: number }> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   let q = supabase
     .from('saha_scan_job_items')
     .select('*', { count: 'exact' })
@@ -146,7 +146,7 @@ export default function ScanJobDetailPage() {
   // Realtime
   useEffect(() => {
     if (!jobId) return;
-    const supabase = getSupabaseClient();
+    const supabase = getTypedClient();
     const channel = supabase
       .channel(`scan-job-${jobId}`)
       .on(
@@ -177,7 +177,7 @@ export default function ScanJobDetailPage() {
 
   const retryItem = useMutation({
     mutationFn: async (itemId: string) => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error } = await supabase
         .from('saha_scan_job_items')
         .update({

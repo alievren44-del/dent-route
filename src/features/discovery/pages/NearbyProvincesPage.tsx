@@ -14,7 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Locate, Loader2, AlertCircle } from 'lucide-react';
 
 import { useGeolocation } from '@features/map/hooks/useGeolocation';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { getNearbyProvinces, type NearbyProvince } from '@features/discovery/lib/nearby-provinces';
 import { ProvinceCard } from '@features/discovery/components/ProvinceCard';
 
@@ -23,7 +23,7 @@ const VERTICAL_KEY = 'dental';
 
 async function fetchClinicCounts(slugs: string[]): Promise<Record<string, number>> {
   if (slugs.length === 0) return {};
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data, error } = await supabase.rpc('saha_clinics_count_by_province', {
     _slugs: slugs,
     _vertical_key: VERTICAL_KEY,

@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { loadSahaConfig } from '@config/loadConfig';
 
 const FormSchema = z
@@ -37,7 +37,7 @@ export default function FirstAdminPage() {
   // Guard: profiles tablosunda kayıt varsa /login'e at.
   useEffect(() => {
     let cancelled = false;
-    const supabase = getSupabaseClient();
+    const supabase = getTypedClient();
     void supabase
       .from('profiles')
       .select('id', { count: 'exact', head: true })
@@ -79,7 +79,7 @@ export default function FirstAdminPage() {
     setSubmitting(true);
     try {
       const fullName = `${parsed.data.ad} ${parsed.data.soyad}`;
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error: signUpErr } = await supabase.auth.signUp({
         email: parsed.data.email,
         password: parsed.data.password,

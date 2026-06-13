@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { format, startOfDay, startOfWeek, startOfMonth } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { useVertical } from '@core/verticals/useVertical';
 import { useAuthStore } from '@core/auth/authStore';
 import VisitCard, {
@@ -111,7 +111,7 @@ interface DetailModalProps {
 }
 
 function DetailModal({ visitId, outcomeMap, onClose }: DetailModalProps): JSX.Element | null {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const navigate = useNavigate();
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
@@ -372,7 +372,7 @@ function DetailModal({ visitId, outcomeMap, onClose }: DetailModalProps): JSX.El
 }
 
 function VisitHistoryPage(): JSX.Element {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const navigate = useNavigate();
   const vertical = useVertical();
   const repId = useAuthStore((s) => s.session?.userId ?? null);

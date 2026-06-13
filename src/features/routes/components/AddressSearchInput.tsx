@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { MapPin, Loader2, X, Building2 } from 'lucide-react';
 import { mapboxGeocode, type GeocodeResult } from '@/lib/mapboxGeocode';
-import { getSupabaseClient } from '@/lib/supabase';
+import { getTypedClient } from '@/lib/supabase';
 
 interface ClinicResult {
   kind: 'clinic';
@@ -34,7 +34,7 @@ interface Props {
 }
 
 async function searchClinics(query: string): Promise<ClinicResult[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data, error } = await supabase
     .from('saha_clinics')
     .select('name, lat, lng, address, clinic_segment')

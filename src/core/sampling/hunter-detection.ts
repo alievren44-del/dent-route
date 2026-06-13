@@ -1,4 +1,4 @@
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import type { HunterCandidate } from './types';
 
 export interface HunterThresholds {
@@ -30,7 +30,7 @@ export function classifySeverity(
 export async function getHunterCandidates(
   thresholds: HunterThresholds = DEFAULT_THRESHOLDS,
 ): Promise<HunterCandidate[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const since = new Date();
   since.setMonth(since.getMonth() - thresholds.lookbackMonths);
   const sinceIso = since.toISOString();
@@ -53,14 +53,14 @@ export async function getHunterCandidates(
 
   const { data: orderRows, error: oErr } = await supabase
     .from('orders')
-    .select('customer_id')
-    .in('customer_id', accountIds)
+    .select('clinic_id')
+    .in('clinic_id', accountIds)
     .gte('created_at', sinceIso);
 
   const orderCounts = new Map<string, number>();
   if (!oErr && orderRows) {
-    for (const row of orderRows as Array<{ customer_id: string }>) {
-      orderCounts.set(row.customer_id, (orderCounts.get(row.customer_id) ?? 0) + 1);
+    for (const row of orderRows as Array<{ clinic_id: string }>) {
+      orderCounts.set(row.clinic_id, (orderCounts.get(row.clinic_id) ?? 0) + 1);
     }
   }
 

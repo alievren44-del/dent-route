@@ -26,7 +26,7 @@ import {
 import { toast } from 'sonner';
 
 import { getEnv } from '@config/env';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { useGeolocation } from '@features/map/hooks/useGeolocation';
 import { optimizeRouteHybrid } from '@features/admin/lib/tsp';
 import { decodePolyline } from '@/lib/polyline';
@@ -106,7 +106,7 @@ export default function DistrictAutoRoutePage() {
       setLoadingClinics(true);
       setErr(null);
       try {
-        const supabase = getSupabaseClient();
+        const supabase = getTypedClient();
         const { data, error } = await supabase.rpc('saha_clinics_by_district', {
           _province_slug: provinceSlug,
           _district_slug: districtSlug,
@@ -166,7 +166,7 @@ export default function DistrictAutoRoutePage() {
         { lat: start.lat, lng: start.lng },
         ...toOptimize.map((c) => ({ lat: c.lat, lng: c.lng })),
       ];
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error } = await supabase.functions.invoke('mapbox-optimize', {
         body: {
           coords: coordsForFn,

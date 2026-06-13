@@ -25,7 +25,7 @@ import {
 } from 'recharts';
 import { Target, Save } from 'lucide-react';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
 
 interface RepRow {
@@ -86,7 +86,7 @@ function monthRange(ym: string): { startIso: string; endIso: string; startDate: 
 }
 
 async function fetchKpi(ym: string): Promise<KpiData> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { startIso, endIso, startDate, endDate } = monthRange(ym);
 
   const [reps, visits, orders, odemeler, samples, routes, targets] = await Promise.all([
@@ -262,7 +262,7 @@ export default function RepKpiPage() {
   const upsertMutation = useMutation({
     mutationFn: async () => {
       if (!formRepId) throw new Error('Plasiyer seçin.');
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error } = await supabase.from('saha_rep_targets').upsert(
         {
           rep_id: formRepId,

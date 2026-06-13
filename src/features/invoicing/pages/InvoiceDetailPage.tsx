@@ -13,7 +13,7 @@ import { ArrowLeft, Download, FileCode, Edit2, XCircle } from 'lucide-react';
 
 import { toast } from 'sonner';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { loadSahaConfig } from '@config/loadConfig';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
 import { printInvoice, type PdfKalem } from '@features/invoicing/pdf/invoicePdf';
@@ -96,7 +96,7 @@ function InvoiceDetailPage(): JSX.Element {
     queryKey: ['invoice', id],
     enabled: !!id,
     queryFn: async (): Promise<InvoiceFull | null> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error } = await supabase
         .from('saha_faturalar')
         .select('*')
@@ -111,7 +111,7 @@ function InvoiceDetailPage(): JSX.Element {
     queryKey: ['invoice-kalemler', id],
     enabled: !!id,
     queryFn: async (): Promise<KalemRow[]> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error } = await supabase
         .from('saha_fatura_kalemleri')
         .select('*')
@@ -126,7 +126,7 @@ function InvoiceDetailPage(): JSX.Element {
     queryKey: ['invoice-cari', invoice?.cari_id],
     enabled: !!invoice?.cari_id,
     queryFn: async (): Promise<CariFull | null> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error } = await supabase
         .from('saha_cariler')
         .select('id, cari_kodu, fatura_unvani, vergi_no, vergi_dairesi, fatura_adresi, il, ilce')
@@ -165,7 +165,7 @@ function InvoiceDetailPage(): JSX.Element {
       });
 
       // PERSIST: ETTN + durum saha_faturalar'a yazılır.
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error } = await supabase
         .from('saha_faturalar')
         .update({ efatura_uuid: result.ettn, efatura_durum: result.status })
@@ -185,7 +185,7 @@ function InvoiceDetailPage(): JSX.Element {
 
   const cancelMutation = useMutation({
     mutationFn: async () => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error } = await supabase
         .from('saha_faturalar')
         .update({ durum: 'iptal' })

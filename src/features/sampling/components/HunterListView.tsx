@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, ShieldOff, Ban } from 'lucide-react';
 import { getHunterCandidates } from '@core/sampling/hunter-detection';
 import type { HunterCandidate } from '@core/sampling/types';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 
 export default function HunterListView() {
   const queryClient = useQueryClient();
@@ -13,7 +13,7 @@ export default function HunterListView() {
 
   const blacklist = useMutation({
     mutationFn: async (payload: { accountId: string; reason: string; bannedUntil?: string }) => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error } = await supabase.from('saha_blacklist').upsert(
         {
           account_id: payload.accountId,

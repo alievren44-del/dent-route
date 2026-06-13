@@ -3,11 +3,11 @@ import { Link, Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@core/auth/authStore';
 import { usePermissions } from '@core/auth/usePermissions';
 import { loadSahaConfig } from '@config/loadConfig';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 
 async function shouldShowFirstSetup(): Promise<boolean> {
   try {
-    const supabase = getSupabaseClient();
+    const supabase = getTypedClient();
     const { count, error } = await supabase
       .from('profiles')
       .select('id', { count: 'exact', head: true });

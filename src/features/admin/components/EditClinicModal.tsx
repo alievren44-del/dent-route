@@ -22,7 +22,8 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { toast } from 'sonner';
 import { Edit, Trash2, Save, X } from 'lucide-react';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
+import type { Json } from '@/types/database.types';
 import { logClinicEdit } from '@lib/clinicEditAudit';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -177,7 +178,7 @@ export default function EditClinicModal({
     }
 
     setSaving(true);
-    const supabase = getSupabaseClient();
+    const supabase = getTypedClient();
     const before = pickAuditFields(clinic);
 
     // raw_payload'ı koru, neighborhood/clinic_type alanlarını güncelle.
@@ -193,7 +194,7 @@ export default function EditClinicModal({
       name: trimmedName,
       address: address.trim() || null,
       phone: phone.trim() || null,
-      raw_payload: nextRaw,
+      raw_payload: nextRaw as Json,
     };
 
     try {
@@ -234,7 +235,7 @@ export default function EditClinicModal({
       return;
     }
     setDeleting(true);
-    const supabase = getSupabaseClient();
+    const supabase = getTypedClient();
     const before = pickAuditFields(clinic);
 
     try {

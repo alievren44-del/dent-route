@@ -1,4 +1,4 @@
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 
 export interface ROIQuery {
   startDate: string; // ISO
@@ -81,7 +81,7 @@ function lineCost(line: SampleLineRow): number {
 }
 
 export async function computeROI(query: ROIQuery): Promise<ROIMetrics> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
 
   let q = supabase
     .from('saha_samples')

@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 
 interface AssignedRoute {
@@ -41,7 +41,7 @@ interface AssignedRoute {
 }
 
 async function fetchAssigned(userId: string): Promise<AssignedRoute[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data, error } = await supabase
     .from('saha_routes')
     .select(
@@ -87,7 +87,7 @@ export default function AssignedRoutesPage() {
   const accept = useCallback(
     async (routeId: string) => {
       try {
-        const supabase = getSupabaseClient();
+        const supabase = getTypedClient();
         const { error } = await supabase
           .from('saha_routes')
           .update({ status: 'active', accepted_at: new Date().toISOString() })
@@ -107,7 +107,7 @@ export default function AssignedRoutesPage() {
     async (routeId: string) => {
       if (!confirm('Bu rotayı reddediyor musun?')) return;
       try {
-        const supabase = getSupabaseClient();
+        const supabase = getTypedClient();
         const { error } = await supabase
           .from('saha_routes')
           .update({ status: 'cancelled' })

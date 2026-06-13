@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { getEnv } from '@config/env';
 import { useGeolocation } from '@/features/map/hooks/useGeolocation';
 import { useRoutePlanner, type RouteClinic } from '@features/admin/store/routePlannerStore';
@@ -183,7 +183,7 @@ export default function ScanRoutePlanner(): JSX.Element {
     let cancelled = false;
     void (async () => {
       try {
-        const supabase = getSupabaseClient();
+        const supabase = getTypedClient();
         const { data: userData } = await supabase.auth.getUser();
         const userId = userData.user?.id;
         if (!userId) return;
@@ -335,7 +335,7 @@ export default function ScanRoutePlanner(): JSX.Element {
     if (!routeResult) return;
     setSaving(true);
     try {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data: userData, error: userErr } = await supabase.auth.getUser();
       if (userErr || !userData.user) throw new Error('Oturum yok');
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Bell } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 
 interface NotificationRow {
@@ -21,7 +21,7 @@ interface NotificationRow {
 }
 
 async function fetchRecent(userId: string): Promise<NotificationRow[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data, error } = await supabase
     .from('saha_notifications')
     .select('id, type, title, body, payload, read_at, created_at')
@@ -48,7 +48,7 @@ export function NotificationBell() {
 
   const markRead = useMutation({
     mutationFn: async (id: string) => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error } = await supabase
         .from('saha_notifications')
         .update({ read_at: new Date().toISOString() })

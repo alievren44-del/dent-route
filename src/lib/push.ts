@@ -4,7 +4,7 @@
  * PARLA mobil uygulamasındaki `src/lib/push.ts` davranış pattern'i NAV mimarisine
  * UYARLANDI (kör kopya değil). Saptığımız noktalar ve gerekçeleri:
  *   - PARLA `import { supabase } from './supabase'` (singleton) kullanır; NAV'da
- *     client lazy factory `getSupabaseClient()` ile gelir → her çağrıda factory.
+ *     client lazy factory `getTypedClient()` ile gelir → her çağrıda factory.
  *   - PARLA tip-cast'siz `supabase.from(...)` çağırır; NAV `getTypedClient()` ile
  *     `device_tokens` tablosunu tam-tipli (Database) yazar.
  *   - PARLA'da `getCurrentUser()` helper'ı var; NAV'da yok →
@@ -30,7 +30,7 @@ import type {
   PushNotificationSchema,
   ActionPerformed,
 } from '@capacitor/push-notifications';
-import { getSupabaseClient, getTypedClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { pushDebug } from '@/lib/debugLog';
 
 // Son alınan FCM token (login sonrası tekrar kayıt için modül-seviyesi cache).
@@ -60,7 +60,7 @@ export function setPushNavigate(fn: PushNavigateFn | null): void {
 async function saveToken(token: string): Promise<void> {
   lastToken = token;
   try {
-    const auth = getSupabaseClient().auth;
+    const auth = getTypedClient().auth;
     const { data, error: userErr } = await auth.getUser();
     const user = data?.user ?? null;
     if (userErr || !user) {
@@ -168,7 +168,7 @@ export async function initPush(): Promise<void> {
   // SIGNED_IN DEĞİL → token asla kaydedilmezdi. Ayrıca registration event'i session
   // client'a bağlanmadan önce fire ederse ilk saveToken anon gider (RLS 403); bu listener
   // session-bağlı anda (event session taşır) güvenle retry eder. (Cihaz-testte yakalandı.)
-  getSupabaseClient().auth.onAuthStateChange((event, session) => {
+  getTypedClient().auth.onAuthStateChange((event, session) => {
     if (
       (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') &&
       session?.user &&

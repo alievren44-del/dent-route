@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CheckCheck, Inbox } from 'lucide-react';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 
 interface NotificationRow {
@@ -22,7 +22,7 @@ interface NotificationRow {
 type TabKey = 'all' | 'unread';
 
 async function fetchAll(userId: string): Promise<NotificationRow[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data, error } = await supabase
     .from('saha_notifications')
     .select('id, type, title, body, payload, read_at, created_at')
@@ -76,7 +76,7 @@ export default function NotificationsPage() {
 
   const markRead = useMutation({
     mutationFn: async (id: string) => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error } = await supabase
         .from('saha_notifications')
         .update({ read_at: new Date().toISOString() })
@@ -91,7 +91,7 @@ export default function NotificationsPage() {
   const markAllRead = useMutation({
     mutationFn: async () => {
       if (!userId) return;
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error } = await supabase
         .from('saha_notifications')
         .update({ read_at: new Date().toISOString() })

@@ -20,7 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 import { mapParlaToSahaRole } from '@core/auth/types';
 import { useVertical } from '@core/verticals/useVertical';
@@ -131,7 +131,7 @@ function SampleFormMobile({
 }: SampleFormMobileProps): JSX.Element {
   const vertical = useVertical();
   const customerLabel = vertical.labels.customer.singular;
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
 
   // Yönetici/admin: numune bütçe limitini bypass eder (onay gerekmez).
   const profile = useAuthStore((s) => s.profile);
@@ -500,7 +500,8 @@ function SampleFormMobile({
 
       const { data: sample, error: sampleErr } = await supabase
         .from('saha_samples')
-        .insert(insertPayload)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .insert(insertPayload as any)
         .select('id')
         .single();
 
@@ -524,10 +525,10 @@ function SampleFormMobile({
       // 5. Increment quota
       if (totalCost > 0) {
         // RPC auth.uid()'den rep_id türetir; client sadece year_month + amount geçer.
-        const { error: quotaErr } = await supabase.rpc('saha_increment_sample_spent', {
+        const { error: quotaErr } = await supabase.rpc('saha_increment_sample_spent' as never, {
           p_year_month: currentYearMonth(),
           p_amount: totalCost,
-        });
+        } as never);
         if (quotaErr) {
           if (quotaErr.message?.includes('budget_exceeded')) {
             setSubmitError('Aylık numune bütçesi aşıldı. Bu numune kaydedilemedi.');

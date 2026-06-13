@@ -26,7 +26,7 @@ import {
   Clock,
 } from 'lucide-react';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 
 interface ScanJobRow {
   id: string;
@@ -48,7 +48,7 @@ interface ScanJobRow {
 }
 
 async function fetchJobs(): Promise<ScanJobRow[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data, error } = await supabase
     .from('saha_scan_jobs')
     .select('*')
@@ -151,7 +151,7 @@ export default function ScanJobsPage({ embedded = false }: ScanJobsPageProps = {
 
   // Realtime subscription — postgres_changes invalidates query.
   useEffect(() => {
-    const supabase = getSupabaseClient();
+    const supabase = getTypedClient();
     const channel = supabase
       .channel('scan-jobs')
       .on(
@@ -177,7 +177,7 @@ export default function ScanJobsPage({ embedded = false }: ScanJobsPageProps = {
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: ScanJobRow['status'] }) => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error } = await supabase.from('saha_scan_jobs').update({ status }).eq('id', id);
       if (error) throw error;
       // Devam Et durumunda batch-scan'i tekrar uyandır.

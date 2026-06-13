@@ -32,7 +32,7 @@ import {
 
 import { useVertical } from '@core/verticals/useVertical';
 import { useAuthStore } from '@core/auth/authStore';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { SupabaseCRMAdapter } from '@core/adapters/builtin/SupabaseCRMAdapter';
 import { useGeolocation } from '@features/map/hooks/useGeolocation';
 import ClinicCard from '@features/discovery/components/ClinicCard';
@@ -125,7 +125,7 @@ function useDebounced<T>(value: T, delayMs: number): T {
  * saha_visits varsa son ziyareti ayrı sorguda alır; yoksa boş geçer.
  */
 async function fetchAccounts(geo: { lat: number; lng: number } | null): Promise<CustomerListRow[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
 
   type RpcRow = {
     id: string;
@@ -269,7 +269,7 @@ async function fetchLastVisitMap(ids: string[]): Promise<Map<string, VisitRow>> 
   // IN listesini parçala (her account_id tek batch'te olduğundan per-account en-yeni doğru).
   const CHUNK = 80;
   try {
-    const supabase = getSupabaseClient();
+    const supabase = getTypedClient();
     for (let i = 0; i < ids.length; i += CHUNK) {
       const batch = ids.slice(i, i + CHUNK);
       const { data, error } = await supabase
@@ -294,7 +294,7 @@ async function fetchLastVisitMap(ids: string[]): Promise<Map<string, VisitRow>> 
 }
 
 async function fetchReps(): Promise<RepOption[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data, error } = await supabase
     .from('profiles')
     .select('id, ad_soyad, email, role')

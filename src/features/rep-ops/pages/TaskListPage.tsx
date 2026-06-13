@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 import {
   type RepTask,
@@ -61,7 +61,7 @@ function formatDateLabel(s: string): string {
 }
 
 async function fetchTasks(repId: string, date: string): Promise<RepTask[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data, error } = await supabase
     .from('rep_tasks')
     .select('*')
@@ -105,9 +105,9 @@ export default function TaskListPage() {
 
   const create = useMutation({
     mutationFn: async (data: FormState) => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error } = await supabase.from('rep_tasks').insert({
-        rep_id: userId,
+        rep_id: userId!,
         title: data.title.trim(),
         description: data.description.trim() || null,
         task_type: data.task_type,
@@ -131,7 +131,7 @@ export default function TaskListPage() {
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: RepTaskStatus }) => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error } = await supabase.from('rep_tasks').update({ status }).eq('id', id);
       if (error) throw error;
     },
@@ -140,7 +140,7 @@ export default function TaskListPage() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error } = await supabase.from('rep_tasks').delete().eq('id', id);
       if (error) throw error;
     },

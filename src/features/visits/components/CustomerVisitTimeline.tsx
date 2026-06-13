@@ -13,7 +13,7 @@ import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, History, Loader2 } from 'lucide-react';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { useVertical } from '@core/verticals/useVertical';
 import VisitCard, { type OutcomeMeta, type VisitCardData } from './VisitCard';
 
@@ -43,7 +43,7 @@ function CustomerVisitTimeline({
   limit = 20,
   hideHeader = false,
 }: CustomerVisitTimelineProps): JSX.Element {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const navigate = useNavigate();
   const vertical = useVertical();
 

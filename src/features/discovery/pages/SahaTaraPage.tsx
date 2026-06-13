@@ -29,7 +29,7 @@ import {
 import { toast } from 'sonner';
 
 import { useGeolocation } from '@features/map/hooks/useGeolocation';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { mapboxReverseGeocode } from '@/lib/mapboxGeocode';
 import { ScanModeToggle } from '@features/discovery/components/ScanModeToggle';
 import { radiusForNufus, describeRadius } from '@features/discovery/lib/dynamic-radius';
@@ -107,7 +107,7 @@ interface RepRegion {
 
 /** Soft territory enforcement: rep'in atanmış bölgesini __region_meta__ satırından çeker. */
 async function fetchRepRegion(repId: string): Promise<RepRegion> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data, error } = await supabase
     .from('saha_assignments')
     .select('region_provinces, region_districts')
@@ -227,7 +227,7 @@ export default function SahaTaraPage() {
     if (locationMode !== 'manual' || !manualProvince || !manualDistrict) return;
     let cancelled = false;
     void (async () => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error } = await supabase
         .from('saha_neighborhoods')
         .select('name, lat, lng')
@@ -298,7 +298,7 @@ export default function SahaTaraPage() {
     setLoading(true);
     setErr(null);
     try {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error } = await supabase.rpc('saha_search_nearby_clinics', {
         _lat: searchOrigin.lat,
         _lng: searchOrigin.lng,
@@ -339,7 +339,7 @@ export default function SahaTaraPage() {
     setScanning(true);
     setErr(null);
     try {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       // districtInfo yoksa edge fn'a default bos slug + strictDistrict false geç
       const provinceSlug = districtInfo ? slugifyTr(districtInfo.il_ad) : 'unknown';
       const districtSlug = districtInfo?.slug ?? 'merkez';

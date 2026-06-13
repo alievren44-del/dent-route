@@ -62,6 +62,8 @@ const fromMock = vi.fn((table: string) => makeBuilder(table));
 
 vi.mock('@lib/supabase', () => ({
   getSupabaseClient: () => ({ from: fromMock }),
+  // #106 typed-flip: sayfa artık getTypedClient kullanıyor (aynı client)
+  getTypedClient: () => ({ from: fromMock }),
 }));
 
 import RepKpiPage from '@features/admin/pages/RepKpiPage';

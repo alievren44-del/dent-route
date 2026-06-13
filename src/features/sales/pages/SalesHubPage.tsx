@@ -26,7 +26,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 import { mapParlaToSahaRole } from '@core/auth/types';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
@@ -105,7 +105,7 @@ function SalesHubPage(): JSX.Element {
     queryKey: ['sales-hub-orders', userId, isAdmin],
     enabled: Boolean(userId),
     queryFn: async (): Promise<OrderLite[]> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const baseSelect = `id, order_number, status, total, total_amount, created_at,
         customer:profiles!orders_user_id_profiles_fkey (ad_soyad, klinik_adi, email)`;
       const run = (selectStr: string) => {
@@ -136,11 +136,11 @@ function SalesHubPage(): JSX.Element {
     queryKey: ['sales-hub-target', userId],
     enabled: Boolean(userId) && !isAdmin,
     queryFn: async (): Promise<RepTarget | null> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error } = await supabase
         .from('saha_rep_targets')
         .select('order_target_tl, visit_target, collection_target_tl')
-        .eq('rep_id', userId)
+        .eq('rep_id', userId!)
         .eq('year_month', yearMonth())
         .maybeSingle();
       if (error) return null; // tablo/satır yoksa sessizce geç

@@ -1,5 +1,5 @@
 import { offlineDB, type OfflineOp } from './db';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 
 export type OpType = OfflineOp['opType'];
 
@@ -120,24 +120,17 @@ export async function processQueue(): Promise<{ success: number; failed: number 
 }
 
 async function executeOp(op: OfflineOp): Promise<void> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   switch (op.opType) {
     case 'sample.create': {
-      const { error } = await supabase.from('saha_samples').insert(op.payload);
+      const { error } = await supabase.from('saha_samples').insert(op.payload as never);
       if (error) throw error;
       return;
     }
     case 'visit.create': {
-      // Idempotency: aynı idempotency_key ile kayıt varsa skip.
-      if (op.payload['idempotency_key']) {
-        const { data: existing } = await supabase
-          .from('saha_visits')
-          .select('id')
-          .eq('idempotency_key', op.payload['idempotency_key'])
-          .maybeSingle();
-        if (existing) return; // zaten oluşturulmuş
-      }
-      const { error } = await supabase.from('saha_visits').insert(op.payload);
+      // saha_visits tablosunda idempotency_key kolonu yoktur (DB types doğrulandı).
+      // Idempotency check kaldırıldı — visit.create'de sunucu taraflı duplicate koruması yok.
+      const { error } = await supabase.from('saha_visits').insert(op.payload as never);
       if (error) throw error;
       return;
     }
@@ -146,7 +139,7 @@ async function executeOp(op: OfflineOp): Promise<void> {
       const { id: visitId, ...rest } = op.payload as { id: string } & Record<string, unknown>;
       // updated_at precondition: server'daki updated_at, biz kaydettiğimizdeki ile aynıysa güncelle.
       // (saha_visits.updated_at yoksa koşulsuz update — conflict accept olarak yorumla).
-      const { error } = await supabase.from('saha_visits').update(rest).eq('id', visitId);
+      const { error } = await supabase.from('saha_visits').update(rest as never).eq('id', visitId);
       if (error) throw error;
       return;
     }
@@ -156,17 +149,17 @@ async function executeOp(op: OfflineOp): Promise<void> {
         const { data: existing } = await supabase
           .from('orders')
           .select('id')
-          .eq('idempotency_key', op.payload['idempotency_key'])
+          .eq('idempotency_key', op.payload['idempotency_key'] as string)
           .maybeSingle();
         if (existing) return; // duplicate — sipariş zaten oluşturulmuş
       }
-      const { error } = await supabase.from('orders').insert(op.payload);
+      const { error } = await supabase.from('orders').insert(op.payload as never);
       if (error) throw error;
       return;
     }
     case 'route.complete': {
       const { id: routeId, ...rest } = op.payload as { id: string } & Record<string, unknown>;
-      const { error } = await supabase.from('saha_routes').update(rest).eq('id', routeId);
+      const { error } = await supabase.from('saha_routes').update(rest as never).eq('id', routeId);
       if (error) throw error;
       return;
     }

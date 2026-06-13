@@ -18,7 +18,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Search, AlertTriangle, Check } from 'lucide-react';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
 
 interface CariOption {
@@ -89,7 +89,7 @@ function PaymentFormPage(): JSX.Element {
     queryKey: ['payment-initial-cari', initialCariId],
     enabled: !!initialCariId,
     queryFn: async () => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error: err } = await supabase
         .from('saha_cariler')
         .select('id, cari_kodu, fatura_unvani')
@@ -109,7 +109,7 @@ function PaymentFormPage(): JSX.Element {
     queryKey: ['payment-cari-search', debouncedCariSearch],
     enabled: cariOpen && debouncedCariSearch.trim().length >= 2,
     queryFn: async (): Promise<CariOption[]> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const term = `%${debouncedCariSearch}%`;
       const { data, error: err } = await supabase
         .from('saha_cariler')
@@ -126,7 +126,7 @@ function PaymentFormPage(): JSX.Element {
     queryKey: ['payment-bakiyeli', cariId],
     enabled: !!cariId,
     queryFn: async (): Promise<BakiyeliFatura[]> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error: err } = await supabase
         .from('saha_faturalar')
         .select('id, fatura_no, tarih, vade_tarihi, toplam, odenen, kalan, tip, durum')
@@ -171,7 +171,7 @@ function PaymentFormPage(): JSX.Element {
 
   const submitMutation = useMutation({
     mutationFn: async () => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       if (!cariId) throw new Error('Cari seçin.');
       if (tutar <= 0) throw new Error("Tutar 0'dan büyük olmalı.");
 

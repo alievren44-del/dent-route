@@ -36,7 +36,7 @@ import { decodePolyline } from '@/lib/polyline';
 import { computeDetour } from '@features/routes/lib/detour-calc';
 import { useRouteBasket, MAX_BASKET } from '@features/routes/store/routeBasketStore';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { getEnv } from '@config/env';
 import { useAuthStore } from '@core/auth/authStore';
 import { useGeolocation } from '@features/map/hooks/useGeolocation';
@@ -63,7 +63,7 @@ interface SahaRouteRow {
 }
 
 async function fetchRoute(id: string): Promise<SahaRouteRow> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data, error } = await supabase
     .from('saha_routes')
     .select('*')
@@ -86,7 +86,7 @@ interface RouteStopCoord {
 
 async function fetchStopCoords(accountIds: string[]): Promise<RouteStopCoord[]> {
   if (accountIds.length === 0) return [];
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
 
   // saha_clinics tek kaynak: Discovery / SahaTara / DistrictAutoRoute / Corridor
   // sepete saha_clinics.id (uuid) yazıyor. (accounts tablosu Parla DB'de yok.)
@@ -135,7 +135,7 @@ interface CompleteRoutePayload {
 }
 
 async function completeRoute(payload: CompleteRoutePayload): Promise<void> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const completedAt = new Date().toISOString();
 
   const { error: routeErr } = await supabase
@@ -271,7 +271,7 @@ export default function ActiveRoutePage(): JSX.Element {
     }
     setCorridorLoading(true);
     try {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const a = { lat: geolocation.position.lat, lng: geolocation.position.lng };
       const b = { lat: nextStop.lat, lng: nextStop.lng };
       const { data: dirData, error: dirErr } = await supabase.functions.invoke(
@@ -517,7 +517,7 @@ export default function ActiveRoutePage(): JSX.Element {
   const persistAccountIds = useCallback(
     async (newIds: string[]): Promise<void> => {
       if (!route) return;
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error: updErr } = await supabase
         .from('saha_routes')
         .update({ account_ids: newIds })
@@ -934,7 +934,7 @@ export default function ActiveRoutePage(): JSX.Element {
                   if (!notingStop || !session?.userId) return;
                   setSavingNote(true);
                   try {
-                    const supabase = getSupabaseClient();
+                    const supabase = getTypedClient();
                     const gpsLat = geolocation.position?.lat ?? null;
                     const gpsLng = geolocation.position?.lng ?? null;
                     const { error: insErr } = await supabase.from('saha_visits').insert({

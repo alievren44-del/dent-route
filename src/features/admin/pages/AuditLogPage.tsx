@@ -12,7 +12,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ClipboardList, RefreshCw } from 'lucide-react';
 
-import { getSupabaseClient } from '@/lib/supabase';
+import { getTypedClient } from '@/lib/supabase';
 
 const PAGE_SIZE = 50;
 
@@ -36,7 +36,7 @@ async function fetchAuditLogs(input: {
   to: string;
   limit: number;
 }): Promise<AuditLogJoined[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   let q = supabase
     .from('admin_audit_logs')
     .select('id, actor_id, action, target_table, target_id, details, created_at')

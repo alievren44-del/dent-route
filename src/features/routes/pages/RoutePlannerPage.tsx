@@ -18,7 +18,7 @@ import { AssignRouteModal } from '@features/routes/components/AssignRouteModal';
 import { AddressSearchInput } from '@features/routes/components/AddressSearchInput';
 import type { GeocodeResult } from '@/lib/mapboxGeocode';
 
-import { getSupabaseClient } from '@/lib/supabase';
+import { getTypedClient } from '@/lib/supabase';
 import { getEnv } from '@config/env';
 import { useGeolocation } from '@/features/map/hooks/useGeolocation';
 import { useVertical } from '@core/verticals/useVertical';
@@ -237,7 +237,7 @@ export default function RoutePlannerPage() {
         ...drivingBasket.map((b) => [b.lng, b.lat] as [number, number]),
       ];
 
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error } = await supabase.functions.invoke('mapbox-optimize', {
         body: {
           coords: coordsForFn,
@@ -330,7 +330,7 @@ export default function RoutePlannerPage() {
     setStarting(true);
     setErrorMsg(null);
     try {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data: userData, error: userErr } = await supabase.auth.getUser();
       if (userErr || !userData.user) throw new Error('Oturum yok');
 

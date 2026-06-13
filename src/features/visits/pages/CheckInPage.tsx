@@ -22,7 +22,7 @@ import { toast } from 'sonner';
 import { ArrowLeft, Loader2, MapPin, Navigation } from 'lucide-react';
 import { useGeolocation } from '@features/map/hooks/useGeolocation';
 import { haversineMeters } from '@features/discovery/dedup';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 import { useVertical } from '@core/verticals/useVertical';
 import { enqueueOp } from '@core/offline/syncQueue';
@@ -93,7 +93,7 @@ function CheckInPage(): JSX.Element {
   const vertical = useVertical();
   const { position, status, error: geoError, request } = useGeolocation();
   const repId = useAuthStore((s) => s.session?.userId ?? null);
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const customerLabel = vertical.labels.customer.singular;
 
   useEffect(() => {
@@ -226,7 +226,7 @@ function CheckInPage(): JSX.Element {
 
       const { data, error } = await supabase
         .from('saha_visits')
-        .insert(payload)
+        .insert(payload as never)
         .select('id')
         .single();
       if (error) throw error;

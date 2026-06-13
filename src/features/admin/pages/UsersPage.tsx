@@ -20,7 +20,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { UserPlus, Search, Key, Power, MapPin, X, User as UserIcon, Copy } from 'lucide-react';
 
-import { getSupabaseClient } from '@/lib/supabase';
+import { getTypedClient } from '@/lib/supabase';
 
 type Role = 'ADMIN' | 'MANAGER' | 'REP' | 'USER';
 
@@ -61,7 +61,7 @@ interface CreateUserResponse {
 }
 
 async function fetchUsers(): Promise<ProfileRow[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data, error } = await supabase
     .from('profiles')
     .select(
@@ -110,7 +110,7 @@ export default function UsersPage(): JSX.Element {
 
   const changeRole = useMutation({
     mutationFn: async (input: { userId: string; role: Role }) => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error } = await supabase
         .from('profiles')
         .update({ role: input.role })
@@ -139,7 +139,7 @@ export default function UsersPage(): JSX.Element {
 
   const toggleActive = useMutation({
     mutationFn: async (input: { userId: string; nextActive: boolean }) => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error } = await supabase
         .from('profiles')
         .update({ is_approved: input.nextActive })
@@ -166,7 +166,7 @@ export default function UsersPage(): JSX.Element {
 
   const resetPassword = useMutation({
     mutationFn: async (email: string) => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/login`,
       });
@@ -454,7 +454,7 @@ function CreateUserModal({ onClose, onCreated }: CreateUserModalProps): JSX.Elem
 
   const createUser = useMutation({
     mutationFn: async (body: CreateUserBody): Promise<CreateUserResponse> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error } = await supabase.functions.invoke<CreateUserResponse>(
         'admin-create-user',
         { body },

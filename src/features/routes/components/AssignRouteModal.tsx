@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { X, Send, Loader2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 
 interface RepProfile {
@@ -48,7 +48,7 @@ export function AssignRouteModal({ open, onClose, payload }: Props) {
     void (async () => {
       setLoading(true);
       try {
-        const supabase = getSupabaseClient();
+        const supabase = getTypedClient();
         const { data, error } = await supabase
           .from('profiles')
           .select('id, email, ad_soyad, role')
@@ -79,7 +79,7 @@ export function AssignRouteModal({ open, onClose, payload }: Props) {
     }
     setSubmitting(true);
     try {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const nowIso = new Date().toISOString();
 
       // 1. saha_routes insert

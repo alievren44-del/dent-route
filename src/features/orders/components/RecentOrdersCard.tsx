@@ -13,7 +13,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, ShoppingBag } from 'lucide-react';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
 
 interface RecentOrdersCardProps {
@@ -66,7 +66,7 @@ function formatDate(iso: string | null): string {
 }
 
 async function fetchRecentOrders(customerId: string, limit: number): Promise<OrderRow[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data, error } = await supabase
     .from('orders')
     .select('id, order_number, total, total_amount, status, created_at')

@@ -9,7 +9,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Package, ArrowDownUp } from 'lucide-react';
 
-import { getSupabaseClient } from '@/lib/supabase';
+import { getTypedClient } from '@/lib/supabase';
 
 interface ProductRef {
   name: string | null;
@@ -69,7 +69,7 @@ function formatDateTime(iso: string): string {
 }
 
 async function fetchLedger(): Promise<LedgerData> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
 
   const [movements, products] = await Promise.all([
     supabase

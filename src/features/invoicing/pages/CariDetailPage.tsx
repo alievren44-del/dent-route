@@ -22,7 +22,7 @@ import {
   Save,
 } from 'lucide-react';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
 import { generateExtractPdfHtml, openInvoicePrintWindow } from '@features/invoicing/pdf/invoicePdf';
 
@@ -127,7 +127,7 @@ function CariDetailPage(): JSX.Element {
     queryKey: ['cari-detail', id],
     enabled: !!id,
     queryFn: async (): Promise<CariFull | null> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error } = await supabase
         .from('saha_cariler')
         .select('*')
@@ -142,7 +142,7 @@ function CariDetailPage(): JSX.Element {
     queryKey: ['cari-faturalar', id],
     enabled: !!id,
     queryFn: async (): Promise<FaturaRow[]> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error } = await supabase
         .from('saha_faturalar')
         .select('id, fatura_no, tarih, vade_tarihi, tip, toplam, odenen, kalan, durum')
@@ -157,7 +157,7 @@ function CariDetailPage(): JSX.Element {
     queryKey: ['cari-odemeler', id],
     enabled: !!id,
     queryFn: async (): Promise<OdemeRow[]> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error } = await supabase
         .from('saha_odemeler')
         .select('id, tarih, tutar, yontem, dekont_no, fatura_id, aciklama')
@@ -172,7 +172,7 @@ function CariDetailPage(): JSX.Element {
     queryKey: ['cari-cek-senet', id],
     enabled: !!id,
     queryFn: async (): Promise<CekSenetRow[]> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error } = await supabase
         .from('saha_cek_senetler')
         .select('id, tip, cek_no, banka, kesideci, vade_tarihi, tutar, durum')
@@ -625,7 +625,7 @@ function BilgilerTab({ cari }: { cari: CariFull }): JSX.Element {
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { error } = await supabase
         .from('saha_cariler')
         .update({

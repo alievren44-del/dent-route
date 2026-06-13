@@ -9,7 +9,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 import { getEnv } from '@config/env';
-import { getSupabaseClient } from '@/lib/supabase';
+import { getTypedClient } from '@/lib/supabase';
 
 export default function HeatmapPage() {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -36,7 +36,7 @@ export default function HeatmapPage() {
       void (async () => {
         map.resize();
         try {
-          const supabase = getSupabaseClient();
+          const supabase = getTypedClient();
           const { data, error } = await supabase
             .from('saha_visits')
             .select('check_in_lat, check_in_lng, check_in_at')

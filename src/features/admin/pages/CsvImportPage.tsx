@@ -18,7 +18,7 @@ import {
   XCircle,
 } from 'lucide-react';
 
-import { getSupabaseClient } from '@/lib/supabase';
+import { getTypedClient } from '@/lib/supabase';
 import ClinicXlsxImport from '@/features/admin/components/ClinicXlsxImport';
 
 const KNOWN_COLUMNS = ['ad_soyad', 'email', 'telefon', 'klinik_adi', 'city', 'role'] as const;
@@ -112,7 +112,7 @@ async function importRow(
   | { status: 'duplicate'; id: string | undefined }
   | { status: 'error'; message: string }
 > {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const email = row.email ? row.email.trim() : '';
 
   if (email) {
@@ -140,7 +140,7 @@ async function importRow(
     is_approved: false,
   };
 
-  const { data, error } = await supabase.from('profiles').insert(payload).select('id').single();
+  const { data, error } = await supabase.from('profiles').insert(payload as never).select('id').single();
 
   if (error) return { status: 'error', message: error.message };
   return { status: 'created', id: (data?.id as string | undefined) ?? undefined };

@@ -29,7 +29,7 @@ import {
 } from 'recharts';
 import { TrendingUp, Wallet, MapPin, Banknote } from 'lucide-react';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
 
 type RangeKey = '30' | '90';
@@ -91,7 +91,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 async function fetchBI(sinceIso: string): Promise<BIData> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const sinceDate = sinceIso.slice(0, 10);
 
   const [orders, profiles, visits, odemeler, faturalar] = await Promise.all([

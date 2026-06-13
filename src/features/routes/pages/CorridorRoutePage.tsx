@@ -18,7 +18,7 @@ import { Sparkles, AlertCircle, Crosshair, Footprints, Car, X, Plus } from 'luci
 import { toast } from 'sonner';
 
 import { getEnv } from '@config/env';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { useGeolocation } from '@features/map/hooks/useGeolocation';
 import { AddressSearchInput } from '@features/routes/components/AddressSearchInput';
 import { decodePolyline } from '@/lib/polyline';
@@ -161,7 +161,7 @@ export default function CorridorRoutePage() {
       if (alts.length === 0) throw new Error('Yol bulunamadı');
 
       // 2. Her rota için saha_clinics_near_polyline + detour filter
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const resolved: RouteWithCandidates[] = [];
       for (const r of alts) {
         const distKm = r.distanceM / 1000;

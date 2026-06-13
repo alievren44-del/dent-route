@@ -1,4 +1,4 @@
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import type { SampleQuota } from './types';
 
 export function currentYearMonth(date = new Date()): string {
@@ -11,7 +11,7 @@ export async function getQuota(
   repId: string,
   yearMonth = currentYearMonth(),
 ): Promise<SampleQuota | null> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data, error } = await supabase
     .from('saha_sample_quotas')
     .select('rep_id, year_month, budget_tl, spent_tl')

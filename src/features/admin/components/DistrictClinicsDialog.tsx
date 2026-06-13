@@ -37,7 +37,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { logClinicEdit } from '@lib/clinicEditAudit';
 import { useRoutePlanner, type RouteClinic } from '@features/admin/store/routePlannerStore';
 
@@ -207,7 +207,7 @@ export default function DistrictClinicsDialog({
     queryKey,
     enabled: open && !!provinceSlug,
     queryFn: async () => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       let q = supabase
         .from('saha_clinics')
         .select(
@@ -284,7 +284,7 @@ export default function DistrictClinicsDialog({
   async function handleDelete(clinic: SahaClinicRow): Promise<void> {
     if (!window.confirm(`"${clinic.name}" silinsin mi?`)) return;
     setDeletingId(clinic.id);
-    const supabase = getSupabaseClient();
+    const supabase = getTypedClient();
     try {
       const { error: delErr } = await supabase.from('saha_clinics').delete().eq('id', clinic.id);
       if (delErr) throw delErr;

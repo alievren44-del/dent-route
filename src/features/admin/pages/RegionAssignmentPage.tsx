@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, ChevronDown, Save, User } from 'lucide-react';
 
-import { getSupabaseClient } from '@/lib/supabase';
+import { getTypedClient } from '@/lib/supabase';
 import {
   getProvinces,
   getDistrictsByProvince,
@@ -35,7 +35,7 @@ interface AssignmentDraft {
 }
 
 async function fetchReps(): Promise<RepRow[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data, error } = await supabase
     .from('profiles')
     .select('id, ad_soyad, email, role, region')
@@ -47,7 +47,7 @@ async function fetchReps(): Promise<RepRow[]> {
 }
 
 async function fetchAssignment(repId: string): Promise<AssignmentDraft> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data, error } = await supabase
     .from('saha_assignments')
     .select('id, profile_id, region_provinces, region_districts, account_id')
@@ -68,7 +68,7 @@ async function saveAssignment(
   provinces: string[],
   districts: string[],
 ): Promise<void> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   // Normalize on save — ensures stored values are always slugs (e.g. 'cankaya' not 'Çankaya')
   const { error } = await supabase.from('saha_assignments').upsert(
     {

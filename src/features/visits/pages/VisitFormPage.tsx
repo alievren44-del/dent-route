@@ -30,7 +30,7 @@ import { toast } from 'sonner';
 import { ArrowLeft, Camera, CheckCircle2, Clock, Loader2, Trash2, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { useVertical } from '@core/verticals/useVertical';
 import { resizeImage, extensionFor } from '@lib/imageResize';
 import type { CustomField, VisitOutcomeOption } from '@core/verticals/types';
@@ -125,7 +125,7 @@ function VisitFormPage(): JSX.Element {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const vertical = useVertical();
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
 
   const customerLabel = vertical.labels.customer.singular;
   const outcomes: VisitOutcomeOption[] =
@@ -432,7 +432,7 @@ function VisitFormPage(): JSX.Element {
 
       const { error: updErr } = await supabase
         .from('saha_visits')
-        .update(updatePayload)
+        .update(updatePayload as never)
         .eq('id', id);
       if (updErr) throw updErr;
 

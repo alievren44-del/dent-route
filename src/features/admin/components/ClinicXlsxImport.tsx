@@ -24,7 +24,7 @@ import {
   XCircle,
 } from 'lucide-react';
 
-import { getSupabaseClient } from '@/lib/supabase';
+import { getTypedClient } from '@/lib/supabase';
 import {
   inferColumnMapping,
   mapRows,
@@ -224,7 +224,7 @@ export default function ClinicXlsxImport() {
     setImporting(true);
     setProgress({ done: 0, total: 0 });
 
-    const supabase = getSupabaseClient();
+    const supabase = getTypedClient();
     const bySheet: ImportResult['bySheet'] = {};
     const skippedReasons: ImportResult['skippedReasons'] = [];
 
@@ -266,12 +266,12 @@ export default function ClinicXlsxImport() {
         .select('google_place_id')
         .in('google_place_id', placeIds);
       const existingSet = new Set(
-        (existing ?? []).map((e: { google_place_id: string }) => e.google_place_id),
+        (existing ?? []).map((e: { google_place_id: string | null }) => e.google_place_id ?? ''),
       );
 
       const { error } = await supabase
         .from('saha_clinics')
-        .upsert(payload, { onConflict: 'google_place_id' });
+        .upsert(payload as never, { onConflict: 'google_place_id' });
 
       if (error) {
         // Hata batch'i skipped say

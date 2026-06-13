@@ -16,7 +16,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Wallet, ChevronRight, Plus } from 'lucide-react';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
 
 interface CariRow {
@@ -37,7 +37,7 @@ interface BalanceData {
 }
 
 async function fetchBalance(customerId: string): Promise<BalanceData> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data: cari, error } = await supabase
     .from('saha_cariler')
     .select('id, cari_kodu, fatura_unvani, kredi_limiti, acilis_bakiyesi')

@@ -23,7 +23,7 @@ import {
 } from 'recharts';
 import { Wallet, CalendarClock, AlertTriangle, Clock } from 'lucide-react';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
 
 interface FaturaRow {
@@ -107,7 +107,7 @@ function bucketFor(days: number): BucketKey {
 }
 
 async function fetchAging(): Promise<AgingData> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
 
   // #72: limitsiz çekim yerine üst sınır + deterministik sıralama (en geç vadeli
   // = en kritik açık alacaklar önce). limit+1 istemiyoruz; cap'e ulaşıldıysa

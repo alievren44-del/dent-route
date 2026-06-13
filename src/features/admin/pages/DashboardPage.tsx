@@ -30,7 +30,7 @@ import {
   Hourglass,
 } from 'lucide-react';
 
-import { getSupabaseClient } from '@/lib/supabase';
+import { getTypedClient } from '@/lib/supabase';
 
 type RangeKey = '7' | '30' | '90';
 
@@ -86,7 +86,7 @@ function sinceIsoFor(range: RangeKey): string {
 }
 
 async function fetchDashboard(sinceIso: string): Promise<DashboardData> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const sinceDate = sinceIso.slice(0, 10);
 
   const [reps, visits, mileage, orders, cariler, odemeler] = await Promise.all([

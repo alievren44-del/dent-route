@@ -21,7 +21,7 @@ import ClinicCard from '@features/discovery/components/ClinicCard';
 import { DistrictPicker } from '@features/routes/components/DistrictPicker';
 import { getDistrictsByProvince } from '@/data/tr-locations/geo-helpers';
 import { useVertical } from '@core/verticals/useVertical';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { SupabaseCRMAdapter } from '@core/adapters/builtin/SupabaseCRMAdapter';
 import {
   useRouteBasket,
@@ -59,7 +59,7 @@ async function fetchSahaClinics(
   radiusM: number,
   verticalKey: string,
 ): Promise<SahaClinicRow[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data, error } = await supabase.rpc('saha_search_nearby_clinics', {
     _lat: lat,
     _lng: lng,
@@ -81,7 +81,7 @@ async function fetchClinicsByDistrict(
   districtSlug: string,
   verticalKey: string,
 ): Promise<SahaClinicRow[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data, error } = await supabase
     .from('saha_clinics')
     .select(

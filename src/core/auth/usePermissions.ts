@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { useAuthStore } from './authStore';
 import { mapParlaToSahaRole, type SahaRole } from './types';
 
@@ -33,7 +33,7 @@ export function usePermissions(): UsePermissionsResult {
     async (code: string): Promise<boolean> => {
       if (!userId) return false;
       if (isAdmin) return true;
-      const result = await getSupabaseClient().rpc('has_permission', {
+      const result = await getTypedClient().rpc('has_permission', {
         p_user_id: userId,
         p_code: code,
       });

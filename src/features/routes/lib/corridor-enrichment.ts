@@ -10,7 +10,7 @@
  *   6. Tamamlanınca refetch trigger
  */
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import provinces from '@/data/tr-locations/provinces.json';
 import districtsRaw from '@/data/tr-locations/districts.json';
 import { pointToPolylineKm } from './detour-calc';
@@ -101,7 +101,7 @@ export async function enrichWithScanStatus(
   districts: Array<Omit<CorridorDistrict, 'lastScanAt' | 'existingCount'>>,
 ): Promise<CorridorDistrict[]> {
   if (districts.length === 0) return [];
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const provinceSlugs = Array.from(new Set(districts.map((d) => d.provinceSlug)));
   const districtSlugs = Array.from(new Set(districts.map((d) => d.districtSlug)));
 

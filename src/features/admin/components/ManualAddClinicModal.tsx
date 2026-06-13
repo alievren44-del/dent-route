@@ -23,7 +23,7 @@ import { toast } from 'sonner';
 import { Building2, MapPin, Phone, RotateCcw, Sparkles, X } from 'lucide-react';
 
 import { getEnv } from '@config/env';
-import { getSupabaseClient } from '@/lib/supabase';
+import { getTypedClient } from '@/lib/supabase';
 import { mapboxGeocode } from '@/lib/mapboxGeocode';
 import {
   getDistrictsByProvince,
@@ -317,7 +317,7 @@ export default function ManualAddClinicModal(props: Props): JSX.Element | null {
         },
       };
 
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error } = await supabase
         .from('saha_clinics')
         .upsert(payload, { onConflict: 'google_place_id' })

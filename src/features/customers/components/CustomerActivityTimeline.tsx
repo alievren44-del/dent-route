@@ -12,7 +12,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { StickyNote, MapPin, Gift } from 'lucide-react';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 
 type ActivityEvent =
   | { kind: 'note'; id: string; ts: string; body: string }
@@ -96,7 +96,7 @@ function CustomerActivityTimeline({ accountId, active }: Props): JSX.Element {
     queryKey: ['customer-activity', accountId],
     enabled: !!accountId && active,
     queryFn: async (): Promise<ActivityEvent[]> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const [notesRes, visitsRes, samplesRes] = await Promise.all([
         supabase
           .from('saha_account_notes')

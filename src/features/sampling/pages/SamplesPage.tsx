@@ -11,7 +11,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Gift, Clock, History, AlertTriangle, BarChart3 } from 'lucide-react';
 import { useAuthStore } from '@core/auth/authStore';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { getQuota, currentYearMonth, getRemainingBudget } from '@core/sampling/quotas';
 import SampleFormMobile from '@features/sampling/components/SampleFormMobile';
 import SampleListView from '@features/sampling/components/SampleListView';
@@ -76,7 +76,7 @@ function SamplesPage(): JSX.Element {
     enabled: Boolean(repId),
     queryFn: async (): Promise<number> => {
       if (!repId) return 0;
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       // Bugün veya geçmişte takip günü gelmiş (overdue) numuneler.
       const cutoffIso = new Date().toISOString();
       const { count, error } = await supabase

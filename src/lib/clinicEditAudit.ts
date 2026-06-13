@@ -12,7 +12,7 @@
  * Sprint: 2 — Phase F (Manual Clinic Edit)
  */
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 
 export type ClinicEditAction = 'create_manual' | 'update' | 'delete';
 
@@ -33,7 +33,7 @@ export interface ClinicEditLogInput {
  * sessizce log basar; çağıran kod akışı durdurmaz.
  */
 export async function logClinicEdit(input: ClinicEditLogInput): Promise<void> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
 
   let userId: string | null = null;
   try {
@@ -49,8 +49,8 @@ export async function logClinicEdit(input: ClinicEditLogInput): Promise<void> {
       clinic_id: input.clinicId,
       edited_by: userId,
       action: input.action,
-      before: input.before ?? null,
-      after: input.after ?? null,
+      before: (input.before ?? null) as unknown as import('@/types/database.types').Json | null,
+      after: (input.after ?? null) as unknown as import('@/types/database.types').Json | null,
     });
     if (error) {
       console.warn('clinic edit audit failed:', error.message);

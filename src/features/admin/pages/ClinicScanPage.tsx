@@ -28,7 +28,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { getProvinces, getDistrictsByProvince } from '@/data/tr-locations/geo-helpers';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import ScanJobsPage from './ScanJobsPage';
 import ScanPreviewDialog from '@features/admin/components/ScanPreviewDialog';
 import DistrictClinicsDialog from '@features/admin/components/DistrictClinicsDialog';
@@ -132,7 +132,7 @@ type ScanIntensity = 'standard' | 'high' | 'max' | 'deep' | 'exhaustive';
 type ScanMode = 'v1' | 'v2' | 'v3';
 
 async function callScan(input: ScanInput): Promise<ScanResult> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const fnName =
     input.scanMode === 'v3'
       ? 'clinic-scan-v3'
@@ -199,7 +199,7 @@ interface CreateBatchJobInput {
 }
 
 async function createBatchJob(input: CreateBatchJobInput): Promise<{ id: string }> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data: userData } = await supabase.auth.getUser();
   const userId = userData?.user?.id ?? null;
 
@@ -207,7 +207,7 @@ async function createBatchJob(input: CreateBatchJobInput): Promise<{ id: string 
     .from('saha_scan_jobs')
     .insert({
       scope_type: input.scope_type,
-      scope_params: input.scope_params,
+      scope_params: input.scope_params as never,
       radius_km: input.radius_km,
       scan_types: input.scan_types,
       scan_source: input.scan_source,
@@ -233,7 +233,7 @@ async function createBatchJob(input: CreateBatchJobInput): Promise<{ id: string 
 }
 
 async function fetchScanStats() {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data, error } = await supabase
     .from('saha_clinics')
     .select('province_slug, district_slug, last_verified_at')
@@ -1064,7 +1064,7 @@ export default function ClinicScanPage() {
 
   async function openEditFromPlaceId(placeId: string, fallbackName: string): Promise<void> {
     try {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error } = await supabase
         .from('saha_clinics')
         .select('*')
@@ -1113,7 +1113,7 @@ export default function ClinicScanPage() {
         return;
       }
 
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error } = await supabase.functions.invoke('clinic-scan-v3', {
         body: {
           // commitOnly path yine de bazı zorunlu alanlar ister:

@@ -12,7 +12,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Phone, MessageCircle, ShoppingCart, ArrowLeft, CalendarPlus, Receipt } from 'lucide-react';
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 
 import CariBalanceCard from '@features/invoicing/components/CariBalanceCard';
@@ -79,7 +79,7 @@ function CustomerDetailPage(): JSX.Element {
     queryKey: ['customer-detail', id],
     enabled: !!id,
     queryFn: async (): Promise<ProfileRow | null> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error } = await supabase
         .from('profiles')
         .select('id, ad_soyad, email, telefon, klinik_adi, city, role')
@@ -94,7 +94,7 @@ function CustomerDetailPage(): JSX.Element {
     queryKey: ['customer-samples', id],
     enabled: !!id && activeTab === 'samples',
     queryFn: async (): Promise<SampleRow[]> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error } = await supabase
         .from('saha_samples')
         .select('id, given_at, status, follow_up_at, notes')
@@ -110,7 +110,7 @@ function CustomerDetailPage(): JSX.Element {
     queryKey: ['customer-notes', id],
     enabled: !!id && activeTab === 'notes',
     queryFn: async (): Promise<AccountNoteRow[]> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error } = await supabase
         .from('saha_account_notes')
         .select('*')
@@ -123,7 +123,7 @@ function CustomerDetailPage(): JSX.Element {
 
   const addNoteMutation = useMutation({
     mutationFn: async (body: string): Promise<void> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       let repId = currentUserId;
       if (!repId) {
         const { data } = await supabase.auth.getUser();
@@ -132,7 +132,7 @@ function CustomerDetailPage(): JSX.Element {
       if (!repId) throw new Error('Oturum bulunamadı. Lütfen tekrar giriş yapın.');
       const { error } = await supabase
         .from('saha_account_notes')
-        .insert({ account_id: id, rep_id: repId, body });
+        .insert({ account_id: id!, rep_id: repId!, body });
       if (error) throw error;
     },
     onSuccess: () => {

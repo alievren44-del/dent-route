@@ -16,7 +16,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, X, Filter, Check, AlertTriangle } from 'lucide-react';
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
 
 interface CariListRow {
@@ -63,7 +63,7 @@ async function fetchCariler(filters: {
   durum: string;
   il: string;
 }): Promise<CariListRow[]> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   let q = supabase
     .from('saha_cariler')
     .select(
@@ -92,7 +92,7 @@ async function fetchFaturaSums(
     { kalan: number; oldestDue: string | null; updatedAt: string | null }
   >();
   if (cariIds.length === 0) return map;
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   const { data, error } = await supabase
     .from('saha_faturalar')
     .select('cari_id, kalan, vade_tarihi, tip, durum, updated_at')
@@ -404,7 +404,7 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
   const { data: salesReps } = useQuery({
     queryKey: ['cari-new-sales-reps'],
     queryFn: async (): Promise<Array<{ id: string; label: string; role: string }>> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error: err } = await supabase
         .from('profiles')
         .select('id, ad_soyad, email, role')
@@ -431,7 +431,7 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
     queryKey: ['cari-new-initial-profile', initialProfileId],
     enabled: !!initialProfileId,
     queryFn: async () => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error: err } = await supabase
         .from('profiles')
         .select('id, ad_soyad, klinik_adi, email, tax_number, tax_office, city')
@@ -462,7 +462,7 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
     queryKey: ['cari-new-profile-search', debouncedSearch],
     enabled: profilePickerOpen && debouncedSearch.trim().length >= 2,
     queryFn: async (): Promise<ProfileOption[]> => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const term = `%${debouncedSearch}%`;
       const { data, error: err } = await supabase
         .from('profiles')
@@ -476,10 +476,11 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const supabase = getSupabaseClient();
+      const supabase = getTypedClient();
       const { data, error: err } = await supabase
         .from('saha_cariler')
         .insert({
+          cari_kodu: '',
           profile_id: profileId,
           fatura_unvani: faturaUnvani.trim(),
           vergi_no: vergiNo.trim() || null,

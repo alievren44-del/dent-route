@@ -17,7 +17,7 @@
  *   Toplam: ~$201, free $200 + credit $120 = $320 budget içinde
  */
 
-import { getSupabaseClient } from '@lib/supabase';
+import { getTypedClient } from '@lib/supabase';
 import seedList from './tr-seed-list.json';
 import provincesRaw from '@/data/tr-locations/provinces.json';
 import districtsRaw from '@/data/tr-locations/districts.json';
@@ -154,7 +154,7 @@ export async function runTrSeed(
   opts: SeedOptions,
   onProgress: (p: SeedProgress) => void,
 ): Promise<SeedProgress> {
-  const supabase = getSupabaseClient();
+  const supabase = getTypedClient();
   let list = (opts.list ?? TR_SEED_LIST).slice();
   if (opts.tier) list = list.filter((c) => c.tier === opts.tier);
 
