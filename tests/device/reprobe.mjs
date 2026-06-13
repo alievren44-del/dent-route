@@ -1,0 +1,10 @@
+import { chromium } from '@playwright/test';
+const b=await chromium.connectOverCDP('http://localhost:9222');
+const page=b.contexts()[0].pages()[0];
+await page.evaluate(()=>{history.pushState({},'','/clinics');dispatchEvent(new PopStateEvent('popstate'));});
+await page.waitForTimeout(1000);
+await page.evaluate(()=>{history.pushState({},'','/takvim');dispatchEvent(new PopStateEvent('popstate'));});
+await page.waitForTimeout(2500);
+const t=await page.evaluate(()=>document.body.innerText.replace(/\s+/g,' ').slice(0,250));
+console.log('TAKVIM:',t);
+await b.close();

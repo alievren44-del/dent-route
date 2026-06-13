@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 
 import { AppShell } from '@components/layout/AppShell';
 import { ProtectedRoute } from '@components/layout/ProtectedRoute';
@@ -78,9 +78,10 @@ export function AppRouter() {
         <Route path="/indir" element={<DownloadAPKPage />} />
         <Route path="/onboarding/first-admin" element={<FirstAdminPage />} />
 
-        {/* Saha rep / admin ekranları — shell İÇİNDE */}
+        {/* Açılış: takvim (kullanıcı açılışta kendi takvimini görür). Harita /harita'da. */}
+        <Route path="/" element={<Navigate to="/takvim" replace />} />
         <Route
-          path="/"
+          path="/harita"
           element={
             <ProtectedRoute>
               <AppShell>

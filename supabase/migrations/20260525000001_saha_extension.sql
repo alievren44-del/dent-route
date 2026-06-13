@@ -206,7 +206,7 @@ AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.profiles
     WHERE id = auth.uid()
-      AND role IN ('REP', 'ADMIN')
+      AND UPPER(role) IN ('REP', 'SALES_REP', 'MANAGER', 'ADMIN')
   )
 $$;
 
@@ -217,7 +217,7 @@ SET search_path = public, pg_temp
 AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.profiles
-    WHERE id = auth.uid() AND role = 'ADMIN'
+    WHERE id = auth.uid() AND UPPER(role) = 'ADMIN'
   )
 $$;
 

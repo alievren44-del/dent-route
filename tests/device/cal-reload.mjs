@@ -1,0 +1,13 @@
+import { chromium } from '@playwright/test';
+const b=await chromium.connectOverCDP('http://localhost:9222');
+const page=b.contexts()[0].pages()[0];
+page.setDefaultTimeout(15000);
+let remReq=0;
+page.on('request',r=>{if(/saha_reminders\?select/.test(r.url()))remReq++;});
+await page.evaluate(()=>{history.pushState({},'','/takvim');dispatchEvent(new PopStateEvent('popstate'));});
+await page.reload({waitUntil:'domcontentloaded'});
+await page.waitForTimeout(6000);
+const t=await page.evaluate(()=>document.body.innerText.replace(/\s+/g,' ').slice(0,220));
+console.log('reminders requests:',remReq);
+console.log('TAKVIM:',t);
+await b.close();
