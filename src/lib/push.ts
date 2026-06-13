@@ -113,17 +113,15 @@ async function saveToken(token: string): Promise<void> {
     }
 
     const platform = Capacitor.getPlatform(); // 'android' | 'ios' | 'web'
-    const { error } = await getTypedClient()
-      .from('device_tokens')
-      .upsert(
-        {
-          user_id: user.id,
-          token,
-          platform,
-          last_seen_at: new Date().toISOString(),
-        },
-        { onConflict: 'token' },
-      );
+    const { error } = await getTypedClient().from('device_tokens').upsert(
+      {
+        user_id: user.id,
+        token,
+        platform,
+        last_seen_at: new Date().toISOString(),
+      },
+      { onConflict: 'token' },
+    );
 
     if (error) {
       pushDebug('error', 'push', `token kayıt hatası: ${error.message}`);
@@ -132,7 +130,11 @@ async function saveToken(token: string): Promise<void> {
     }
   } catch (e) {
     // getUser() offline'da fırlatabilir → login sonrası retry'a bırak.
-    pushDebug('error', 'push', `token kayıt exception: ${e instanceof Error ? e.message : String(e)}`);
+    pushDebug(
+      'error',
+      'push',
+      `token kayıt exception: ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
 }
 
@@ -195,16 +197,23 @@ export async function initPush(): Promise<void> {
   await PushNotifications.addListener('registrationError', (err: RegistrationError) => {
     pushDebug('error', 'push', `registration error: ${JSON.stringify(err)}`);
   });
-  await PushNotifications.addListener('pushNotificationReceived', (notif: PushNotificationSchema) => {
-    if (import.meta.env.DEV) pushDebug('info', 'push', `received (foreground): ${notif.title ?? ''}`);
-  });
-  await PushNotifications.addListener('pushNotificationActionPerformed', (action: ActionPerformed) => {
-    const data = action.notification.data as Record<string, unknown> | undefined;
-    // Bildirim butonu mu (Ara / WhatsApp / Ertele) yoksa gövdeye dokunuldu mu?
-    const actionId = action.actionId;
-    if (handleReminderAction(actionId, data)) return;
-    handleTapNavigation(data);
-  });
+  await PushNotifications.addListener(
+    'pushNotificationReceived',
+    (notif: PushNotificationSchema) => {
+      if (import.meta.env.DEV)
+        pushDebug('info', 'push', `received (foreground): ${notif.title ?? ''}`);
+    },
+  );
+  await PushNotifications.addListener(
+    'pushNotificationActionPerformed',
+    (action: ActionPerformed) => {
+      const data = action.notification.data as Record<string, unknown> | undefined;
+      // Bildirim butonu mu (Ara / WhatsApp / Ertele) yoksa gövdeye dokunuldu mu?
+      const actionId = action.actionId;
+      if (handleReminderAction(actionId, data)) return;
+      handleTapNavigation(data);
+    },
+  );
 
   // Not: Capacitor PushNotifications, Android REMOTE push'ta bildirim-içi aksiyon
   // butonu (Ara/WhatsApp/Ertele) göstermeyi DESTEKLEMEZ (registerActionTypes yalnız

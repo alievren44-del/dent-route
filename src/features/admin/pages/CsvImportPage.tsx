@@ -140,7 +140,11 @@ async function importRow(
     is_approved: false,
   };
 
-  const { data, error } = await supabase.from('profiles').insert(payload as never).select('id').single();
+  const { data, error } = await supabase
+    .from('profiles')
+    .insert(payload as never)
+    .select('id')
+    .single();
 
   if (error) return { status: 'error', message: error.message };
   return { status: 'created', id: (data?.id as string | undefined) ?? undefined };

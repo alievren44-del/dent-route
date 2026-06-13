@@ -19,8 +19,9 @@ function registerBackgroundSync(): void {
   if (typeof (globalThis as { SyncManager?: unknown }).SyncManager === 'undefined') return;
   void navigator.serviceWorker.ready
     .then((reg) => {
-      const sync = (reg as ServiceWorkerRegistration & { sync?: { register(t: string): Promise<void> } })
-        .sync;
+      const sync = (
+        reg as ServiceWorkerRegistration & { sync?: { register(t: string): Promise<void> } }
+      ).sync;
       return sync?.register(SYNC_TAG);
     })
     .catch(() => {
@@ -140,7 +141,10 @@ async function executeOp(op: OfflineOp): Promise<void> {
       const { id: visitId, ...rest } = op.payload as { id: string } & Record<string, unknown>;
       // updated_at precondition: server'daki updated_at, biz kaydettiğimizdeki ile aynıysa güncelle.
       // (saha_visits.updated_at yoksa koşulsuz update — conflict accept olarak yorumla).
-      const { error } = await supabase.from('saha_visits').update(rest as never).eq('id', visitId);
+      const { error } = await supabase
+        .from('saha_visits')
+        .update(rest as never)
+        .eq('id', visitId);
       if (error) throw error;
       return;
     }
@@ -158,7 +162,9 @@ async function executeOp(op: OfflineOp): Promise<void> {
         items: ((p['items'] as Array<Record<string, unknown>>) ?? []).map((it) => ({
           productId: it['productId'] as string,
           quantity: it['quantity'] as number,
-          ...(it['unitPriceOverride'] !== undefined ? { unitPriceOverride: it['unitPriceOverride'] as number } : {}),
+          ...(it['unitPriceOverride'] !== undefined
+            ? { unitPriceOverride: it['unitPriceOverride'] as number }
+            : {}),
         })),
         notes: (p['notes'] as string | null) ?? undefined,
         idempotencyKey: p['idempotency_key'] as string,
@@ -168,7 +174,10 @@ async function executeOp(op: OfflineOp): Promise<void> {
     }
     case 'route.complete': {
       const { id: routeId, ...rest } = op.payload as { id: string } & Record<string, unknown>;
-      const { error } = await supabase.from('saha_routes').update(rest as never).eq('id', routeId);
+      const { error } = await supabase
+        .from('saha_routes')
+        .update(rest as never)
+        .eq('id', routeId);
       if (error) throw error;
       return;
     }

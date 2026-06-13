@@ -114,9 +114,7 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
   // ─── Customers ────────────────────────────────────────
 
   async listCustomers(opts?: ListCustomersOptions): Promise<Page<Customer>> {
-    let q = this.supabase
-      .from('saha_clinics')
-      .select(CLINIC_COLS, { count: 'exact' });
+    let q = this.supabase.from('saha_clinics').select(CLINIC_COLS, { count: 'exact' });
 
     // DB status değerleri: 'active' | 'closed' | 'duplicate' | 'flagged'.
     // Customer.status ise 'active' | 'inactive' | 'prospect'.
@@ -754,19 +752,21 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
     };
 
     return {
-      items: (data ?? []).filter((r: ProductRow) => r.id != null).map((r: ProductRow) => ({
-        id: r.id ?? '',
-        sku: r.sku ?? undefined,
-        name: r.name ?? '',
-        description: r.description ?? undefined,
-        category: r.category_id ?? undefined,
-        unit: 'adet',
-        basePrice: r.sale_price != null ? Number(r.sale_price) : Number(r.base_price ?? 0),
-        currency: r.currency ?? 'TRY',
-        stockQuantity: r.stock_quantity ?? undefined,
-        isActive: Boolean(r.is_active),
-        imageUrl: r.main_image ?? undefined,
-      })),
+      items: (data ?? [])
+        .filter((r: ProductRow) => r.id != null)
+        .map((r: ProductRow) => ({
+          id: r.id ?? '',
+          sku: r.sku ?? undefined,
+          name: r.name ?? '',
+          description: r.description ?? undefined,
+          category: r.category_id ?? undefined,
+          unit: 'adet',
+          basePrice: r.sale_price != null ? Number(r.sale_price) : Number(r.base_price ?? 0),
+          currency: r.currency ?? 'TRY',
+          stockQuantity: r.stock_quantity ?? undefined,
+          isActive: Boolean(r.is_active),
+          imageUrl: r.main_image ?? undefined,
+        })),
       total: count ?? undefined,
     };
   }
@@ -846,19 +846,21 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       is_active: boolean | null;
       main_image: string | null;
     };
-    return (data ?? []).filter((r: ProductRow) => r.id != null).map((r: ProductRow) => ({
-      id: r.id ?? '',
-      sku: r.sku ?? undefined,
-      name: r.name ?? '',
-      description: r.description ?? undefined,
-      category: r.category_id ?? undefined,
-      unit: 'adet',
-      basePrice: r.sale_price != null ? Number(r.sale_price) : Number(r.base_price ?? 0),
-      currency: r.currency ?? 'TRY',
-      stockQuantity: r.stock_quantity ?? undefined,
-      isActive: Boolean(r.is_active),
-      imageUrl: r.main_image ?? undefined,
-    }));
+    return (data ?? [])
+      .filter((r: ProductRow) => r.id != null)
+      .map((r: ProductRow) => ({
+        id: r.id ?? '',
+        sku: r.sku ?? undefined,
+        name: r.name ?? '',
+        description: r.description ?? undefined,
+        category: r.category_id ?? undefined,
+        unit: 'adet',
+        basePrice: r.sale_price != null ? Number(r.sale_price) : Number(r.base_price ?? 0),
+        currency: r.currency ?? 'TRY',
+        stockQuantity: r.stock_quantity ?? undefined,
+        isActive: Boolean(r.is_active),
+        imageUrl: r.main_image ?? undefined,
+      }));
   }
 
   // ─── Campaigns ────────────────────────────────────────

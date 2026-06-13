@@ -561,9 +561,7 @@ export default function ActiveRoutePage(): JSX.Element {
                   await persistAccountIds(prevIds);
                   toast.success('Durak geri eklendi');
                 } catch (e) {
-                  toast.error(
-                    'Geri alınamadı: ' + (e instanceof Error ? e.message : String(e)),
-                  );
+                  toast.error('Geri alınamadı: ' + (e instanceof Error ? e.message : String(e)));
                 }
               })();
             },

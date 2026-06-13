@@ -1,0 +1,220 @@
+[
+  {
+    "p": "/",
+    "final": "/",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Parla Saha Çıkış Çevremdeki Klinikler Konumumu"
+  },
+  {
+    "p": "/clinics",
+    "final": "/clinics",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Parla Saha Çıkış Klinikler Çoklu Seçim Sırala "
+  },
+  {
+    "p": "/clinics/discover",
+    "final": "/clinics/discover",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Parla Saha Çıkış Çevremdeki Klinikler Yenile K"
+  },
+  {
+    "p": "/nearby-provinces",
+    "final": "/nearby-provinces",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Parla Saha Çıkış Yakınımdaki İller Konumundan "
+  },
+  {
+    "p": "/tahsilatlar",
+    "final": "/tahsilatlar",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Parla Saha Çıkış Tahsilatlarım Bu ay onaylanan"
+  },
+  {
+    "p": "/gorevler",
+    "final": "/gorevler",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Parla Saha Çıkış Görevlerim 0/0 tamamlandı Bug"
+  },
+  {
+    "p": "/history",
+    "final": "/history",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Parla Saha Çıkış Ziyaret Geçmişi Filtre Bugün "
+  },
+  {
+    "p": "/sales",
+    "final": "/sales",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Parla Saha Çıkış Satış Bu Ay Satış ₺0,00 Sipar"
+  },
+  {
+    "p": "/orders/new",
+    "final": "/orders/new",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Parla Saha Çıkış Yeni Sipariş Müşteri Ürün Ekl"
+  },
+  {
+    "p": "/orders/approval",
+    "final": "/orders/approval",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Erişim engellendi Bu sayfa için yetkiniz yok. "
+  },
+  {
+    "p": "/orders/history",
+    "final": "/orders/history",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Parla Saha Çıkış Sipariş Geçmişi Tümü Beklemed"
+  },
+  {
+    "p": "/invoicing/cari",
+    "final": "/invoicing/cari",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Erişim engellendi Bu sayfa için yetkiniz yok. "
+  },
+  {
+    "p": "/invoicing/aging",
+    "final": "/invoicing/aging",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Erişim engellendi Bu sayfa için yetkiniz yok. "
+  },
+  {
+    "p": "/invoicing/cek-senet",
+    "final": "/invoicing/cek-senet",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Erişim engellendi Bu sayfa için yetkiniz yok. "
+  },
+  {
+    "p": "/samples",
+    "final": "/samples",
+    "redir": false,
+    "errs": [],
+    "net": [
+      "net::ERR_ABORTED rranpzicmhgfupgabgbi.supabase.co/rest/v1/saha_samples?select=i"
+    ],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Parla Saha Çıkış Bu ay bütçe: 0 TL / Kalan: 0 "
+  },
+  {
+    "p": "/notifications",
+    "final": "/notifications",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Parla Saha Çıkış Bildirimler Hepsini okundu iş"
+  },
+  {
+    "p": "/admin/dashboard",
+    "final": "/admin/dashboard",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Erişim engellendi Bu sayfa için yetkiniz yok. "
+  },
+  {
+    "p": "/admin/stock",
+    "final": "/admin/stock",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Erişim engellendi Bu sayfa için yetkiniz yok. "
+  },
+  {
+    "p": "/admin/rep-kpi",
+    "final": "/admin/rep-kpi",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Erişim engellendi Bu sayfa için yetkiniz yok. "
+  },
+  {
+    "p": "/admin/bi",
+    "final": "/admin/bi",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Erişim engellendi Bu sayfa için yetkiniz yok. "
+  },
+  {
+    "p": "/admin/regions",
+    "final": "/admin/regions",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Erişim engellendi Bu sayfa için yetkiniz yok. "
+  },
+  {
+    "p": "/admin/users",
+    "final": "/admin/users",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Erişim engellendi Bu sayfa için yetkiniz yok. "
+  },
+  {
+    "p": "/admin/audit-logs",
+    "final": "/admin/audit-logs",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Erişim engellendi Bu sayfa için yetkiniz yok. "
+  },
+  {
+    "p": "/admin/clinics",
+    "final": "/admin/clinics",
+    "redir": false,
+    "errs": [],
+    "net": [],
+    "blank": false,
+    "snip": "Saha App — vertical: dental (Diş Hekimliği) Erişim engellendi Bu sayfa için yetkiniz yok. "
+  }
+]

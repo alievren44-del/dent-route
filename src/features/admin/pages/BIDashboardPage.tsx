@@ -112,7 +112,11 @@ async function fetchBI(sinceIso: string): Promise<BIData> {
   if (orders.error) throw orders.error;
 
   const profileName = new Map<string, string>();
-  for (const p of (profiles.data ?? []) as Array<{ id: string; ad_soyad: string | null; email: string | null }>) {
+  for (const p of (profiles.data ?? []) as Array<{
+    id: string;
+    ad_soyad: string | null;
+    email: string | null;
+  }>) {
     profileName.set(p.id, p.ad_soyad ?? p.email ?? p.id.slice(0, 8));
   }
 
@@ -140,7 +144,10 @@ async function fetchBI(sinceIso: string): Promise<BIData> {
     .map(([day, value]) => ({ day: day.slice(5), value: Math.round(value) }));
 
   const salesByRep: RepPoint[] = Array.from(salesByRepMap.entries())
-    .map(([id, value]) => ({ name: profileName.get(id) ?? id.slice(0, 8), value: Math.round(value) }))
+    .map(([id, value]) => ({
+      name: profileName.get(id) ?? id.slice(0, 8),
+      value: Math.round(value),
+    }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 10);
 
@@ -159,7 +166,10 @@ async function fetchBI(sinceIso: string): Promise<BIData> {
   // Tahsilat trendi (günlük)
   const collByDay = new Map<string, number>();
   let collectedTl = 0;
-  for (const p of (odemeler.data ?? []) as Array<{ tutar: number | string | null; tarih: string | null }>) {
+  for (const p of (odemeler.data ?? []) as Array<{
+    tutar: number | string | null;
+    tarih: string | null;
+  }>) {
     const t = num(p.tutar);
     collectedTl += t;
     const day = (p.tarih ?? '').slice(0, 10);
@@ -172,7 +182,10 @@ async function fetchBI(sinceIso: string): Promise<BIData> {
   // Açık alacak (kalan işaret: satis +, iade -)
   let openArTl = 0;
   if (!faturalar.error) {
-    for (const f of (faturalar.data ?? []) as Array<{ kalan: number | string | null; tip: string }>) {
+    for (const f of (faturalar.data ?? []) as Array<{
+      kalan: number | string | null;
+      tip: string;
+    }>) {
       const sign = f.tip === 'iade' ? -1 : 1;
       openArTl += sign * num(f.kalan);
     }
@@ -214,7 +227,9 @@ export default function BIDashboardPage() {
                 type="button"
                 onClick={() => setRange(opt.value)}
                 className={`rounded px-3 py-1 text-sm font-medium transition ${
-                  active ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                  active
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
                 {opt.label}
@@ -315,7 +330,14 @@ export default function BIDashboardPage() {
               <XAxis dataKey="day" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} width={70} />
               <Tooltip formatter={(v: number) => formatTRY(v)} />
-              <Line type="monotone" dataKey="value" name="Tahsilat ₺" stroke="#0ea5e9" strokeWidth={2} dot={false} />
+              <Line
+                type="monotone"
+                dataKey="value"
+                name="Tahsilat ₺"
+                stroke="#0ea5e9"
+                strokeWidth={2}
+                dot={false}
+              />
             </LineChart>
           </ResponsiveContainer>
         </ChartCard>

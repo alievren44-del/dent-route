@@ -12,15 +12,7 @@
 
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Wallet, CalendarClock, AlertTriangle, Clock } from 'lucide-react';
 
 import { getTypedClient } from '@lib/supabase';
@@ -218,8 +210,8 @@ export default function AgingReportPage() {
         <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>
-            Çok sayıda açık fatura var; performans için yalnızca ilk {FATURA_FETCH_LIMIT} fatura
-            (en eski vadeden başlayarak) gösteriliyor. Toplamlar bu alt kümeyi yansıtır.
+            Çok sayıda açık fatura var; performans için yalnızca ilk {FATURA_FETCH_LIMIT} fatura (en
+            eski vadeden başlayarak) gösteriliyor. Toplamlar bu alt kümeyi yansıtır.
           </span>
         </div>
       )}

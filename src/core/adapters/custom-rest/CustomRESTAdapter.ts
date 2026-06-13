@@ -223,11 +223,7 @@ export class CustomRESTAdapter implements ICRMAdapter {
   }
 
   /** baseUrl + path(:param substitution) + ?query. */
-  private buildUrl(
-    path: string,
-    params?: Record<string, string>,
-    query?: QueryParams,
-  ): string {
+  private buildUrl(path: string, params?: Record<string, string>, query?: QueryParams): string {
     let resolved = path;
     if (params) {
       for (const [k, v] of Object.entries(params)) {

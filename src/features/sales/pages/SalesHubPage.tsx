@@ -121,9 +121,7 @@ function SalesHubPage(): JSX.Element {
       const first = await run(baseSelect);
       if (first.error) {
         // FK alias yoksa sade select fallback
-        const fb = await run(
-          'id, order_number, status, total, total_amount, created_at',
-        );
+        const fb = await run('id, order_number, status, total, total_amount, created_at');
         if (fb.error) throw fb.error;
         return (fb.data ?? []) as unknown as OrderLite[];
       }
@@ -152,10 +150,7 @@ function SalesHubPage(): JSX.Element {
 
   const { orderCount, totalTl } = useMemo(() => {
     const count = orders.length;
-    const sum = orders.reduce(
-      (acc, o) => acc + Number(o.total ?? o.total_amount ?? 0),
-      0,
-    );
+    const sum = orders.reduce((acc, o) => acc + Number(o.total ?? o.total_amount ?? 0), 0);
     return { orderCount: count, totalTl: sum };
   }, [orders]);
 

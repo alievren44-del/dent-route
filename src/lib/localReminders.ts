@@ -130,7 +130,11 @@ export async function syncReminderNotifications(): Promise<void> {
     }
     pushDebug('info', 'push', `${notifications.length} yerel hatırlatma zamanlandı`);
   } catch (e) {
-    pushDebug('error', 'push', `local reminder sync: ${e instanceof Error ? e.message : String(e)}`);
+    pushDebug(
+      'error',
+      'push',
+      `local reminder sync: ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
 }
 
