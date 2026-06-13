@@ -17,6 +17,7 @@ export type ParlaUserRole =
   | 'DOCTOR'
   | 'ASSISTANT'
   | 'REP'
+  | 'MANAGER'
   | 'PENDING'
   | 'GUEST'
   | 'WAREHOUSE'
@@ -63,5 +64,8 @@ export function mapParlaToSahaRole(
   const normalized = String(role).trim().toUpperCase();
   if (normalized === 'REP' || normalized === 'SALES_REP') return 'sales_rep';
   if (normalized === 'ADMIN') return 'admin';
+  // MANAGER → admin saha rolü: onay zinciri (50.000 TL eşiği) çalışabilmesi için
+  // yükseltilmiş erişim gerekiyor. SahaRole 'manager' değeri yok; 'admin' map edilir.
+  if (normalized === 'MANAGER') return 'admin';
   return null;
 }
