@@ -25,12 +25,22 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft, Camera, CheckCircle2, Clock, Loader2, Trash2, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  CalendarClock,
+  Camera,
+  CheckCircle2,
+  Clock,
+  Loader2,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import { getTypedClient } from '@lib/supabase';
+import { getSupabaseClient, getTypedClient } from '@lib/supabase';
+import { syncReminderNotifications } from '@lib/localReminders';
 import { useVertical } from '@core/verticals/useVertical';
 import { resizeImage, extensionFor } from '@lib/imageResize';
 import type { CustomField, VisitOutcomeOption } from '@core/verticals/types';
@@ -126,6 +136,7 @@ function VisitFormPage(): JSX.Element {
   const navigate = useNavigate();
   const vertical = useVertical();
   const supabase = getTypedClient();
+  const queryClient = useQueryClient();
 
   const customerLabel = vertical.labels.customer.singular;
   const outcomes: VisitOutcomeOption[] =
@@ -208,6 +219,9 @@ function VisitFormPage(): JSX.Element {
   const [photos, setPhotos] = useState<PendingPhoto[]>([]);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
   const [nextVisitDate, setNextVisitDate] = useState<string>('');
+  // Hekimden alınan randevu (tarih-saat) + not — takvime 'appointment' hatırlatması yazar.
+  const [apptAt, setApptAt] = useState<string>('');
+  const [apptNote, setApptNote] = useState<string>('');
   const [processingFile, setProcessingFile] = useState<boolean>(false);
 
   // Initialize once when visit loads
@@ -366,6 +380,12 @@ function VisitFormPage(): JSX.Element {
 
     // Outcome-based navigation helper (aşağıda iki yerde kullanılır)
     const doNavigate = () => {
+      // Ziyaret geçmişi + takvim cache'ini tazele — yeni/güncel ziyaret hemen görünsün.
+      // (Aksi halde "Bugün" sekmesi save öncesi boş cache'i gösteriyordu.)
+      void queryClient.invalidateQueries({ queryKey: ['visit-history'] });
+      void queryClient.invalidateQueries({ queryKey: ['calendar'] });
+      // Yeni hatırlatma(lar) için yerel bildirimleri yeniden zamanla (aksiyon butonlu).
+      void syncReminderNotifications();
       const opt = outcomes.find((o) => o.key === outcome);
       if (opt?.requiresOrder || outcome === 'order_taken') {
         navigate(`/orders/new?customerId=${visit.account_id}`, { replace: true });
@@ -373,6 +393,58 @@ function VisitFormPage(): JSX.Element {
         navigate(`/samples?customerId=${visit.account_id}`, { replace: true });
       } else {
         navigate('/history', { replace: true });
+      }
+    };
+
+    // Takvim hatırlatması insert — tekrar ziyaret tarihi ve/veya hekim randevusu.
+    const upsertReminders = async (): Promise<void> => {
+      if (!visit) return;
+      const rows: Record<string, unknown>[] = [];
+      // Tekrar ziyaret: plasiyer tarih girdiyse onu kullan; girmediyse otomatik +1 ay.
+      // (Her ziyaret edilen klinik 1 ay sonra "ziyaret edileli 1 ay oldu" hatırlatması alır.)
+      const revisitDue = nextVisitDate
+        ? new Date(`${nextVisitDate}T09:00:00`)
+        : (() => {
+            const d = new Date();
+            d.setMonth(d.getMonth() + 1);
+            d.setHours(9, 0, 0, 0);
+            return d;
+          })();
+      rows.push({
+        rep_id: visit.rep_id,
+        account_id: visit.account_id,
+        visit_id: id,
+        created_by: visit.rep_id,
+        type: 'revisit',
+        title: `Tekrar ziyaret — ${accountName}`,
+        note: notes.trim() || (nextVisitDate ? null : '1 ay önce ziyaret edildi'),
+        due_at: revisitDue.toISOString(),
+        status: 'open',
+      });
+      if (apptAt) {
+        const due = new Date(apptAt);
+        if (!Number.isNaN(due.getTime())) {
+          rows.push({
+            rep_id: visit.rep_id,
+            account_id: visit.account_id,
+            visit_id: id,
+            created_by: visit.rep_id,
+            type: 'appointment',
+            title: `Randevu — ${accountName}`,
+            note: apptNote.trim() || null,
+            due_at: due.toISOString(),
+            status: 'open',
+          });
+        }
+      }
+      if (rows.length === 0) return;
+      try {
+        // saha_reminders generated tiplerde yok → untyped client.
+        const sb = getSupabaseClient();
+        const { error } = await sb.from('saha_reminders').insert(rows);
+        if (error) console.warn('Hatırlatma kaydedilemedi:', error);
+      } catch (e) {
+        console.warn('Hatırlatma insert hatası:', e);
       }
     };
 
@@ -435,6 +507,9 @@ function VisitFormPage(): JSX.Element {
         .update(updatePayload as never)
         .eq('id', id);
       if (updErr) throw updErr;
+
+      // Takvim hatırlatmaları — tekrar ziyaret + hekim randevusu (best-effort, ziyareti bloklamaz).
+      await upsertReminders();
 
       toast.success('Ziyaret kaydedildi');
       doNavigate();
@@ -681,18 +756,52 @@ function VisitFormPage(): JSX.Element {
           </section>
         )}
 
-        {/* 6. Next visit date */}
-        <section className="space-y-2">
-          <label htmlFor="next-visit" className="text-sm font-medium text-foreground">
-            Sonraki Ziyaret Tarihi
-          </label>
-          <input
-            id="next-visit"
-            type="date"
-            value={nextVisitDate}
-            onChange={(e) => setNextVisitDate(e.target.value)}
-            className="w-full rounded-xl border border-border bg-background px-3 h-12 min-h-tap-min text-base"
-          />
+        {/* 6. Tekrar ziyaret + Hekim randevusu → takvime hatırlatma yazar */}
+        <section className="space-y-3 rounded-2xl border border-border bg-card p-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <CalendarClock className="h-4 w-4 text-primary" aria-hidden="true" />
+            Hatırlatma / Randevu
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="next-visit" className="text-xs text-muted-foreground">
+              Tekrar Ziyaret Tarihi
+            </label>
+            <input
+              id="next-visit"
+              type="date"
+              value={nextVisitDate}
+              onChange={(e) => setNextVisitDate(e.target.value)}
+              className="w-full rounded-xl border border-border bg-background px-3 h-12 min-h-tap-min text-base"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="appt-at" className="text-xs text-muted-foreground">
+              Hekimden Randevu (tarih + saat)
+            </label>
+            <input
+              id="appt-at"
+              type="datetime-local"
+              value={apptAt}
+              onChange={(e) => setApptAt(e.target.value)}
+              className="w-full rounded-xl border border-border bg-background px-3 h-12 min-h-tap-min text-base"
+            />
+            {apptAt && (
+              <input
+                type="text"
+                value={apptNote}
+                onChange={(e) => setApptNote(e.target.value)}
+                maxLength={200}
+                placeholder="Randevu notu (opsiyonel)"
+                className="w-full rounded-xl border border-border bg-background px-3 h-11 min-h-tap-min text-sm"
+              />
+            )}
+          </div>
+
+          <p className="text-[11px] text-muted-foreground">
+            Girilen tarihler plasiyer takvimine otomatik eklenir.
+          </p>
         </section>
 
         {/* Foto sayısı + temizle */}

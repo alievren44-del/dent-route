@@ -19,7 +19,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft, Loader2, MapPin, Navigation } from 'lucide-react';
+import { ArrowLeft, FileText, Loader2, MapPin, Navigation } from 'lucide-react';
 import { useGeolocation } from '@features/map/hooks/useGeolocation';
 import { haversineMeters } from '@features/discovery/dedup';
 import { getTypedClient } from '@lib/supabase';
@@ -170,6 +170,9 @@ function CheckInPage(): JSX.Element {
 
   // Submit
   const [submitting, setSubmitting] = useState(false);
+  // Check-in anında hızlı not (opsiyonel) — saha_visits.notes'a yazılır.
+  const [note, setNote] = useState('');
+  const [showNote, setShowNote] = useState(false);
 
   async function handleCheckIn(): Promise<void> {
     if (!id || !position) {
@@ -202,6 +205,7 @@ function CheckInPage(): JSX.Element {
           ? crypto.randomUUID()
           : `checkin-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
+      const trimmedNote = note.trim();
       const payload: Record<string, unknown> = {
         account_id: id,
         rep_id: effectiveRepId,
@@ -212,6 +216,7 @@ function CheckInPage(): JSX.Element {
         distance_to_account_m: distanceM,
         status: 'in_progress',
         idempotency_key: idempotencyKey,
+        ...(trimmedNote ? { notes: trimmedNote } : {}),
       };
 
       // Çevrim dışıysa kuyruğa al, geçici visit id oluştur.
@@ -234,7 +239,16 @@ function CheckInPage(): JSX.Element {
       toast.success('Check-in başarılı');
       navigate(`/visits/${visitId}`, { replace: true });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      // Supabase/PostgREST hataları Error instance değil — düz nesne (message/details/hint).
+      let msg: string;
+      if (err instanceof Error) {
+        msg = err.message;
+      } else if (typeof err === 'object' && err !== null) {
+        const e = err as { message?: string; details?: string; hint?: string };
+        msg = e.message ?? e.details ?? e.hint ?? JSON.stringify(err);
+      } else {
+        msg = String(err);
+      }
       const isNetworkError =
         msg.includes('fetch') ||
         msg.includes('network') ||
@@ -258,12 +272,13 @@ function CheckInPage(): JSX.Element {
               account_id: id,
               rep_id: effectiveRepId2 ?? '',
               check_in_at: new Date().toISOString(),
-              check_in_lat: position!.lat,
-              check_in_lng: position!.lng,
-              check_in_accuracy_m: position!.accuracy,
+              check_in_lat: position.lat,
+              check_in_lng: position.lng,
+              check_in_accuracy_m: position.accuracy,
               distance_to_account_m: distanceM,
               status: 'in_progress',
               idempotency_key: idempotencyKey2,
+              ...(note.trim() ? { notes: note.trim() } : {}),
             },
             idempotencyKey2,
           );
@@ -371,6 +386,34 @@ function CheckInPage(): JSX.Element {
             <Navigation className="h-4 w-4" aria-hidden="true" />
             Konumu Yenile
           </button>
+        )}
+
+        {/* Hızlı not (opsiyonel) — check-in ile birlikte kaydedilir */}
+        {!showNote ? (
+          <button
+            type="button"
+            onClick={() => setShowNote(true)}
+            className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-background h-11 min-h-tap-min text-sm font-medium hover:bg-muted"
+          >
+            <FileText className="h-4 w-4" aria-hidden="true" />
+            Not Ekle
+          </button>
+        ) : (
+          <div className="rounded-2xl border border-border bg-card p-3 space-y-1.5">
+            <label htmlFor="checkin-note" className="text-xs font-medium text-muted-foreground">
+              Ziyaret notu
+            </label>
+            <textarea
+              id="checkin-note"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={3}
+              maxLength={500}
+              placeholder="Bu ziyaretle ilgili kısa not…"
+              className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+            />
+            <p className="text-right text-[11px] text-muted-foreground">{note.length}/500</p>
+          </div>
         )}
       </div>
 

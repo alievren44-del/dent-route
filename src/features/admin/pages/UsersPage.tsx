@@ -20,7 +20,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { UserPlus, Search, Key, Power, MapPin, X, User as UserIcon, Copy } from 'lucide-react';
 
-import { getTypedClient } from '@/lib/supabase';
+import { getSupabaseClient, getTypedClient } from '@/lib/supabase';
+import { Receipt } from 'lucide-react';
+
+const INVOICING_PERM = 'saha:invoicing:access';
 
 type Role = 'ADMIN' | 'MANAGER' | 'REP' | 'USER';
 
@@ -194,6 +197,50 @@ export default function UsersPage(): JSX.Element {
     },
   });
 
+  // Hangi kullanıcılara invoicing (fatura/cari/ödeme/çek-senet/aging) erişimi verilmiş?
+  const invoicingGrants = useQuery({
+    queryKey: ['admin', 'invoicing-grants'],
+    queryFn: async (): Promise<Set<string>> => {
+      const sb = getSupabaseClient();
+      const { data, error } = await sb
+        .from('user_permissions')
+        .select('user_id, effect')
+        .eq('permission_code', INVOICING_PERM);
+      if (error) throw error;
+      const granted = new Set<string>();
+      ((data ?? []) as { user_id: string; effect: string }[]).forEach((r) => {
+        if (r.effect === 'grant') granted.add(r.user_id);
+      });
+      return granted;
+    },
+  });
+
+  const toggleInvoicing = useMutation({
+    mutationFn: async (input: { userId: string; grant: boolean }) => {
+      const sb = getSupabaseClient();
+      // idempotent: önce varsa sil, grant ise yeniden ekle
+      const del = await sb
+        .from('user_permissions')
+        .delete()
+        .eq('user_id', input.userId)
+        .eq('permission_code', INVOICING_PERM);
+      if (del.error) throw del.error;
+      if (input.grant) {
+        const ins = await sb
+          .from('user_permissions')
+          .insert({ user_id: input.userId, permission_code: INVOICING_PERM, effect: 'grant' });
+        if (ins.error) throw ins.error;
+      }
+    },
+    onSuccess: (_, vars) => {
+      toast.success(vars.grant ? 'Fatura erişimi verildi' : 'Fatura erişimi kaldırıldı');
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'invoicing-grants'] });
+    },
+    onError: (err) => {
+      toast.error(`İşlem başarısız: ${err.message}`);
+    },
+  });
+
   const users = usersQuery.data ?? [];
 
   const filtered = useMemo<ProfileRow[]>(() => {
@@ -361,6 +408,32 @@ export default function UsersPage(): JSX.Element {
                     <td className="px-3 py-2 text-slate-500">{formatDate(u.created_at)}</td>
                     <td className="px-3 py-2">
                       <div className="flex justify-end gap-1">
+                        {currentRole !== 'ADMIN' &&
+                          (() => {
+                            const hasInv = invoicingGrants.data?.has(u.id) ?? false;
+                            return (
+                              <button
+                                type="button"
+                                disabled={toggleInvoicing.isPending}
+                                onClick={() =>
+                                  toggleInvoicing.mutate({ userId: u.id, grant: !hasInv })
+                                }
+                                className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs disabled:opacity-50 ${
+                                  hasInv
+                                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                                }`}
+                                title={
+                                  hasInv
+                                    ? 'Fatura/cari/ödeme erişimini kaldır'
+                                    : 'Fatura/cari/ödeme erişimi ver'
+                                }
+                              >
+                                <Receipt className="h-3.5 w-3.5" />
+                                {hasInv ? 'Fatura ✓' : 'Fatura'}
+                              </button>
+                            );
+                          })()}
                         <Link
                           to="/admin/regions"
                           className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"

@@ -84,13 +84,11 @@ async function fetchCariler(filters: {
   return (data ?? []) as CariListRow[];
 }
 
-async function fetchFaturaSums(
-  cariIds: string[],
-): Promise<Map<string, { kalan: number; oldestDue: string | null; updatedAt: string | null }>> {
-  const map = new Map<
-    string,
-    { kalan: number; oldestDue: string | null; updatedAt: string | null }
-  >();
+// NOT: dönüş Record (Map değil) — react-query cache persist edildiğinde Map JSON-safe
+// olmadığından rehydrate'te `.get is not a function` crash olur.
+type FaturaSum = { kalan: number; oldestDue: string | null; updatedAt: string | null };
+async function fetchFaturaSums(cariIds: string[]): Promise<Record<string, FaturaSum>> {
+  const map: Record<string, FaturaSum> = {};
   if (cariIds.length === 0) return map;
   const supabase = getTypedClient();
   const { data, error } = await supabase
@@ -107,14 +105,14 @@ async function fetchFaturaSums(
     durum: string;
     updated_at: string;
   }>) {
-    const prev = map.get(row.cari_id) ?? { kalan: 0, oldestDue: null, updatedAt: null };
+    const prev = map[row.cari_id] ?? { kalan: 0, oldestDue: null, updatedAt: null };
     const sign = row.tip === 'iade' ? -1 : 1;
     prev.kalan += sign * Number(row.kalan ?? 0);
     if (row.vade_tarihi && Number(row.kalan ?? 0) > 0) {
       if (!prev.oldestDue || row.vade_tarihi < prev.oldestDue) prev.oldestDue = row.vade_tarihi;
     }
     if (!prev.updatedAt || row.updated_at > prev.updatedAt) prev.updatedAt = row.updated_at;
-    map.set(row.cari_id, prev);
+    map[row.cari_id] = prev;
   }
   return map;
 }
@@ -171,7 +169,7 @@ function CariListPage(): JSX.Element {
     const today = new Date().toISOString().slice(0, 10);
     const tenDaysLater = new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10);
     return (cariler ?? []).map((c) => {
-      const sums = faturaSums?.get(c.id);
+      const sums = faturaSums?.[c.id];
       const bakiye = Number(c.acilis_bakiyesi ?? 0) + (sums?.kalan ?? 0);
       const oldestDue = sums?.oldestDue ?? null;
       const hasOverdue = !!oldestDue && bakiye > 0 && oldestDue < today;

@@ -1,0 +1,15 @@
+import { chromium } from '@playwright/test';
+const b=await chromium.connectOverCDP('http://localhost:9222');
+const page=b.contexts()[0].pages()[0];
+page.setDefaultTimeout(12000);
+const net=[],errs=[];
+page.on('console',m=>{if(m.type()==='error')errs.push(m.text().slice(0,160));});
+page.on('response',r=>{if(r.url().startsWith('http')&&(r.status()>=400||/saha_visits/i.test(r.url())))net.push(`${r.status()} ${r.request().method()} ${r.url().slice(40,90)}`);});
+await page.getByRole('button',{name:/Check-in Yap/}).click();
+await page.waitForTimeout(4000);
+const info=await page.evaluate(()=>({url:location.pathname,txt:document.body.innerText.replace(/\s+/g,' ').slice(0,300)}));
+console.log('URL',info.url);console.log('TXT',info.txt);
+await page.screenshot({path:'tests/device/shots/plasiyer/f3-visit-form.png',timeout:6000}).catch(e=>console.log('!shot'));
+if(net.length)console.log('NET',JSON.stringify([...new Set(net)].slice(0,5)));
+if(errs.length)console.log('ERR',JSON.stringify([...new Set(errs)].slice(0,3)));
+await b.close();

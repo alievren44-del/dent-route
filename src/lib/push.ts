@@ -30,8 +30,50 @@ import type {
   PushNotificationSchema,
   ActionPerformed,
 } from '@capacitor/push-notifications';
-import { getTypedClient } from '@lib/supabase';
+import { getSupabaseClient, getTypedClient } from '@lib/supabase';
 import { pushDebug } from '@/lib/debugLog';
+
+/** wa.me için TR telefon normalize (0XXX → 90XXX). */
+export function normalizeWaPhone(raw: string): string {
+  const digits = raw.replace(/[^\d+]/g, '');
+  return digits.replace(/^0/, '90').replace(/^\+/, '');
+}
+
+/**
+ * Hatırlatma bildirimi aksiyon butonu işle (Ara / WhatsApp / 1 saat ertele).
+ * İşlendiyse true döner; gövdeye dokunma (default) ise false → navigation devralır.
+ */
+export function handleReminderAction(
+  actionId: string | undefined,
+  data: Record<string, unknown> | undefined,
+): boolean {
+  if (!data || data.kind !== 'visit_reminder') return false;
+  const phone = (data.clinic_phone as string | null | undefined) ?? null;
+  switch (actionId) {
+    case 'call':
+      if (phone) window.location.assign(`tel:${phone.replace(/[^\d+]/g, '')}`);
+      return true;
+    case 'whatsapp':
+      if (phone) window.open(`https://wa.me/${normalizeWaPhone(phone)}`, '_blank');
+      return true;
+    case 'snooze1h': {
+      const id = data.reminder_id as string | undefined;
+      if (id) {
+        const due = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+        void getSupabaseClient()
+          .from('saha_reminders')
+          .update({ due_at: due, status: 'open', notified_at: null })
+          .eq('id', id)
+          .then(({ error }) => {
+            if (error) pushDebug('error', 'push', `snooze hatası: ${error.message}`);
+          });
+      }
+      return true;
+    }
+    default:
+      return false;
+  }
+}
 
 // Son alınan FCM token (login sonrası tekrar kayıt için modül-seviyesi cache).
 let lastToken: string | null = null;
@@ -100,9 +142,9 @@ async function saveToken(token: string): Promise<void> {
  * Önce React Router navigate (reload YOK, SPA state korunur); kaydedilmemişse
  * custom event köprüsü; o da tüketilmezse son çare tam reload.
  */
-function handleTapNavigation(data: Record<string, unknown> | undefined): void {
+export function handleTapNavigation(data: Record<string, unknown> | undefined): void {
   if (!data) return;
-  const route = (data.route ?? data.url ?? data.path) as string | undefined;
+  const route = (data.route ?? data.url ?? data.path ?? data.deeplink) as string | undefined;
   if (!route) return;
   try {
     // Mutlak http(s) URL: SPA-içi navigate edilemez → reload zorunlu.
@@ -157,8 +199,18 @@ export async function initPush(): Promise<void> {
     if (import.meta.env.DEV) pushDebug('info', 'push', `received (foreground): ${notif.title ?? ''}`);
   });
   await PushNotifications.addListener('pushNotificationActionPerformed', (action: ActionPerformed) => {
-    handleTapNavigation(action.notification.data as Record<string, unknown> | undefined);
+    const data = action.notification.data as Record<string, unknown> | undefined;
+    // Bildirim butonu mu (Ara / WhatsApp / Ertele) yoksa gövdeye dokunuldu mu?
+    const actionId = action.actionId;
+    if (handleReminderAction(actionId, data)) return;
+    handleTapNavigation(data);
   });
+
+  // Not: Capacitor PushNotifications, Android REMOTE push'ta bildirim-içi aksiyon
+  // butonu (Ara/WhatsApp/Ertele) göstermeyi DESTEKLEMEZ (registerActionTypes yalnız
+  // LocalNotifications'ta). Bu yüzden bildirim gövdesine dokunma /takvim'e götürür;
+  // tüm aksiyonlar (Ara/WhatsApp/1 saat/Yarın/Tamamlandı) orada yer alır.
+  // handleReminderAction yine de actionId gelirse (ileride local-notif köprüsü) çalışır.
 
   // Listener'lar hazır → ŞİMDİ register (token event'i kesin yakalanır, race kapandı).
   await PushNotifications.register();

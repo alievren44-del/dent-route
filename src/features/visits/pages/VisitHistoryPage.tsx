@@ -499,8 +499,11 @@ function VisitHistoryPage(): JSX.Element {
   const accountNamesQuery = useQuery({
     queryKey: ['visit-history-account-names', uniqueAccountIds.join(',')],
     enabled: uniqueAccountIds.length > 0,
-    queryFn: async (): Promise<Map<string, string>> => {
-      const m = new Map<string, string>();
+    // NOT: react-query cache asyncStorage ile PERSIST ediliyor. Map JSON'a serialize
+    // edilemez (rehydrate'te düz nesne olur → `.get is not a function` crash). Bu yüzden
+    // düz Record döndürüyoruz (JSON-safe).
+    queryFn: async (): Promise<Record<string, string>> => {
+      const m: Record<string, string> = {};
 
       // 1) saha_clinics — batch lookup for clinic-type accounts.
       const { data: clinicData } = await supabase
@@ -509,7 +512,7 @@ function VisitHistoryPage(): JSX.Element {
         .in('id', uniqueAccountIds);
       const foundInClinics = new Set<string>();
       for (const c of (clinicData ?? []) as { id: string; name: string }[]) {
-        m.set(c.id, c.name);
+        m[c.id] = c.name;
         foundInClinics.add(c.id);
       }
 
@@ -527,7 +530,7 @@ function VisitHistoryPage(): JSX.Element {
           ad_soyad: string | null;
           email: string | null;
         }[]) {
-          m.set(r.id, r.klinik_adi ?? r.ad_soyad ?? r.email ?? 'Müşteri');
+          m[r.id] = r.klinik_adi ?? r.ad_soyad ?? r.email ?? 'Müşteri';
         }
       }
 
@@ -535,8 +538,8 @@ function VisitHistoryPage(): JSX.Element {
     },
   });
 
-  const accountNames = useMemo<Map<string, string>>(
-    () => accountNamesQuery.data ?? new Map<string, string>(),
+  const accountNames = useMemo<Record<string, string>>(
+    () => accountNamesQuery.data ?? {},
     [accountNamesQuery.data],
   );
 
@@ -584,7 +587,7 @@ function VisitHistoryPage(): JSX.Element {
       met_person: r.met_person,
       notes: r.notes,
       photoCount: r.saha_visit_photos?.length ?? 0,
-      customerName: accountNames.get(r.account_id) ?? null,
+      customerName: accountNames[r.account_id] ?? null,
     }));
   }, [allRows, accountNames]);
 
