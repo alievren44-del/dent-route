@@ -1,0 +1,12 @@
+import { chromium } from '@playwright/test';
+const b=await chromium.connectOverCDP('http://localhost:9222');
+const page=b.contexts()[0].pages()[0];
+let net=0,err=0;
+page.on('request',()=>net++);
+page.on('console',m=>{if(m.type()==='error')err++;});
+await page.evaluate(()=>{history.pushState({},'','/takvim');dispatchEvent(new PopStateEvent('popstate'));});
+await page.waitForTimeout(1000);
+const n1=net;await page.waitForTimeout(4000);const n2=net;
+const spin=await page.evaluate(()=>document.querySelectorAll('.animate-spin').length);
+console.log('net req in 4s:',n2-n1,'| console errs:',err,'| spinners:',spin);
+await b.close();

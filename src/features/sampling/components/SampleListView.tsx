@@ -183,10 +183,12 @@ function SampleListView({
     return Array.from(set);
   }, [samples]);
 
-  const accountsQuery = useQuery<Map<string, AccountRow>>({
+  // NOT: react-query cache persist ediliyor → Map JSON-safe değil (rehydrate'te `.get`
+  // crash). Düz Record döndür.
+  const accountsQuery = useQuery<Record<string, AccountRow>>({
     queryKey: ['samples:accounts', accountIds],
-    queryFn: async (): Promise<Map<string, AccountRow>> => {
-      const map = new Map<string, AccountRow>();
+    queryFn: async (): Promise<Record<string, AccountRow>> => {
+      const map: Record<string, AccountRow> = {};
       if (accountIds.length === 0) return map;
       const supabase = getTypedClient();
       const { data, error } = await supabase
@@ -199,20 +201,20 @@ function SampleListView({
         name: string;
         types: string[] | null;
       }>) {
-        map.set(row.id, { id: row.id, name: row.name, type: row.types?.[0] ?? null });
+        map[row.id] = { id: row.id, name: row.name, type: row.types?.[0] ?? null };
       }
       return map;
     },
     enabled: accountIds.length > 0,
   });
 
-  const accountMap = accountsQuery.data ?? new Map<string, AccountRow>();
+  const accountMap = accountsQuery.data ?? {};
 
   const filteredSamples = useMemo(() => {
     const term = searchTerm.trim().toLocaleLowerCase('tr');
     if (!term) return samples;
     return samples.filter((row) => {
-      const acc = accountMap.get(row.account_id);
+      const acc = accountMap[row.account_id];
       if (!acc) return false;
       return acc.name.toLocaleLowerCase('tr').includes(term);
     });
@@ -357,7 +359,7 @@ function SampleListView({
       {/* Mobile cards */}
       <div className="flex flex-col gap-3 md:hidden">
         {filteredSamples.map((row) => {
-          const acc = accountMap.get(row.account_id);
+          const acc = accountMap[row.account_id];
           const accountName = acc?.name ?? 'Bilinmiyor';
           const accountType = acc?.type ?? null;
           const stripe = stripeColor(row.follow_up_at, row.status);
@@ -461,7 +463,7 @@ function SampleListView({
               </thead>
               <tbody>
                 {filteredSamples.map((row) => {
-                  const acc = accountMap.get(row.account_id);
+                  const acc = accountMap[row.account_id];
                   const accountName = acc?.name ?? 'Bilinmiyor';
                   const accountType = acc?.type ?? null;
                   const stripe = stripeColor(row.follow_up_at, row.status);

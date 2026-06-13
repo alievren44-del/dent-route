@@ -40,6 +40,7 @@ import {
   TrendingDown,
   TrendingUp,
   ClipboardList,
+  CalendarDays,
 } from 'lucide-react';
 import { useRouteBasket } from '@features/routes/store/routeBasketStore';
 
@@ -76,6 +77,7 @@ const SECTIONS: NavSection[] = [
       { to: '/routes/corridor', label: 'Yol Üstü Klinik', Icon: Navigation },
       { to: '/routes/assigned', label: 'Bana Atanan Rotalar', Icon: Bell },
       { to: '/history', label: 'Ziyaret Geçmişi', Icon: HistoryIcon },
+      { to: '/takvim', label: 'Takvim', Icon: CalendarDays },
       { to: '/gorevler', label: 'Görevlerim', Icon: ClipboardList },
       { to: '/tahsilatlar', label: 'Tahsilatlar', Icon: Banknote },
       { to: '/samples', label: 'Numune', Icon: Gift },
@@ -103,6 +105,7 @@ const SECTIONS: NavSection[] = [
       { to: '/admin/dashboard', label: 'Yönetici Paneli', Icon: LayoutDashboard },
       { to: '/admin/bi', label: 'BI Panosu', Icon: BarChart3 },
       { to: '/admin/rep-kpi', label: 'Plasiyer KPI', Icon: Target },
+      { to: '/takvim', label: 'Plasiyer Takvimleri', Icon: CalendarDays },
       { to: '/admin/stock', label: 'Stok Defteri', Icon: Package },
       { to: '/admin/clinic-scan', label: 'Klinik Tarama', Icon: Radar },
       { to: '/admin/clinics', label: 'CSV / Excel İçe Aktar', Icon: FileUp },

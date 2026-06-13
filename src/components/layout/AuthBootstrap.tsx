@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { useAuthStore } from '@core/auth/authStore';
 import { initPush } from '@lib/push';
+import { initLocalReminders } from '@lib/localReminders';
 
 /**
  * AuthBootstrap — uygulama mount'unda session/profile yükler.
@@ -19,6 +20,8 @@ export function AuthBootstrap({ children }: { children: ReactNode }) {
       .initialize()
       .finally(() => {
         void initPush();
+        // Yerel hatırlatma bildirimleri (aksiyon butonlu) — yaklaşan reminder'ları zamanla.
+        void initLocalReminders();
       });
   }, []);
   return <>{children}</>;

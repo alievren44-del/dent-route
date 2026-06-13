@@ -1,0 +1,15 @@
+import { chromium } from '@playwright/test';
+const b=await chromium.connectOverCDP('http://localhost:9222');
+const page=b.contexts()[0].pages()[0];
+page.setDefaultTimeout(15000);
+const net=[],errs=[];
+page.on('console',m=>{if(m.type()==='error')errs.push(m.text().slice(0,160));});
+page.on('response',r=>{if(r.url().startsWith('http')&&(r.status()>=400||/saha_routes|rest\/v1|functions/i.test(r.url())))net.push(`${r.status()} ${r.request().method()} ${r.url().slice(8,80)}`);});
+await page.getByRole('button',{name:'Kendim Başlat'}).click();
+await page.waitForTimeout(4000);
+const info=await page.evaluate(()=>({url:location.pathname+location.search,txt:document.body.innerText.replace(/\s+/g,' ').slice(0,400)}));
+console.log('URL',info.url);console.log('TXT',info.txt);
+await page.screenshot({path:'tests/device/shots/plasiyer/f2-active.png',timeout:6000}).catch(e=>console.log('!shot'));
+console.log('NET',JSON.stringify([...new Set(net)].slice(0,8)));
+if(errs.length)console.log('ERR',JSON.stringify([...new Set(errs)].slice(0,4)));
+await b.close();

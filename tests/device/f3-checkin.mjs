@@ -1,0 +1,15 @@
+import { chromium } from '@playwright/test';
+const b=await chromium.connectOverCDP('http://localhost:9222');
+const page=b.contexts()[0].pages()[0];
+page.setDefaultTimeout(12000);
+const net=[],errs=[];
+page.on('console',m=>{if(m.type()==='error')errs.push(m.text().slice(0,150));});
+page.on('response',r=>{if(r.url().startsWith('http')&&(r.status()>=400||/visit|check|saha_/i.test(r.url())))net.push(`${r.status()} ${r.request().method()} ${r.url().slice(40,95)}`);});
+await page.getByRole('button',{name:/Sıradaki Durağa Git/}).click();
+await page.waitForTimeout(3500);
+const info=await page.evaluate(()=>({url:location.pathname,txt:document.body.innerText.replace(/\s+/g,' ').slice(0,400),btns:[...document.querySelectorAll('button')].map(b=>b.innerText.trim()).filter(Boolean).slice(0,20)}));
+console.log('URL',info.url);console.log('TXT',info.txt);console.log('BTN',JSON.stringify(info.btns));
+await page.screenshot({path:'tests/device/shots/plasiyer/f3-checkin.png',timeout:6000}).catch(e=>console.log('!shot'));
+if(net.length)console.log('NET',JSON.stringify([...new Set(net)].slice(0,6)));
+if(errs.length)console.log('ERR',JSON.stringify([...new Set(errs)].slice(0,3)));
+await b.close();

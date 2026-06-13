@@ -46,6 +46,9 @@ const CheckInPage = lazy(() => import('@features/visits/pages/CheckInPage'));
 const VisitFormPage = lazy(() => import('@features/visits/pages/VisitFormPage'));
 const VisitHistoryPage = lazy(() => import('@features/visits/pages/VisitHistoryPage'));
 
+// Takvim (plasiyer hatırlatma/randevu ajandası)
+const CalendarPage = lazy(() => import('@features/calendar/pages/CalendarPage'));
+
 // Invoicing (Sprint 6 — cari + fatura + ödeme + çek/senet)
 const CariListPage = lazy(() => import('@features/invoicing/pages/CariListPage'));
 const CariDetailPage = lazy(() => import('@features/invoicing/pages/CariDetailPage'));
@@ -252,6 +255,16 @@ export function AppRouter() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/takvim"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <CalendarPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
 
         {/* Satış sekmesi (rep + admin) */}
         <Route
@@ -301,7 +314,7 @@ export function AppRouter() {
         <Route
           path="/invoicing/cari"
           element={
-            <ProtectedRoute requireRole="admin">
+            <ProtectedRoute requirePermission="saha:invoicing:access">
               <AppShell>
                 <CariListPage />
               </AppShell>
@@ -311,7 +324,7 @@ export function AppRouter() {
         <Route
           path="/invoicing/cari/:id"
           element={
-            <ProtectedRoute requireRole="admin">
+            <ProtectedRoute requirePermission="saha:invoicing:access">
               <AppShell>
                 <CariDetailPage />
               </AppShell>
@@ -321,7 +334,7 @@ export function AppRouter() {
         <Route
           path="/invoicing/fatura/yeni"
           element={
-            <ProtectedRoute requireRole="admin">
+            <ProtectedRoute requirePermission="saha:invoicing:access">
               <AppShell>
                 <InvoiceFormPage />
               </AppShell>
@@ -331,7 +344,7 @@ export function AppRouter() {
         <Route
           path="/invoicing/fatura/:id"
           element={
-            <ProtectedRoute requireRole="admin">
+            <ProtectedRoute requirePermission="saha:invoicing:access">
               <AppShell>
                 <InvoiceDetailPage />
               </AppShell>
@@ -342,7 +355,7 @@ export function AppRouter() {
         <Route
           path="/invoicing/aging"
           element={
-            <ProtectedRoute requireRole="admin">
+            <ProtectedRoute requirePermission="saha:invoicing:access">
               <AppShell>
                 <AgingReportPage />
               </AppShell>
@@ -382,7 +395,7 @@ export function AppRouter() {
         <Route
           path="/invoicing/odeme/yeni"
           element={
-            <ProtectedRoute requireRole="admin">
+            <ProtectedRoute requirePermission="saha:invoicing:access">
               <AppShell>
                 <PaymentFormPage />
               </AppShell>
@@ -392,7 +405,7 @@ export function AppRouter() {
         <Route
           path="/invoicing/cek-senet"
           element={
-            <ProtectedRoute requireRole="admin">
+            <ProtectedRoute requirePermission="saha:invoicing:access">
               <AppShell>
                 <CekSenetListPage />
               </AppShell>

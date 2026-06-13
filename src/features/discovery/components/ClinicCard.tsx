@@ -119,8 +119,8 @@ function ClinicCard({
         </div>
       )}
 
-      {/* Actions */}
-      <div className="mt-3 flex gap-2">
+      {/* Actions — dar ekranda taşmasın diye sar (Ekle butonu karttan çıkıyordu) */}
+      <div className="mt-3 flex flex-wrap gap-2">
         {hasPhone ? (
           <a
             href={`tel:${phone}`}
