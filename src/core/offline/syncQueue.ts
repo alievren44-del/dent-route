@@ -1,5 +1,6 @@
 import { offlineDB, type OfflineOp } from './db';
 import { getTypedClient } from '@lib/supabase';
+import { SupabaseCRMAdapter } from '@core/adapters/builtin/SupabaseCRMAdapter';
 
 export type OpType = OfflineOp['opType'];
 
@@ -144,17 +145,25 @@ async function executeOp(op: OfflineOp): Promise<void> {
       return;
     }
     case 'order.create': {
-      // Idempotency: orders tablosu idempotency_key kolununu destekliyor.
-      if (op.payload['idempotency_key']) {
-        const { data: existing } = await supabase
-          .from('orders')
-          .select('id')
-          .eq('idempotency_key', op.payload['idempotency_key'] as string)
-          .maybeSingle();
-        if (existing) return; // duplicate — sipariş zaten oluşturulmuş
-      }
-      const { error } = await supabase.from('orders').insert(op.payload as never);
-      if (error) throw error;
+      // Replay'i ADAPTER üzerinden yap: fiyatlar DB'den yeniden hesaplanır
+      // (client snapshot'una GÜVENİLMEZ — #21 offline price-validation), order_items
+      // oluşturulur ve approval-status doğru set edilir. Eski hâli ham
+      // orders.insert(payload) yapıyordu → payload orders kolonlarıyla uyuşmuyor +
+      // price-recompute/order_items yok. Adapter idempotency_key ile duplicate'i
+      // kendi içinde ele alır (getOrder döner, çift insert etmez).
+      const p = op.payload as Record<string, unknown>;
+      const adapter = new SupabaseCRMAdapter();
+      await adapter.createOrder({
+        customerId: p['customer_id'] as string,
+        items: ((p['items'] as Array<Record<string, unknown>>) ?? []).map((it) => ({
+          productId: it['productId'] as string,
+          quantity: it['quantity'] as number,
+          ...(it['unitPriceOverride'] !== undefined ? { unitPriceOverride: it['unitPriceOverride'] as number } : {}),
+        })),
+        notes: (p['notes'] as string | null) ?? undefined,
+        idempotencyKey: p['idempotency_key'] as string,
+        requiresApproval: p['requires_approval'] as boolean | undefined,
+      });
       return;
     }
     case 'route.complete': {
