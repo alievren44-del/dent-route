@@ -173,9 +173,7 @@ function DiscoveryPage(): JSX.Element {
       const clinicsFetch = isDistrictMode
         ? fetchClinicsByDistrict(provinceSlug, districtSlug, vertical.id).then((rows) =>
             // Slug eşleşmezse (eski scan farklı slug) 0 dönebilir → 25km radius fallback
-            rows.length > 0
-              ? rows
-              : fetchSahaClinics(origin.lat, origin.lng, 25_000, vertical.id),
+            rows.length > 0 ? rows : fetchSahaClinics(origin.lat, origin.lng, 25_000, vertical.id),
           )
         : fetchSahaClinics(origin.lat, origin.lng, radiusKm * 1000, vertical.id);
       const [sahaResult, clinicsResult] = await Promise.allSettled([
@@ -346,7 +344,9 @@ function DiscoveryPage(): JSX.Element {
       {originMode === 'gps' && status === 'denied' && (
         <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
           <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden="true" />
-          <span>Konum izni reddedildi. "İl / İlçe seç" ile manuel ara veya tarayıcıdan izin ver.</span>
+          <span>
+            Konum izni reddedildi. "İl / İlçe seç" ile manuel ara veya tarayıcıdan izin ver.
+          </span>
         </div>
       )}
 

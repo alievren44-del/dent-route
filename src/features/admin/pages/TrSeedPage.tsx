@@ -75,15 +75,11 @@ export default function TrSeedPage() {
   const [skipFreshDays, setSkipFreshDays] = useState(30);
   const [skipClinicThreshold, setSkipClinicThreshold] = useState(50);
 
-  const priorityProvinces = useMemo(
-    () => parsePriorityProvinces(priorityInput),
-    [priorityInput],
-  );
+  const priorityProvinces = useMemo(() => parsePriorityProvinces(priorityInput), [priorityInput]);
 
   // Mode'a göre temel liste (öncelik illeri önce sıralanmış)
   const baseList = useMemo<SeedCity[]>(
-    () =>
-      mode === 'full' ? buildFullSeedList(priorityProvinces, intensity) : TR_SEED_LIST,
+    () => (mode === 'full' ? buildFullSeedList(priorityProvinces, intensity) : TR_SEED_LIST),
     [mode, priorityProvinces, intensity],
   );
 
@@ -149,9 +145,8 @@ export default function TrSeedPage() {
           <Globe size={22} /> TR Seed Tarama
         </h1>
         <p className="mt-1 text-xs opacity-90">
-          Tüm Türkiye'yi (973 ilçe) clinic-scan-v3 source:'all' ile doldur. Aylık ücretsiz
-          Google tavanına tempolu — her ay ~{districtsThisRun.n} ilçe, cep $0. Plasiyer
-          bölgeleri önce.
+          Tüm Türkiye'yi (973 ilçe) clinic-scan-v3 source:'all' ile doldur. Aylık ücretsiz Google
+          tavanına tempolu — her ay ~{districtsThisRun.n} ilçe, cep $0. Plasiyer bölgeleri önce.
         </p>
       </header>
 
@@ -237,8 +232,8 @@ export default function TrSeedPage() {
                 className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm"
               />
               <span className="mt-0.5 block text-[10px] text-slate-500">
-                Bu run'da ~{districtsThisRun.n} ilçe (~{districtsThisRun.calls} call) işlenir,
-                tavan dolunca durur.
+                Bu run'da ~{districtsThisRun.n} ilçe (~{districtsThisRun.calls} call) işlenir, tavan
+                dolunca durur.
               </span>
             </label>
           </div>
@@ -291,9 +286,7 @@ export default function TrSeedPage() {
               min={0}
               max={500}
               value={skipClinicThreshold}
-              onChange={(e) =>
-                setSkipClinicThreshold(Number.parseInt(e.target.value) || 50)
-              }
+              onChange={(e) => setSkipClinicThreshold(Number.parseInt(e.target.value) || 50)}
               className="mt-1 w-full rounded border border-slate-200 px-2 py-1 text-sm"
             />
           </label>
@@ -329,9 +322,9 @@ export default function TrSeedPage() {
           </div>
         </div>
         <p className="mt-1.5 text-[10px] text-amber-700">
-          ⚠️ Google $200/ay credit Mart 2025'te kalktı. Yeni: SKU-başına aylık ücretsiz tavan
-          (Pro Nearby ~5000/ay). Tüm-Türkiye modu bu tavana tempolar → ayda ~
-          {districtsThisRun.n} ilçe, cep $0. ~10 ayda 973 ilçe biter.
+          ⚠️ Google $200/ay credit Mart 2025'te kalktı. Yeni: SKU-başına aylık ücretsiz tavan (Pro
+          Nearby ~5000/ay). Tüm-Türkiye modu bu tavana tempolar → ayda ~{districtsThisRun.n} ilçe,
+          cep $0. ~10 ayda 973 ilçe biter.
         </p>
       </section>
 
@@ -383,9 +376,7 @@ export default function TrSeedPage() {
           <div className="mt-1.5 grid grid-cols-3 gap-2 text-center text-[10px]">
             <div>
               <div className="text-slate-500">Tahmin</div>
-              <div className="font-bold text-slate-700">
-                ${progress.estimatedCost.toFixed(2)}
-              </div>
+              <div className="font-bold text-slate-700">${progress.estimatedCost.toFixed(2)}</div>
             </div>
             <div>
               <div className="text-slate-500">Hata</div>

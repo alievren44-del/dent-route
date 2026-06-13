@@ -485,7 +485,9 @@ function VisitFormPage(): JSX.Element {
     if (!navigator.onLine) {
       try {
         if (photos.length > 0) {
-          toast.warning('Çevrim dışısınız — fotoğraflar senkronize edilmeyecek, diğer alanlar kaydedildi.');
+          toast.warning(
+            'Çevrim dışısınız — fotoğraflar senkronize edilmeyecek, diğer alanlar kaydedildi.',
+          );
         }
         await enqueueOp('visit.update', { id, ...updatePayload });
         toast.success('Ziyaret kaydedildi — bağlantı geldiğinde senkronize edilecek');

@@ -43,7 +43,7 @@ const PROFILE_CACHE_KEY = 'saha-profile-cache';
 const MAX_CACHE_AGE = 24 * 60 * 60 * 1000; // 24 saat (ms)
 
 interface ProfileCacheEntry {
-  ts: number;       // Date.now() — yazıldığı an
+  ts: number; // Date.now() — yazıldığı an
   profile: SahaProfile;
 }
 

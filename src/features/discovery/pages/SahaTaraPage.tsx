@@ -583,8 +583,7 @@ export default function SahaTaraPage() {
             <div className="flex items-center gap-1.5 text-sm text-slate-700">
               <MapPin size={14} className="text-emerald-600" />
               <span>
-                <strong>Bölge filtresi:</strong>{' '}
-                {repRegion.provinces.join(', ')}
+                <strong>Bölge filtresi:</strong> {repRegion.provinces.join(', ')}
               </span>
             </div>
             <button

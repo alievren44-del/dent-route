@@ -576,9 +576,7 @@ function OrderHistoryPage(): JSX.Element {
             <dl className="text-sm space-y-2">
               <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Müşteri</dt>
-                <dd className="text-right text-foreground">
-                  {customerName(detailFor)}
-                </dd>
+                <dd className="text-right text-foreground">{customerName(detailFor)}</dd>
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Temsilci</dt>

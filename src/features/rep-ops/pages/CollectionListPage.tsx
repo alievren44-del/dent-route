@@ -140,9 +140,9 @@ export default function CollectionListPage() {
         .order('name')
         .limit(20);
       if (error) throw error;
-      return ((data ?? []) as Array<{ id: string; name: string | null; address: string | null }>).map(
-        (r) => ({ id: r.id, name: r.name ?? 'İsimsiz klinik', address: r.address }),
-      );
+      return (
+        (data ?? []) as Array<{ id: string; name: string | null; address: string | null }>
+      ).map((r) => ({ id: r.id, name: r.name ?? 'İsimsiz klinik', address: r.address }));
     },
   });
 

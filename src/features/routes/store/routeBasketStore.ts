@@ -107,10 +107,7 @@ export const useRouteBasket = create<RouteBasketState>()(
 
       loadNextDistrictBatch() {
         const { districtQueue, districtBatchStart } = get();
-        const batch = districtQueue.slice(
-          districtBatchStart,
-          districtBatchStart + MAX_BASKET,
-        );
+        const batch = districtQueue.slice(districtBatchStart, districtBatchStart + MAX_BASKET);
         const now = Date.now();
         const items: BasketStop[] = batch.map((s, i) => ({
           ...s,

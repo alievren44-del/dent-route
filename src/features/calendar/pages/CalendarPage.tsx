@@ -108,7 +108,11 @@ function timeLabel(iso: string): string {
   return new Date(iso).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
 }
 
-function typeMeta(type: AgendaItem['type']): { label: string; Icon: typeof CalendarClock; color: string } {
+function typeMeta(type: AgendaItem['type']): {
+  label: string;
+  Icon: typeof CalendarClock;
+  color: string;
+} {
   switch (type) {
     case 'appointment':
       return { label: 'Randevu', Icon: Stethoscope, color: 'text-blue-600' };
@@ -397,10 +401,14 @@ function CalendarPage(): JSX.Element {
                           </p>
                         )}
                         {it.note && (
-                          <p className="mt-1 text-xs text-muted-foreground line-clamp-3">{it.note}</p>
+                          <p className="mt-1 text-xs text-muted-foreground line-clamp-3">
+                            {it.note}
+                          </p>
                         )}
                         <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <span className={`text-[11px] font-medium ${meta.color}`}>{meta.label}</span>
+                          <span className={`text-[11px] font-medium ${meta.color}`}>
+                            {meta.label}
+                          </span>
                           {it.visitId && (
                             <Link
                               to={`/visits/${it.visitId}`}
@@ -442,7 +450,10 @@ function CalendarPage(): JSX.Element {
                               onClick={() => void snooze(it.id, 60 * 60 * 1000, '1 saat')}
                               className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2 h-8 text-[11px] font-medium hover:bg-muted"
                             >
-                              <AlarmClock className="h-3.5 w-3.5 text-amber-600" aria-hidden="true" />
+                              <AlarmClock
+                                className="h-3.5 w-3.5 text-amber-600"
+                                aria-hidden="true"
+                              />
                               1 saat
                             </button>
                             <button
@@ -450,7 +461,10 @@ function CalendarPage(): JSX.Element {
                               onClick={() => void snooze(it.id, 24 * 60 * 60 * 1000, 'Yarın')}
                               className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2 h-8 text-[11px] font-medium hover:bg-muted"
                             >
-                              <AlarmClock className="h-3.5 w-3.5 text-amber-600" aria-hidden="true" />
+                              <AlarmClock
+                                className="h-3.5 w-3.5 text-amber-600"
+                                aria-hidden="true"
+                              />
                               Yarın
                             </button>
                             <button

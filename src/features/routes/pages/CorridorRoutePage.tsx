@@ -629,8 +629,8 @@ export default function CorridorRoutePage() {
           </div>
 
           <p className="mt-2 text-[10px] text-slate-400">
-            Kapsam DB'den okunur (canlı tarama yok, maliyet $0). Taranmamış ilçeleri admin
-            toplu tarama ile doldurur.
+            Kapsam DB'den okunur (canlı tarama yok, maliyet $0). Taranmamış ilçeleri admin toplu
+            tarama ile doldurur.
           </p>
         </section>
       )}

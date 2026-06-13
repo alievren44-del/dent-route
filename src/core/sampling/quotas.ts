@@ -38,4 +38,3 @@ export function getRemainingBudget(quota: SampleQuota | null): number {
   if (!quota) return 0;
   return Math.max(0, quota.budgetTl - quota.spentTl);
 }
-

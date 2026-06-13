@@ -81,11 +81,9 @@ function variantLabel(v: VariantLite): string {
     pick('size_label') ??
     pick('shade_code') ??
     pick('tipSize') ??
-    (v.sku ?? undefined) ??
+    v.sku ??
     'Standart';
-  const extra = [pick('grit'), pick('shaft'), pick('package_type')]
-    .filter(Boolean)
-    .join(' ');
+  const extra = [pick('grit'), pick('shaft'), pick('package_type')].filter(Boolean).join(' ');
   return [primary, extra].filter(Boolean).join(' · ');
 }
 
@@ -224,10 +222,7 @@ function SampleFormMobile({
 
   /** Ürün (+ opsiyonel varyant) seçimini satıra yazar. */
   function finalizeLine(uid: string, product: ProductRow, variant?: VariantLite): void {
-    const price =
-      variant?.price_try ??
-      (product.sale_price ?? product.base_price) ??
-      undefined;
+    const price = variant?.price_try ?? product.sale_price ?? product.base_price ?? undefined;
     const name = variant ? `${product.name} · ${variantLabel(variant)}` : product.name;
     updateLine(uid, {
       productId: variant?.id ?? product.id,
@@ -453,7 +448,15 @@ function SampleFormMobile({
     }
     if (!repId) out.push('Oturum bulunamadı (tekrar giriş yapın)');
     return [...new Set(out)];
-  }, [selectedAccount, customerLabel, lines, kvkkChecked, hasBlockingIssue, validationResults, repId]);
+  }, [
+    selectedAccount,
+    customerLabel,
+    lines,
+    kvkkChecked,
+    hasBlockingIssue,
+    validationResults,
+    repId,
+  ]);
 
   async function handleSubmit(): Promise<void> {
     setSubmitError(null);
@@ -525,10 +528,13 @@ function SampleFormMobile({
       // 5. Increment quota
       if (totalCost > 0) {
         // RPC auth.uid()'den rep_id türetir; client sadece year_month + amount geçer.
-        const { error: quotaErr } = await supabase.rpc('saha_increment_sample_spent' as never, {
-          p_year_month: currentYearMonth(),
-          p_amount: totalCost,
-        } as never);
+        const { error: quotaErr } = await supabase.rpc(
+          'saha_increment_sample_spent' as never,
+          {
+            p_year_month: currentYearMonth(),
+            p_amount: totalCost,
+          } as never,
+        );
         if (quotaErr) {
           if (quotaErr.message?.includes('budget_exceeded')) {
             setSubmitError('Aylık numune bütçesi aşıldı. Bu numune kaydedilemedi.');
@@ -537,7 +543,9 @@ function SampleFormMobile({
           }
           // Generic quota error — log but don't block the already-saved record
           console.error('saha_increment_sample_spent error', quotaErr);
-          setSubmitError('Numune kaydedildi ancak kota güncellenemedi. Lütfen yöneticinize bildirin.');
+          setSubmitError(
+            'Numune kaydedildi ancak kota güncellenemedi. Lütfen yöneticinize bildirin.',
+          );
           setSubmitting(false);
           return;
         }
@@ -732,7 +740,9 @@ function SampleFormMobile({
                           <div className="font-medium">{variantLabel(v)}</div>
                           <div className="text-xs text-muted-foreground">
                             {v.sku ? `${v.sku} · ` : ''}
-                            {v.price_try != null ? `${Number(v.price_try).toFixed(2)} TL` : 'Fiyat —'}
+                            {v.price_try != null
+                              ? `${Number(v.price_try).toFixed(2)} TL`
+                              : 'Fiyat —'}
                           </div>
                         </button>
                       ))}

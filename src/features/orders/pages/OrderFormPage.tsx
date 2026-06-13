@@ -122,7 +122,12 @@ function OrderFormPage(): JSX.Element {
         .eq('id', initialCustomerId)
         .maybeSingle();
       if (prof) {
-        const p = prof as { id: string; ad_soyad: string | null; klinik_adi: string | null; email: string | null };
+        const p = prof as {
+          id: string;
+          ad_soyad: string | null;
+          klinik_adi: string | null;
+          email: string | null;
+        };
         setCustomerLabel(p.klinik_adi ?? p.ad_soyad ?? p.email ?? p.id);
       }
       return prof;
@@ -143,7 +148,11 @@ function OrderFormPage(): JSX.Element {
         .order('name')
         .limit(20);
       if (err) throw err;
-      const rows = (data ?? []) as Array<{ id: string; name: string | null; address: string | null }>;
+      const rows = (data ?? []) as Array<{
+        id: string;
+        name: string | null;
+        address: string | null;
+      }>;
       return rows.map((r) => ({
         id: r.id,
         name: r.name ?? 'İsimsiz klinik',
@@ -363,9 +372,7 @@ function OrderFormPage(): JSX.Element {
           // Alıcılar: onaycı rolüne sahip kullanıcılar. approverRole bir üst
           // onaycıyı verir (REP→MANAGER, MANAGER→ADMIN). ADMIN her zaman dahil
           // (limitsiz onay yetkisi) ki MANAGER yoksa da bildirim ulaşsın.
-          const recipientRoles = Array.from(
-            new Set([approverRole ?? 'ADMIN', 'ADMIN']),
-          );
+          const recipientRoles = Array.from(new Set([approverRole ?? 'ADMIN', 'ADMIN']));
           const { data: recipients, error: recErr } = await supabase
             .from('profiles')
             .select('id')

@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { WifiOff, CloudUpload, AlertCircle, RotateCcw, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import {
+  WifiOff,
+  CloudUpload,
+  AlertCircle,
+  RotateCcw,
+  ChevronDown,
+  ChevronUp,
+  Trash2,
+} from 'lucide-react';
 import { listPending, listFailed, retryFailed, removeOp } from '@core/offline/syncQueue';
 import type { OfflineOp } from '@core/offline/db';
 
@@ -31,7 +39,9 @@ function summarizePayload(op: OfflineOp): string {
   if (id) parts.push(`#${id.length > 8 ? `${id.slice(0, 8)}…` : id}`);
   if (account) parts.push(account.length > 24 ? `${account.slice(0, 24)}…` : account);
   if (total) parts.push(`${total} ₺`);
-  return parts.length > 0 ? parts.join(' · ') : `oluşturulma: ${op.createdAt.slice(0, 16).replace('T', ' ')}`;
+  return parts.length > 0
+    ? parts.join(' · ')
+    : `oluşturulma: ${op.createdAt.slice(0, 16).replace('T', ' ')}`;
 }
 
 export function OfflineBanner() {
@@ -178,7 +188,9 @@ export function OfflineBanner() {
             <WifiOff className="h-4 w-4" />
             <span>
               Çevrim dışısınız
-              {hasPending ? ` — ${pending} işlem bağlantı geldiğinde gönderilecek` : ' — değişiklikler bağlantı geldiğinde gönderilecek'}
+              {hasPending
+                ? ` — ${pending} işlem bağlantı geldiğinde gönderilecek`
+                : ' — değişiklikler bağlantı geldiğinde gönderilecek'}
             </span>
           </>
         )}

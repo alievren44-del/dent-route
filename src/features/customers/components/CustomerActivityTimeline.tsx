@@ -16,7 +16,14 @@ import { getTypedClient } from '@lib/supabase';
 
 type ActivityEvent =
   | { kind: 'note'; id: string; ts: string; body: string }
-  | { kind: 'visit'; id: string; ts: string; status: string; outcome: string | null; notes: string | null }
+  | {
+      kind: 'visit';
+      id: string;
+      ts: string;
+      status: string;
+      outcome: string | null;
+      notes: string | null;
+    }
   | {
       kind: 'sample';
       id: string;
@@ -110,7 +117,9 @@ function CustomerActivityTimeline({ accountId, active }: Props): JSX.Element {
           .order('check_in_at', { ascending: false }),
         supabase
           .from('saha_samples')
-          .select('id, given_at, status, follow_up_at, notes, saha_sample_lines(product_name, qty, unit)')
+          .select(
+            'id, given_at, status, follow_up_at, notes, saha_sample_lines(product_name, qty, unit)',
+          )
           .eq('account_id', accountId)
           .order('given_at', { ascending: false }),
       ]);

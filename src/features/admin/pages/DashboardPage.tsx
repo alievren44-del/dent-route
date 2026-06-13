@@ -383,11 +383,7 @@ export default function DashboardPage() {
               label="Çek / Senet"
               icon={<CreditCard className="h-4 w-4" />}
             />
-            <AdminLink
-              to="/admin/bi"
-              label="BI Panosu"
-              icon={<BarChart3 className="h-4 w-4" />}
-            />
+            <AdminLink to="/admin/bi" label="BI Panosu" icon={<BarChart3 className="h-4 w-4" />} />
             <AdminLink
               to="/admin/rep-kpi"
               label="Plasiyer KPI"

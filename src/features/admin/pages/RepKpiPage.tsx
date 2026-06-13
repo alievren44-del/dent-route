@@ -14,15 +14,7 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Target, Save } from 'lucide-react';
 
 import { getTypedClient } from '@lib/supabase';
@@ -71,7 +63,12 @@ function currentYearMonth(): string {
 }
 
 /** 'YYYY-MM' → ay başı/bitişi ISO (UTC). */
-function monthRange(ym: string): { startIso: string; endIso: string; startDate: string; endDate: string } {
+function monthRange(ym: string): {
+  startIso: string;
+  endIso: string;
+  startDate: string;
+  endDate: string;
+} {
   const parts = ym.split('-');
   const y = Number.parseInt(parts[0] ?? '1970', 10);
   const m = Number.parseInt(parts[1] ?? '1', 10);
@@ -123,7 +120,10 @@ async function fetchKpi(ym: string): Promise<KpiData> {
       .eq('status', 'completed')
       .gte('completed_at', startIso)
       .lt('completed_at', endIso),
-    supabase.from('saha_rep_targets').select('rep_id, visit_target, order_target_tl, collection_target_tl').eq('year_month', ym),
+    supabase
+      .from('saha_rep_targets')
+      .select('rep_id, visit_target, order_target_tl, collection_target_tl')
+      .eq('year_month', ym),
   ]);
 
   if (reps.error) throw reps.error;
@@ -134,7 +134,14 @@ async function fetchKpi(ym: string): Promise<KpiData> {
   function bucket(id: string): RepActual {
     let e = actuals[id];
     if (!e) {
-      e = { visits: 0, ordersTl: 0, collectionsTl: 0, sampleCount: 0, sampleCostTl: 0, routesCompleted: 0 };
+      e = {
+        visits: 0,
+        ordersTl: 0,
+        collectionsTl: 0,
+        sampleCount: 0,
+        sampleCostTl: 0,
+        routesCompleted: 0,
+      };
       actuals[id] = e;
     }
     return e;
@@ -156,14 +163,20 @@ async function fetchKpi(ym: string): Promise<KpiData> {
     bucket(o.sales_rep_id).ordersTl += t;
   }
 
-  for (const p of (odemeler.data ?? []) as Array<{ created_by: string | null; tutar: number | string | null }>) {
+  for (const p of (odemeler.data ?? []) as Array<{
+    created_by: string | null;
+    tutar: number | string | null;
+  }>) {
     if (!p.created_by) continue;
     bucket(p.created_by).collectionsTl += num(p.tutar);
   }
 
   for (const s of (samples.data ?? []) as Array<{
     rep_id: string | null;
-    saha_sample_lines: Array<{ qty: number | string | null; unit_cost_tl: number | string | null }> | null;
+    saha_sample_lines: Array<{
+      qty: number | string | null;
+      unit_cost_tl: number | string | null;
+    }> | null;
   }>) {
     if (!s.rep_id) continue;
     const b = bucket(s.rep_id);
@@ -212,7 +225,10 @@ function ProgressBar({ value }: { value: number }) {
   const color = value >= 100 ? 'bg-emerald-500' : value >= 60 ? 'bg-amber-500' : 'bg-rose-500';
   return (
     <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-100">
-      <div className={`h-full ${color}`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+      <div
+        className={`h-full ${color}`}
+        style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
+      />
     </div>
   );
 }
@@ -366,7 +382,9 @@ export default function RepKpiPage() {
 
         {/* Actual vs Target sipariş ₺ chart */}
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="mb-3 text-sm font-semibold text-slate-700">Sipariş ₺ — Gerçekleşen vs Hedef</h2>
+          <h2 className="mb-3 text-sm font-semibold text-slate-700">
+            Sipariş ₺ — Gerçekleşen vs Hedef
+          </h2>
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
@@ -429,7 +447,9 @@ export default function RepKpiPage() {
                       <td className="px-3 py-2 align-top" style={{ minWidth: 130 }}>
                         <div className="flex justify-between text-xs tabular-nums text-slate-700">
                           <span>{a.visits.toLocaleString('tr-TR')}</span>
-                          <span className="text-slate-400">/ {t.visitTarget.toLocaleString('tr-TR')}</span>
+                          <span className="text-slate-400">
+                            / {t.visitTarget.toLocaleString('tr-TR')}
+                          </span>
                         </div>
                         <ProgressBar value={pct(a.visits, t.visitTarget)} />
                       </td>
@@ -443,7 +463,9 @@ export default function RepKpiPage() {
                       <td className="px-3 py-2 align-top" style={{ minWidth: 150 }}>
                         <div className="flex justify-between text-xs tabular-nums text-slate-700">
                           <span>{formatTRY(a.collectionsTl)}</span>
-                          <span className="text-slate-400">/ {formatTRY(t.collectionTargetTl)}</span>
+                          <span className="text-slate-400">
+                            / {formatTRY(t.collectionTargetTl)}
+                          </span>
                         </div>
                         <ProgressBar value={pct(a.collectionsTl, t.collectionTargetTl)} />
                       </td>

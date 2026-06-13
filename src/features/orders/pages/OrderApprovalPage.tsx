@@ -108,9 +108,13 @@ function OrderApprovalPage(): JSX.Element {
     const supabase = getTypedClient();
     const channel = supabase
       .channel('order-approval-list')
-      .on('postgres_changes' as never, { event: '*', schema: 'public', table: 'orders', filter: 'status=eq.approval_pending' }, () => {
-        void queryClient.invalidateQueries({ queryKey: ['order-approval-list'] });
-      })
+      .on(
+        'postgres_changes' as never,
+        { event: '*', schema: 'public', table: 'orders', filter: 'status=eq.approval_pending' },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ['order-approval-list'] });
+        },
+      )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
@@ -145,9 +149,7 @@ function OrderApprovalPage(): JSX.Element {
             ? String((err as { message?: unknown }).message ?? '')
             : '';
       if (msg.includes('over_approval_limit')) {
-        toast.error(
-          'Bu tutar için onay yetkiniz yok (REP limiti 5.000₺ / MANAGER 50.000₺).',
-        );
+        toast.error('Bu tutar için onay yetkiniz yok (REP limiti 5.000₺ / MANAGER 50.000₺).');
       } else if (msg.includes('not_authorized')) {
         toast.error('Onay yetkiniz yok.');
       } else {
