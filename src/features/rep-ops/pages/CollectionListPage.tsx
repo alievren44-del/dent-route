@@ -192,7 +192,7 @@ export default function CollectionListPage() {
 
   const monthlyTotal = useMemo(() => {
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
     let total = 0;
     for (const c of query.data ?? []) {
       if (c.status === 'CONFIRMED' && c.created_at >= monthStart) {

@@ -135,23 +135,36 @@ function DetailModal({ visitId, outcomeMap, onClose }: DetailModalProps): JSX.El
       if (!data) return null;
       const visit = data as RawVisit;
 
-      const accountRes = await supabase
-        .from('profiles')
-        .select('id, klinik_adi, ad_soyad, email')
+      // 1) saha_clinics — Discovery / SahaTara / Atanan rota sepete clinic id yazar.
+      let account: { id: string; name: string } | null = null;
+      const clinicRes = await supabase
+        .from('saha_clinics')
+        .select('id, name')
         .eq('id', visit.account_id)
         .maybeSingle();
-      const ar = accountRes.data as {
-        id: string;
-        klinik_adi: string | null;
-        ad_soyad: string | null;
-        email: string | null;
-      } | null;
-      const account = ar
-        ? {
-            id: ar.id,
-            name: ar.klinik_adi ?? ar.ad_soyad ?? ar.email ?? 'Müşteri',
-          }
-        : null;
+      if (clinicRes.data) {
+        const c = clinicRes.data as { id: string; name: string };
+        account = { id: c.id, name: c.name };
+      } else {
+        // 2) profiles fallback (DOCTOR / Parla mevcut müşterileri).
+        const accountRes = await supabase
+          .from('profiles')
+          .select('id, klinik_adi, ad_soyad, email')
+          .eq('id', visit.account_id)
+          .maybeSingle();
+        const ar = accountRes.data as {
+          id: string;
+          klinik_adi: string | null;
+          ad_soyad: string | null;
+          email: string | null;
+        } | null;
+        account = ar
+          ? {
+              id: ar.id,
+              name: ar.klinik_adi ?? ar.ad_soyad ?? ar.email ?? 'Müşteri',
+            }
+          : null;
+      }
 
       // Signed URLs (privat bucket)
       const photoUrls: string[] = [];
@@ -487,20 +500,37 @@ function VisitHistoryPage(): JSX.Element {
     queryKey: ['visit-history-account-names', uniqueAccountIds.join(',')],
     enabled: uniqueAccountIds.length > 0,
     queryFn: async (): Promise<Map<string, string>> => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, klinik_adi, ad_soyad, email')
-        .in('id', uniqueAccountIds);
-      if (error) throw error;
       const m = new Map<string, string>();
-      for (const r of (data ?? []) as {
-        id: string;
-        klinik_adi: string | null;
-        ad_soyad: string | null;
-        email: string | null;
-      }[]) {
-        m.set(r.id, r.klinik_adi ?? r.ad_soyad ?? r.email ?? 'Müşteri');
+
+      // 1) saha_clinics — batch lookup for clinic-type accounts.
+      const { data: clinicData } = await supabase
+        .from('saha_clinics')
+        .select('id, name')
+        .in('id', uniqueAccountIds);
+      const foundInClinics = new Set<string>();
+      for (const c of (clinicData ?? []) as { id: string; name: string }[]) {
+        m.set(c.id, c.name);
+        foundInClinics.add(c.id);
       }
+
+      // 2) profiles fallback — only IDs not found in saha_clinics.
+      const profileIds = uniqueAccountIds.filter((id) => !foundInClinics.has(id));
+      if (profileIds.length > 0) {
+        const { data: profileData, error } = await supabase
+          .from('profiles')
+          .select('id, klinik_adi, ad_soyad, email')
+          .in('id', profileIds);
+        if (error) throw error;
+        for (const r of (profileData ?? []) as {
+          id: string;
+          klinik_adi: string | null;
+          ad_soyad: string | null;
+          email: string | null;
+        }[]) {
+          m.set(r.id, r.klinik_adi ?? r.ad_soyad ?? r.email ?? 'Müşteri');
+        }
+      }
+
       return m;
     },
   });
