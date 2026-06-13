@@ -339,18 +339,14 @@ function OrderFormPage(): JSX.Element {
         items,
         notes: notes.trim() || undefined,
         idempotencyKey,
+        requiresApproval,
       });
 
-      // Onay gerekirse: status'u 'approval_pending' olarak güncelle ve notify.
+      // Onay gerekirse bildirim fan-out. Status zaten adapter'da doğrudan
+      // 'approval_pending' olarak set edildi — eski ikinci-UPDATE race penceresi
+      // kaldırıldı (sipariş hiç 'pending' görünmüyor).
       if (requiresApproval) {
         const supabase = getTypedClient();
-        const { error: updErr } = await supabase
-          .from('orders')
-          .update({ status: 'approval_pending', idempotency_key: idempotencyKey })
-          .eq('id', created.id);
-        if (updErr) {
-          console.warn('[OrderFormPage] approval_pending status set edilemedi:', updErr.message);
-        }
 
         // #79 — Onay bildirimi fan-out.
         // ESKİ BUG: 'notifications' tablosuna user_id OLMADAN, recipient_role'ü

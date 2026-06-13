@@ -621,7 +621,9 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
         cari_id: cariId,
         clinic_id: clinicId,
         sales_rep_id: salesRepId,
-        status: 'pending',
+        // Onay gereken sipariş doğrudan approval_pending oluşturulur — eski
+        // "önce pending INSERT, sonra ikinci UPDATE" race penceresini kapatır.
+        status: order.requiresApproval ? 'approval_pending' : 'pending',
         subtotal,
         vat_amount: vatTotal,
         total: grandTotal,

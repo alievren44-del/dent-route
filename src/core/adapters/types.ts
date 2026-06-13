@@ -145,6 +145,8 @@ export interface NewOrder {
   notes?: string;
   idempotencyKey: string;
   visitId?: string;
+  /** true ise sipariş doğrudan 'approval_pending' olarak oluşturulur (race önler). */
+  requiresApproval?: boolean;
 }
 
 export interface QuotedItem extends NewOrderItem {
