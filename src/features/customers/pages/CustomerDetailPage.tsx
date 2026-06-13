@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { Phone, MessageCircle, ShoppingCart, ArrowLeft, CalendarPlus, Receipt } from 'lucide-react';
 import { getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
+import { mapParlaToSahaRole } from '@core/auth/types';
 
 import CariBalanceCard from '@features/invoicing/components/CariBalanceCard';
 import CustomerVisitTimeline from '@features/visits/components/CustomerVisitTimeline';
@@ -73,6 +74,8 @@ function CustomerDetailPage(): JSX.Element {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const currentUserId = useAuthStore((s) => s.session?.userId ?? null);
+  const currentUserRole = useAuthStore((s) => s.profile?.role ?? null);
+  const canInvoice = mapParlaToSahaRole(currentUserRole) === 'admin';
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
 
   const { data: customerData, isLoading: custLoading } = useQuery({
@@ -210,7 +213,7 @@ function CustomerDetailPage(): JSX.Element {
       </div>
 
       {/* Hızlı aksiyonlar */}
-      <div className="px-4 py-3 grid grid-cols-3 gap-2">
+      <div className={`px-4 py-3 grid gap-2 ${canInvoice ? 'grid-cols-3' : 'grid-cols-2'}`}>
         <button
           type="button"
           onClick={() => navigate(`/orders/new?customerId=${id}`)}
@@ -227,14 +230,16 @@ function CustomerDetailPage(): JSX.Element {
           <CalendarPlus className="h-5 w-5 text-primary" />
           <span className="text-[11px] font-medium text-foreground">Yeni Ziyaret</span>
         </button>
-        <button
-          type="button"
-          onClick={() => navigate(`/invoicing/fatura/yeni?profile_id=${id}`)}
-          className="flex flex-col items-center justify-center gap-1 px-2 py-3 rounded-xl border border-border bg-card hover:bg-muted/40 min-h-tap-min"
-        >
-          <Receipt className="h-5 w-5 text-primary" />
-          <span className="text-[11px] font-medium text-foreground">Fatura Kes</span>
-        </button>
+        {canInvoice && (
+          <button
+            type="button"
+            onClick={() => navigate(`/invoicing/fatura/yeni?profile_id=${id}`)}
+            className="flex flex-col items-center justify-center gap-1 px-2 py-3 rounded-xl border border-border bg-card hover:bg-muted/40 min-h-tap-min"
+          >
+            <Receipt className="h-5 w-5 text-primary" />
+            <span className="text-[11px] font-medium text-foreground">Fatura Kes</span>
+          </button>
+        )}
       </div>
 
       {/* Tabs */}

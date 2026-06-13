@@ -36,10 +36,21 @@ let authStateSubscription: { unsubscribe: () => void } | null = null;
 // Profil offline cache — offline açılışta (uygulamayı kapat-aç) session
 // localStorage'dan gelir ama profiles query ağ ister. Son başarılı profili
 // saklayıp offline'da buradan okuruz (offline-first okuma).
+//
+// MAX_CACHE_AGE: 24 saatten eski cache geçersiz sayılır. Böylece deaktive
+// edilmiş/düşürülmüş bir temsilci uzun süre offline erişim yapamaz.
 const PROFILE_CACHE_KEY = 'saha-profile-cache';
+const MAX_CACHE_AGE = 24 * 60 * 60 * 1000; // 24 saat (ms)
+
+interface ProfileCacheEntry {
+  ts: number;       // Date.now() — yazıldığı an
+  profile: SahaProfile;
+}
+
 function cacheProfile(profile: SahaProfile): void {
   try {
-    localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile));
+    const entry: ProfileCacheEntry = { ts: Date.now(), profile };
+    localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(entry));
   } catch {
     /* yutulur */
   }
@@ -48,7 +59,11 @@ function readCachedProfile(userId: string): SahaProfile | null {
   try {
     const raw = localStorage.getItem(PROFILE_CACHE_KEY);
     if (!raw) return null;
-    const p = JSON.parse(raw) as SahaProfile;
+    const entry = JSON.parse(raw) as ProfileCacheEntry;
+    // Eski format (ts alanı yok) veya süresi dolmuş → null döndür.
+    if (!entry || typeof entry.ts !== 'number') return null;
+    if (Date.now() - entry.ts > MAX_CACHE_AGE) return null;
+    const p = entry.profile;
     return p && p.id === userId ? p : null;
   } catch {
     return null;

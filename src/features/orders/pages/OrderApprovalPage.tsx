@@ -108,7 +108,7 @@ function OrderApprovalPage(): JSX.Element {
     const supabase = getTypedClient();
     const channel = supabase
       .channel('order-approval-list')
-      .on('postgres_changes' as never, { event: '*', schema: 'public', table: 'orders' }, () => {
+      .on('postgres_changes' as never, { event: '*', schema: 'public', table: 'orders', filter: 'status=eq.approval_pending' }, () => {
         void queryClient.invalidateQueries({ queryKey: ['order-approval-list'] });
       })
       .subscribe();
