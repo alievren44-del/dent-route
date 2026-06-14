@@ -287,7 +287,7 @@ export default function UsersPage(): JSX.Element {
     },
   });
 
-  const users = usersQuery.data ?? [];
+  const users = useMemo(() => usersQuery.data ?? [], [usersQuery.data]);
 
   const filtered = useMemo<ProfileRow[]>(() => {
     const q = search.trim().toLocaleLowerCase('tr');

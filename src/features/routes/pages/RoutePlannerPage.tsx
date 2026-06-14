@@ -353,7 +353,6 @@ export default function RoutePlannerPage() {
         started_at: new Date().toISOString(),
       };
 
-      console.log('[handleStartRoute] insert payload:', insertRow);
       const { data: routeRow, error: insertErr } = await supabase
         .from('saha_routes')
         .insert(insertRow)
@@ -361,7 +360,6 @@ export default function RoutePlannerPage() {
         .single();
 
       if (insertErr) {
-        console.error('[handleStartRoute] insert error:', insertErr);
         throw new Error(`${insertErr.code ?? ''} ${insertErr.message}`.trim());
       }
       if (!routeRow) throw new Error('Insert satırı dönmedi');

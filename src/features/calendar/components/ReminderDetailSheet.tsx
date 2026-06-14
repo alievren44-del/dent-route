@@ -229,6 +229,7 @@ export function ReminderDetailSheet(props: {
                     />
                   </button>
                 ) : (
+                  // eslint-disable-next-line jsx-a11y/media-has-caption
                   <audio key={att.id} src={att.url} controls className="h-10 max-w-[240px]" />
                 ),
               )}

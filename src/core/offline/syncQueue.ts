@@ -155,7 +155,7 @@ async function executeOp(op: OfflineOp): Promise<void> {
       // orders.insert(payload) yapıyordu → payload orders kolonlarıyla uyuşmuyor +
       // price-recompute/order_items yok. Adapter idempotency_key ile duplicate'i
       // kendi içinde ele alır (getOrder döner, çift insert etmez).
-      const p = op.payload as Record<string, unknown>;
+      const p = op.payload;
       const adapter = new SupabaseCRMAdapter();
       await adapter.createOrder({
         customerId: p['customer_id'] as string,

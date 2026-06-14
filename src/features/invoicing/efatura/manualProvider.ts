@@ -35,6 +35,7 @@ export class ManualEInvoiceProvider implements EInvoiceProvider {
 
   constructor(private readonly options: ManualProviderOptions = {}) {}
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   async createInvoice(payload: EInvoicePayload): Promise<EInvoiceResult> {
     const ettn = uuidV4();
     const xml = generateUblInvoiceXml(payload.invoice, payload.cari, payload.kalemler, {
@@ -54,11 +55,13 @@ export class ManualEInvoiceProvider implements EInvoiceProvider {
   }
 
   // Lokal stub — gerçek GİB durum sorgusu entegratör tarafından eklenecek.
+  // eslint-disable-next-line @typescript-eslint/require-await
   async getStatus(_ettn: string): Promise<{ status: string }> {
     return { status: 'manual_generated' };
   }
 
   // Lokal stub — gerçek iptal entegratör + GİB üzerinden yapılacak.
+  // eslint-disable-next-line @typescript-eslint/require-await
   async cancel(_ettn: string, _reason: string): Promise<{ status: string }> {
     return { status: 'manual_cancelled' };
   }

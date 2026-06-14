@@ -342,7 +342,7 @@ export default function DashboardPage() {
   });
 
   const data = dashboardQuery.data;
-  const reps = data?.reps ?? [];
+  const reps = useMemo(() => data?.reps ?? [], [data]);
 
   const [sortKey, setSortKey] = useState<ScoreKey>('score');
 

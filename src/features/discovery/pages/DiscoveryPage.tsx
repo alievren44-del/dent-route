@@ -242,8 +242,6 @@ function DiscoveryPage(): JSX.Element {
       const phoneHay = (c.phone ?? '').replace(/\D+/g, '');
       return hay.includes(q) || (qDigits.length >= 3 && phoneHay.includes(qDigits));
     });
-    // foldTr is a stable pure local fn; safe to omit from deps
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, searchQuery]);
 
   return (

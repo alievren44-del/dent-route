@@ -20,6 +20,7 @@ module.exports = {
     '*.d.ts',
     'scripts/',
     'supabase/functions/',
+    'src/types/database.types.ts', // Supabase-generated; elle düzeltilmez
   ],
   parser: '@typescript-eslint/parser',
   parserOptions: {

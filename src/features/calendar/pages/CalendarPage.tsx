@@ -505,10 +505,10 @@ function CalendarPage(): JSX.Element {
       return;
     }
     const res = addToBasket({
-      id: data.id as string,
-      name: data.name as string,
-      lat: data.lat as number,
-      lng: data.lng as number,
+      id: data.id,
+      name: data.name,
+      lat: data.lat,
+      lng: data.lng,
       source: 'saha',
     });
     if (res.ok) toast.success('Rota sepetine eklendi.');
@@ -913,7 +913,7 @@ function AgendaCard({
   clinic: { name: string; phone: string | null } | null;
   assignerName?: string | null;
   highlighted?: boolean;
-  onAddPhone?: (accountId: string, phone: string) => void;
+  onAddPhone?: (accountId: string, phone: string) => Promise<void>;
   attachments?: ReminderAttachment[];
   onOpen?: (it: AgendaItem) => void;
 }): JSX.Element {
@@ -1019,13 +1019,12 @@ function AgendaCard({
                       onClick={(e) => e.stopPropagation()}
                       placeholder="Numara girin"
                       className="h-8 w-32 rounded-lg border border-border bg-background px-2 text-[11px]"
-                      autoFocus
                     />
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onAddPhone(it.accountId!, phoneInput);
+                        void onAddPhone(it.accountId!, phoneInput);
                         setAddingPhone(false);
                         setPhoneInput('');
                       }}
@@ -1089,6 +1088,7 @@ function AgendaCard({
                   />
                 </button>
               ) : (
+                // eslint-disable-next-line jsx-a11y/media-has-caption
                 <audio key={att.id} src={att.url} controls className="h-8 max-w-[240px]" />
               ),
             )}
