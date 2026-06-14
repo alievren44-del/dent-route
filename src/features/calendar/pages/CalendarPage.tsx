@@ -664,10 +664,23 @@ function CalendarPage(): JSX.Element {
           repId={targetRepId}
           selfId={selfId}
           isAdmin={isAdmin}
-          assignableReps={assignableQuery.data ?? []}
+          assignableReps={
+            (assignableQuery.data && assignableQuery.data.length > 0
+              ? assignableQuery.data
+              : (repsQuery.data ?? [])
+            ).filter((r) => r.id !== selfId)
+          }
           onClose={() => setShowAdd(false)}
-          onAdded={() => {
+          onAdded={(assignedRepId) => {
             setShowAdd(false);
+            // Başka plasiyere atandıysa admin'in görünümünü o plasiyere geçir →
+            // atanan kayıt anında görünür (aksi halde 'gözükmüyor' algısı).
+            if (assignedRepId && assignedRepId !== selfId) {
+              setRepFilter(assignedRepId);
+              setView('agenda');
+              setFilter('upcoming');
+              setSelectedDay(null);
+            }
             void queryClient.invalidateQueries({ queryKey: ['calendar'] });
             void syncReminderNotifications();
           }}
@@ -797,7 +810,7 @@ function AddReminderModal({
   isAdmin: boolean;
   assignableReps: RepOption[];
   onClose: () => void;
-  onAdded: () => void;
+  onAdded: (assignedRepId?: string) => void;
 }): JSX.Element {
   // Hedef plasiyer (kimin takvimine). Admin başka plasiyere atayabilir → assigned_by=self.
   const [targetRep, setTargetRep] = useState<string>(repId);
@@ -858,19 +871,26 @@ function AddReminderModal({
       toast.error(`Eklenemedi: ${error.message}`);
       return;
     }
-    // Atama ise hedef plasiyere anında bildirim (push zinciri tetiklenir).
+    // Atama ise hedef plasiyere anında bildirim (bell + push).
+    // saha_notify_rep RPC her iki tabloya yazar (notifications INSERT RLS=service_role-only
+    // olduğu için client doğrudan yazamaz; RPC SECURITY DEFINER ile bypass eder).
     if (isAssignment) {
-      await sb.from('notifications').insert({
-        user_id: targetRep,
-        type: 'system_alert',
-        title: `${typeLabel} atandı`,
-        message: `${finalTitle} — ${due.toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' })}`,
-        data: { kind: 'visit_reminder', route: '/takvim', deeplink: '/takvim' },
+      const { error: notifErr } = await sb.rpc('saha_notify_rep', {
+        p_user_id: targetRep,
+        p_saha_type: 'system',
+        p_title: `${typeLabel} atandı`,
+        p_body: `${finalTitle} — ${due.toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' })}`,
+        p_data: { kind: 'visit_reminder', route: '/takvim', deeplink: '/takvim' },
+        p_push: true,
       });
+      if (notifErr) {
+        // Reminder kaydedildi; bildirim gönderilemezse kullanıcıyı uyar (sessiz yutma yok).
+        toast.warning('Atandı, fakat bildirim gönderilemedi.');
+      }
     }
     setSaving(false);
     toast.success(isAssignment ? 'Plasiyere atandı' : 'Takvime eklendi');
-    onAdded();
+    onAdded(isAssignment ? targetRep : undefined);
   }
 
   return (
