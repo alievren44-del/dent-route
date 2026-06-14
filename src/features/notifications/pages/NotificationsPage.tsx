@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CheckCheck, Inbox } from 'lucide-react';
 import { getTypedClient } from '@lib/supabase';
@@ -66,6 +67,7 @@ function bucketOf(iso: string): GroupKey {
 export default function NotificationsPage() {
   const userId = useAuthStore((s) => s.session?.userId);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [tab, setTab] = useState<TabKey>('all');
 
   const { data, isLoading } = useQuery({
@@ -197,6 +199,9 @@ export default function NotificationsPage() {
                         type="button"
                         onClick={() => {
                           if (!n.read_at) markRead.mutate(n.id);
+                          const route =
+                            (n.payload?.route ?? n.payload?.deeplink) as string | undefined;
+                          if (route) navigate(route);
                         }}
                         className={`w-full text-left p-3 hover:bg-muted ${
                           !n.read_at ? 'bg-blue-50' : ''
