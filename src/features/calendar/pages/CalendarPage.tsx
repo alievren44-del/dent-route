@@ -21,18 +21,15 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  AlarmClock,
   Banknote,
   CalendarClock,
   CalendarDays,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Loader2,
   MapPin,
   Megaphone,
   MessageCircle,
-  Navigation,
   Paperclip,
   Phone,
   Plus,
@@ -40,6 +37,7 @@ import {
   StickyNote,
   X,
 } from 'lucide-react';
+import { ReminderDetailSheet, type ReminderDetailItem } from '@features/calendar/components/ReminderDetailSheet';
 import { getSupabaseClient, getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 import { usePermissions } from '@core/auth/usePermissions';
@@ -68,6 +66,8 @@ interface ReminderRow {
   status: 'open' | 'done' | 'cancelled';
   assigned_by: string | null;
   recurrence: 'none' | 'weekly' | 'monthly';
+  outcome: string | null;
+  completion_note: string | null;
 }
 
 interface VisitRow {
@@ -95,6 +95,8 @@ interface AgendaItem {
   visitId?: string | null;
   assignedBy?: string | null;
   recurrence?: 'none' | 'weekly' | 'monthly';
+  outcome?: string | null;
+  completionNote?: string | null;
 }
 
 const OUTCOME_LABEL: Record<string, string> = {
@@ -103,6 +105,9 @@ const OUTCOME_LABEL: Record<string, string> = {
   no_meeting: 'Görüşülemedi',
   order_taken: 'Sipariş Alındı',
   sample_given: 'Numune Verildi',
+  tahsil_edildi: 'Tahsil Edildi',
+  soz_verildi: 'Söz Verildi',
+  odenmedi: 'Ödenmedi',
 };
 
 // Manuel ekleme tip seçenekleri.
@@ -195,6 +200,7 @@ function CalendarPage(): JSX.Element {
   });
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<AgendaItem | null>(null);
 
   // ?reminder=<id> → scroll + highlight (state sadece; effect allItems'tan sonra)
   const [searchParams] = useSearchParams();
@@ -238,7 +244,7 @@ function CalendarPage(): JSX.Element {
 
       let rq = sb
         .from('saha_reminders')
-        .select('id, rep_id, account_id, visit_id, type, title, note, due_at, status, assigned_by, recurrence')
+        .select('id, rep_id, account_id, visit_id, type, title, note, due_at, status, assigned_by, recurrence, outcome, completion_note')
         .eq('rep_id', targetRepId)
         .neq('status', 'cancelled')
         .order('due_at', { ascending: true });
@@ -378,6 +384,8 @@ function CalendarPage(): JSX.Element {
         visitId: r.visit_id,
         assignedBy: r.assigned_by,
         recurrence: r.recurrence,
+        outcome: r.outcome,
+        completionNote: r.completion_note,
       });
     }
     for (const v of visits) {
@@ -502,54 +510,43 @@ function CalendarPage(): JSX.Element {
     else toast.error(res.reason === 'full' ? 'Sepet dolu (max 12).' : 'Zaten sepette.');
   }
 
-  async function markDone(id: string): Promise<void> {
+  async function completeReminder(id: string, outcome: string, note: string): Promise<void> {
     const sb = getSupabaseClient();
-    const { error } = await sb.from('saha_reminders').update({ status: 'done' }).eq('id', id);
-    if (error) {
-      toast.error('Güncellenemedi');
-      return;
-    }
-
+    const { error } = await sb
+      .from('saha_reminders')
+      .update({ status: 'done', outcome, completion_note: note.trim() || null, completed_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) { toast.error('Kaydedilemedi'); return; }
+    toast.success('Tamamlandı');
     // C3 — Tekrarlayan: tamamlananın recurrence'ı varsa sonraki occurrence'ı oluştur.
-    // childId yakalanır → "Geri al" hem original'i açar HEM bu child'ı siler (çift-aktif önle).
-    let childId: string | null = null;
     const sourceReminder = reminders.find((r) => r.id === id);
     if (sourceReminder && sourceReminder.recurrence && sourceReminder.recurrence !== 'none') {
       const nextDue = new Date(sourceReminder.due_at);
       if (sourceReminder.recurrence === 'weekly') nextDue.setDate(nextDue.getDate() + 7);
-      else nextDue.setMonth(nextDue.getMonth() + 1); // monthly
-      const { data: child, error: insertErr } = await sb
-        .from('saha_reminders')
-        .insert({
-          rep_id: sourceReminder.rep_id,
-          account_id: sourceReminder.account_id,
-          type: sourceReminder.type,
-          title: sourceReminder.title,
-          note: sourceReminder.note,
-          due_at: nextDue.toISOString(),
-          status: 'open',
-          recurrence: sourceReminder.recurrence,
-          assigned_by: sourceReminder.assigned_by,
-          created_by: sourceReminder.rep_id,
-        })
-        .select('id')
-        .single();
-      if (insertErr) toast.error('Sonraki tekrar oluşturulamadı.');
-      else childId = (child as { id: string } | null)?.id ?? null;
+      else nextDue.setMonth(nextDue.getMonth() + 1);
+      const { error: recurErr } = await sb.from('saha_reminders').insert({
+        rep_id: sourceReminder.rep_id,
+        account_id: sourceReminder.account_id,
+        type: sourceReminder.type,
+        title: sourceReminder.title,
+        note: sourceReminder.note,
+        due_at: nextDue.toISOString(),
+        status: 'open',
+        recurrence: sourceReminder.recurrence,
+        assigned_by: sourceReminder.assigned_by,
+        created_by: sourceReminder.rep_id,
+      });
+      if (recurErr) toast.warning('Tamamlandı, fakat sonraki tekrar oluşturulamadı.');
     }
+    void queryClient.invalidateQueries({ queryKey: ['calendar'] });
+  }
 
-    toast.success('Tamamlandı', {
-      action: {
-        label: 'Geri al',
-        onClick: () => {
-          void (async () => {
-            await sb.from('saha_reminders').update({ status: 'open' }).eq('id', id);
-            if (childId) await sb.from('saha_reminders').delete().eq('id', childId);
-            void queryClient.invalidateQueries({ queryKey: ['calendar'] });
-          })();
-        },
-      },
-    });
+  async function reopenReminder(id: string): Promise<void> {
+    const sb = getSupabaseClient();
+    await sb
+      .from('saha_reminders')
+      .update({ status: 'open', outcome: null, completion_note: null, completed_at: null })
+      .eq('id', id);
     void queryClient.invalidateQueries({ queryKey: ['calendar'] });
   }
 
@@ -700,13 +697,11 @@ function CalendarPage(): JSX.Element {
                       key={`${it.kind}-${it.id}`}
                       it={it}
                       clinic={it.accountId ? (nameMap[it.accountId] ?? null) : null}
-                      onDone={markDone}
-                      onSnooze={snooze}
                       assignerName={it.assignedBy ? (assignerMap[it.assignedBy] ?? null) : null}
                       highlighted={it.id === focusId}
                       onAddPhone={addClinicPhone}
-                      onAddToRoute={addReminderToRoute}
                       attachments={attachmentsMap[it.id]}
+                      onOpen={setSelectedItem}
                     />
                   ))}
                 </ul>
@@ -807,13 +802,11 @@ function CalendarPage(): JSX.Element {
                       key={`${it.kind}-${it.id}`}
                       it={it}
                       clinic={it.accountId ? (nameMap[it.accountId] ?? null) : null}
-                      onDone={markDone}
-                      onSnooze={snooze}
                       assignerName={it.assignedBy ? (assignerMap[it.assignedBy] ?? null) : null}
                       highlighted={it.id === focusId}
                       onAddPhone={addClinicPhone}
-                      onAddToRoute={addReminderToRoute}
                       attachments={attachmentsMap[it.id]}
+                      onOpen={setSelectedItem}
                     />
                   ))}
                 </ul>
@@ -850,6 +843,32 @@ function CalendarPage(): JSX.Element {
           }}
         />
       )}
+
+      {selectedItem && (
+        <ReminderDetailSheet
+          item={{
+            id: selectedItem.id,
+            kind: selectedItem.kind,
+            type: selectedItem.type,
+            title: selectedItem.title,
+            note: selectedItem.note,
+            at: selectedItem.at,
+            accountId: selectedItem.accountId,
+            status: selectedItem.status,
+            assignedBy: selectedItem.assignedBy,
+            outcome: selectedItem.outcome,
+            completionNote: selectedItem.completionNote,
+          } as ReminderDetailItem}
+          clinic={selectedItem.accountId ? (nameMap[selectedItem.accountId] ?? null) : null}
+          attachments={attachmentsMap[selectedItem.id]}
+          assignerName={selectedItem.assignedBy ? (assignerMap[selectedItem.assignedBy] ?? null) : null}
+          onClose={() => setSelectedItem(null)}
+          onSnooze={(id, ms, label) => { void snooze(id, ms, label); setSelectedItem(null); }}
+          onAddToRoute={(aid) => { void addReminderToRoute(aid); }}
+          onComplete={(id, outcome, note) => { void completeReminder(id, outcome, note); setSelectedItem(null); }}
+          onReopen={(id) => { void reopenReminder(id); setSelectedItem(null); }}
+        />
+      )}
     </div>
   );
 }
@@ -858,23 +877,19 @@ function CalendarPage(): JSX.Element {
 function AgendaCard({
   it,
   clinic,
-  onDone,
-  onSnooze,
   assignerName,
   highlighted,
   onAddPhone,
-  onAddToRoute,
   attachments,
+  onOpen,
 }: {
   it: AgendaItem;
   clinic: { name: string; phone: string | null } | null;
-  onDone: (id: string) => void;
-  onSnooze: (id: string, ms: number, label: string) => void;
   assignerName?: string | null;
   highlighted?: boolean;
   onAddPhone?: (accountId: string, phone: string) => void;
-  onAddToRoute?: (accountId: string) => void;
   attachments?: ReminderAttachment[];
+  onOpen?: (it: AgendaItem) => void;
 }): JSX.Element {
   const meta = typeMeta(it.type);
   const done = it.status === 'done';
@@ -889,7 +904,11 @@ function AgendaCard({
       id={`reminder-${it.id}`}
       className={`rounded-2xl border border-border bg-card p-3 ${done ? 'opacity-60' : ''} ${highlighted ? 'ring-2 ring-primary ring-offset-2' : ''}`}
     >
-      <div className="flex items-start gap-3">
+      <div
+        className={`flex items-start gap-3 ${it.kind === 'reminder' ? 'cursor-pointer' : ''}`}
+        role={it.kind === 'reminder' ? 'button' : undefined}
+        onClick={it.kind === 'reminder' ? () => onOpen?.(it) : undefined}
+      >
         <div className="flex flex-col items-center pt-0.5">
           <meta.Icon className={`h-5 w-5 ${meta.color}`} aria-hidden="true" />
           <span className="mt-1 text-[10px] font-medium text-muted-foreground">
@@ -915,11 +934,18 @@ function AgendaCard({
           {assignerName && (
             <p className="mt-1 text-[11px] font-medium text-indigo-600">Atayan: {assignerName}</p>
           )}
+          {/* Done outcome özeti */}
+          {done && it.outcome && (
+            <p className="mt-1 text-[11px] font-medium text-green-600">
+              ✓ {OUTCOME_LABEL[it.outcome] ?? it.outcome}{it.completionNote ? ` — ${it.completionNote}` : ''}
+            </p>
+          )}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className={`text-[11px] font-medium ${meta.color}`}>{meta.label}</span>
             {it.visitId && (
               <Link
                 to={`/visits/${it.visitId}`}
+                onClick={(e) => e.stopPropagation()}
                 className="text-[11px] font-medium text-primary hover:underline"
               >
                 Ziyareti aç
@@ -932,6 +958,7 @@ function AgendaCard({
               {phone && (
                 <a
                   href={`tel:${phone}`}
+                  onClick={(e) => e.stopPropagation()}
                   className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background px-2 text-[11px] font-medium hover:bg-muted"
                 >
                   <Phone className="h-3.5 w-3.5 text-blue-600" aria-hidden="true" />
@@ -943,6 +970,7 @@ function AgendaCard({
                   href={`https://wa.me/${waPhone}`}
                   target="_blank"
                   rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
                   className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background px-2 text-[11px] font-medium hover:bg-muted"
                 >
                   <MessageCircle className="h-3.5 w-3.5 text-green-600" aria-hidden="true" />
@@ -957,13 +985,15 @@ function AgendaCard({
                       type="tel"
                       value={phoneInput}
                       onChange={(e) => setPhoneInput(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
                       placeholder="Numara girin"
                       className="h-8 w-32 rounded-lg border border-border bg-background px-2 text-[11px]"
                       autoFocus
                     />
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         onAddPhone(it.accountId!, phoneInput);
                         setAddingPhone(false);
                         setPhoneInput('');
@@ -974,7 +1004,7 @@ function AgendaCard({
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setAddingPhone(false); setPhoneInput(''); }}
+                      onClick={(e) => { e.stopPropagation(); setAddingPhone(false); setPhoneInput(''); }}
                       className="inline-flex h-8 items-center justify-center rounded-lg border border-border bg-background px-2 text-[11px] hover:bg-muted"
                       aria-label="İptal"
                     >
@@ -984,7 +1014,7 @@ function AgendaCard({
                 ) : (
                   <button
                     type="button"
-                    onClick={() => setAddingPhone(true)}
+                    onClick={(e) => { e.stopPropagation(); setAddingPhone(true); }}
                     className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background px-2 text-[11px] font-medium hover:bg-muted"
                   >
                     <Phone className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
@@ -992,42 +1022,6 @@ function AgendaCard({
                   </button>
                 )
               )}
-              {/* B3 — rotaya ekle (klinik ve uygun tip) */}
-              {it.accountId &&
-                (['appointment', 'tahsilat', 'tanitim', 'revisit'] as AgendaItem['type'][]).includes(it.type) &&
-                onAddToRoute && (
-                <button
-                  type="button"
-                  onClick={() => onAddToRoute(it.accountId!)}
-                  className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background px-2 text-[11px] font-medium hover:bg-muted"
-                >
-                  <Navigation className="h-3.5 w-3.5 text-indigo-600" aria-hidden="true" />
-                  Rotaya Ekle
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => onSnooze(it.id, 60 * 60 * 1000, '1 saat')}
-                className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background px-2 text-[11px] font-medium hover:bg-muted"
-              >
-                <AlarmClock className="h-3.5 w-3.5 text-amber-600" aria-hidden="true" />1 saat
-              </button>
-              <button
-                type="button"
-                onClick={() => onSnooze(it.id, 24 * 60 * 60 * 1000, 'Yarın')}
-                className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background px-2 text-[11px] font-medium hover:bg-muted"
-              >
-                <AlarmClock className="h-3.5 w-3.5 text-amber-600" aria-hidden="true" />
-                Yarın
-              </button>
-              <button
-                type="button"
-                onClick={() => onDone(it.id)}
-                className="inline-flex h-8 items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-2 text-[11px] font-medium text-green-700 hover:bg-green-100"
-              >
-                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-                Tamamlandı
-              </button>
             </div>
           )}
         </div>
