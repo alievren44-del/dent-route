@@ -43,30 +43,31 @@ export function normalizeWaPhone(raw: string): string {
  * Hatırlatma bildirimi aksiyon butonu işle (Ara / WhatsApp / 1 saat ertele).
  * İşlendiyse true döner; gövdeye dokunma (default) ise false → navigation devralır.
  */
-export function handleReminderAction(
+export async function handleReminderAction(
   actionId: string | undefined,
   data: Record<string, unknown> | undefined,
-): boolean {
+): Promise<boolean> {
   if (!data || data.kind !== 'visit_reminder') return false;
   const phone = (data.clinic_phone as string | null | undefined) ?? null;
   switch (actionId) {
     case 'call':
-      if (phone) window.location.assign(`tel:${phone.replace(/[^\d+]/g, '')}`);
+      if (phone) window.open(`tel:${phone.replace(/[^\d+]/g, '')}`, '_system');
       return true;
     case 'whatsapp':
-      if (phone) window.open(`https://wa.me/${normalizeWaPhone(phone)}`, '_blank');
+      if (phone) window.open(`https://wa.me/${normalizeWaPhone(phone)}`, '_system');
       return true;
     case 'snooze1h': {
       const id = data.reminder_id as string | undefined;
       if (id) {
         const due = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-        void getSupabaseClient()
+        // await ŞART: çağıran (localReminders listener) hemen syncReminderNotifications()
+        // çağırıyor; DB commit edilmeden re-sync edilirse bildirim ESKİ saate yeniden
+        // kurulur → ertele etkisiz kalır.
+        const { error } = await getSupabaseClient()
           .from('saha_reminders')
           .update({ due_at: due, status: 'open', notified_at: null })
-          .eq('id', id)
-          .then(({ error }) => {
-            if (error) pushDebug('error', 'push', `snooze hatası: ${error.message}`);
-          });
+          .eq('id', id);
+        if (error) pushDebug('error', 'push', `snooze hatası: ${error.message}`);
       }
       return true;
     }
@@ -210,8 +211,9 @@ export async function initPush(): Promise<void> {
       const data = action.notification.data as Record<string, unknown> | undefined;
       // Bildirim butonu mu (Ara / WhatsApp / Ertele) yoksa gövdeye dokunuldu mu?
       const actionId = action.actionId;
-      if (handleReminderAction(actionId, data)) return;
-      handleTapNavigation(data);
+      void handleReminderAction(actionId, data).then((handled) => {
+        if (!handled) handleTapNavigation(data);
+      });
     },
   );
 

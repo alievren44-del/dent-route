@@ -213,6 +213,8 @@ function CalendarPage(): JSX.Element {
   const dataQuery = useQuery({
     queryKey: ['calendar', targetRepId, effectiveFilter],
     enabled: Boolean(targetRepId),
+    staleTime: 0,
+    refetchOnMount: 'always',
     queryFn: async (): Promise<{ reminders: ReminderRow[]; visits: VisitRow[] }> => {
       if (!targetRepId) return { reminders: [], visits: [] };
       const sb = getSupabaseClient();
@@ -410,13 +412,30 @@ function CalendarPage(): JSX.Element {
       toast.error('Güncellenemedi');
       return;
     }
-    toast.success('Tamamlandı');
+    toast.success('Tamamlandı', {
+      action: {
+        label: 'Geri al',
+        onClick: () => {
+          void (async () => {
+            await sb.from('saha_reminders').update({ status: 'open' }).eq('id', id);
+            void queryClient.invalidateQueries({ queryKey: ['calendar'] });
+          })();
+        },
+      },
+    });
     void queryClient.invalidateQueries({ queryKey: ['calendar'] });
   }
 
   async function snooze(id: string, ms: number, label: string): Promise<void> {
     const sb = getSupabaseClient();
-    const due = new Date(Date.now() + ms).toISOString();
+    let dueDate = new Date(Date.now() + ms);
+    if (label === 'Yarın') {
+      // Ertesi gün sabah 09:00 (gece çalmasın).
+      dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 1);
+      dueDate.setHours(9, 0, 0, 0);
+    }
+    const due = dueDate.toISOString();
     const { error } = await sb
       .from('saha_reminders')
       .update({ due_at: due, status: 'open', notified_at: null })
@@ -430,7 +449,7 @@ function CalendarPage(): JSX.Element {
     void syncReminderNotifications();
   }
 
-  const loading = dataQuery.isLoading;
+  const loading = dataQuery.isLoading || !selfId;
   const todayKey = dayKeyOf(new Date());
 
   const selectedDayItems = selectedDay ? (byDay.get(selectedDay) ?? []) : [];
@@ -628,6 +647,11 @@ function CalendarPage(): JSX.Element {
                         className={`h-1.5 w-1.5 rounded-full ${typeMeta(it.type).dot}`}
                       />
                     ))}
+                    {dayItems.length > 4 && (
+                      <span className="text-[9px] font-semibold leading-none text-muted-foreground">
+                        +{dayItems.length - 4}
+                      </span>
+                    )}
                   </div>
                 </button>
               );
@@ -664,10 +688,23 @@ function CalendarPage(): JSX.Element {
           repId={targetRepId}
           selfId={selfId}
           isAdmin={isAdmin}
-          assignableReps={assignableQuery.data ?? []}
+          assignableReps={
+            (assignableQuery.data && assignableQuery.data.length > 0
+              ? assignableQuery.data
+              : (repsQuery.data ?? [])
+            ).filter((r) => r.id !== selfId)
+          }
           onClose={() => setShowAdd(false)}
-          onAdded={() => {
+          onAdded={(assignedRepId) => {
             setShowAdd(false);
+            // Başka plasiyere atandıysa admin'in görünümünü o plasiyere geçir →
+            // atanan kayıt anında görünür (aksi halde 'gözükmüyor' algısı).
+            if (assignedRepId && assignedRepId !== selfId) {
+              setRepFilter(assignedRepId);
+              setView('agenda');
+              setFilter('upcoming');
+              setSelectedDay(null);
+            }
             void queryClient.invalidateQueries({ queryKey: ['calendar'] });
             void syncReminderNotifications();
           }}
@@ -797,7 +834,7 @@ function AddReminderModal({
   isAdmin: boolean;
   assignableReps: RepOption[];
   onClose: () => void;
-  onAdded: () => void;
+  onAdded: (assignedRepId?: string) => void;
 }): JSX.Element {
   // Hedef plasiyer (kimin takvimine). Admin başka plasiyere atayabilir → assigned_by=self.
   const [targetRep, setTargetRep] = useState<string>(repId);
@@ -837,6 +874,11 @@ function AddReminderModal({
       toast.error('Geçersiz tarih.');
       return;
     }
+    // 60sn tolerans: "şu an" yazılan saatin kaydet'e basılana dek geçmişe düşmesini önle.
+    if (due.getTime() < Date.now() - 60_000) {
+      toast.error('Geçmiş tarihe randevu eklenemez.');
+      return;
+    }
     setSaving(true);
     const typeLabel = ADD_TYPES.find((t) => t.value === type)?.label ?? 'Hatırlatma';
     const finalTitle = title.trim() || (clinic ? `${typeLabel} — ${clinic.name}` : typeLabel);
@@ -858,19 +900,29 @@ function AddReminderModal({
       toast.error(`Eklenemedi: ${error.message}`);
       return;
     }
-    // Atama ise hedef plasiyere anında bildirim (push zinciri tetiklenir).
+    // Atama ise hedef plasiyere anında bildirim (bell + push).
+    // saha_notify_rep RPC her iki tabloya yazar (notifications INSERT RLS=service_role-only
+    // olduğu için client doğrudan yazamaz; RPC SECURITY DEFINER ile bypass eder).
+    let notifFailed = false;
     if (isAssignment) {
-      await sb.from('notifications').insert({
-        user_id: targetRep,
-        type: 'system_alert',
-        title: `${typeLabel} atandı`,
-        message: `${finalTitle} — ${due.toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' })}`,
-        data: { kind: 'visit_reminder', route: '/takvim', deeplink: '/takvim' },
+      const { error: notifErr } = await sb.rpc('saha_notify_rep', {
+        p_user_id: targetRep,
+        p_saha_type: 'system',
+        p_title: `${typeLabel} atandı`,
+        p_body: `${finalTitle} — ${due.toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' })}`,
+        p_data: { kind: 'visit_reminder', route: '/takvim', deeplink: '/takvim' },
+        p_push: true,
       });
+      if (notifErr) notifFailed = true;
     }
     setSaving(false);
-    toast.success(isAssignment ? 'Plasiyere atandı' : 'Takvime eklendi');
-    onAdded();
+    // Tek mesaj: bildirim başarısızsa uyarı, aksi halde başarı (çift-toast yok).
+    if (notifFailed) {
+      toast.warning('Atandı, fakat bildirim gönderilemedi.');
+    } else {
+      toast.success(isAssignment ? 'Plasiyere atandı' : 'Takvime eklendi');
+    }
+    onAdded(isAssignment ? targetRep : undefined);
   }
 
   return (

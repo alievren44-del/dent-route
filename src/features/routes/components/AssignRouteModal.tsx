@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { X, Send, Loader2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { getTypedClient } from '@lib/supabase';
+import { getSupabaseClient, getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 
 interface RepProfile {
@@ -103,19 +103,32 @@ export function AssignRouteModal({ open, onClose, payload }: Props) {
       if (routeErr) throw routeErr;
       const routeId = (routeRow as { id: string }).id;
 
-      // 2. saha_notifications insert
+      // 2. Bildirim: saha_notify_rep RPC bell (saha_notifications) + push (notifications→FCM)
+      //    tablolarına birlikte yazar. saha_notifications'ta push trigger olmadığı için
+      //    eski doğrudan insert plasiyere FCM push GÖNDERMİYORDU.
       const rep = reps.find((r) => r.id === selectedRep);
       const repLabel = rep?.ad_soyad?.trim() || rep?.email || 'Plasiyer';
-      await supabase.from('saha_notifications').insert({
-        user_id: selectedRep,
-        type: 'route_assigned',
-        title: 'Yeni rota atandı',
-        body:
-          (routeName.trim() ? `"${routeName.trim()}" rotası` : 'Yeni rota') +
-          ` (${payload.account_ids.length} durak, ${payload.total_distance_km.toFixed(1)} km)` +
-          (note.trim() ? ` — Not: ${note.trim()}` : ''),
-        payload: { route_id: routeId, account_count: payload.account_ids.length },
+      const notifBody =
+        (routeName.trim() ? `"${routeName.trim()}" rotası` : 'Yeni rota') +
+        ` (${payload.account_ids.length} durak, ${payload.total_distance_km.toFixed(1)} km)` +
+        (note.trim() ? ` — Not: ${note.trim()}` : '');
+      const { error: notifErr } = await getSupabaseClient().rpc('saha_notify_rep', {
+        p_user_id: selectedRep,
+        p_saha_type: 'route_assigned',
+        p_title: 'Yeni rota atandı',
+        p_body: notifBody,
+        p_data: {
+          route_id: routeId,
+          account_count: payload.account_ids.length,
+          route: '/routes/assigned',
+          deeplink: '/routes/assigned',
+        },
+        p_push: true,
       });
+      if (notifErr) {
+        // Rota atandı; bildirim gönderilemezse kullanıcıyı uyar (akışı bozma).
+        toast.warning('Rota atandı, fakat bildirim gönderilemedi.');
+      }
 
       toast.success(`Rota ${repLabel}'a atandı + bildirim gönderildi`);
       onClose();
