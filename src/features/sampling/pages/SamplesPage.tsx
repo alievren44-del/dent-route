@@ -10,6 +10,7 @@ import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Gift, Clock, History, AlertTriangle, BarChart3 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useAuthStore } from '@core/auth/authStore';
 import { getTypedClient } from '@lib/supabase';
 import { getQuota, currentYearMonth, getRemainingBudget } from '@core/sampling/quotas';
@@ -103,30 +104,37 @@ function SamplesPage(): JSX.Element {
   );
 
   function handleSubmitted(sampleId: string): void {
-    alert(`Numune kaydedildi: ${sampleId}`);
+    toast.success(`Numune kaydedildi: ${sampleId}`);
     setActiveTab('active');
   }
 
   return (
     <div className="flex flex-col h-full">
       {/* Üst banner */}
-      <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 text-sm flex flex-wrap items-center gap-x-4 gap-y-1">
-        <div className="flex items-center gap-1.5">
-          <span className="text-amber-900/80">Bu ay bütçe:</span>
-          <span className="font-semibold text-amber-900">
-            {totalBudget.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} TL
-          </span>
-          <span className="text-amber-900/60">/</span>
-          <span className="text-amber-900/80">Kalan:</span>
-          <span className="font-semibold text-amber-900">
-            {remainingBudget.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} TL
-          </span>
+      {!quotaQuery.isLoading && quota === null ? (
+        <div className="px-4 py-3 bg-yellow-50 border-b border-yellow-300 text-sm flex items-center gap-2 text-yellow-800">
+          <AlertTriangle className="w-4 h-4 shrink-0 text-yellow-600" />
+          <span>Bu ay için numune bütçesi tanımlanmamış — yönetici ile iletişime geçin.</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-amber-900/80">Bekleyen takip:</span>
-          <span className="font-semibold text-amber-900">{pendingCount}</span>
+      ) : (
+        <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 text-sm flex flex-wrap items-center gap-x-4 gap-y-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-amber-900/80">Bu ay bütçe:</span>
+            <span className="font-semibold text-amber-900">
+              {totalBudget.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} TL
+            </span>
+            <span className="text-amber-900/60">/</span>
+            <span className="text-amber-900/80">Kalan:</span>
+            <span className="font-semibold text-amber-900">
+              {remainingBudget.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} TL
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-amber-900/80">Bekleyen takip:</span>
+            <span className="font-semibold text-amber-900">{pendingCount}</span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Tab başlıkları */}
       <div className="flex border-b border-border overflow-x-auto bg-background sticky top-0 z-10">

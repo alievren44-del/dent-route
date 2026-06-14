@@ -504,11 +504,43 @@ export default function ActiveRoutePage(): JSX.Element {
   });
 
   const handleAdvanceStop = (): void => {
-    if (currentStopIndex < totalStops - 1) {
-      setCurrentStopIndex((idx) => idx + 1);
-    } else if (currentStopIndex === totalStops - 1) {
-      setCurrentStopIndex(totalStops);
-    }
+    if (currentStopIndex >= totalStops) return;
+
+    const accountId = route?.account_ids[currentStopIndex];
+    const routeId = route?.id;
+    const repId = session?.userId;
+
+    // saha_visits'e tamamlanmış-ziyaret kaydı yaz (veri-kaybını önle).
+    // idempotency_key → çift-tıklamada veya yeniden render'da tek kayıt garantisi.
+    // Hata olursa toast göster ama index'i yine ilerlet (UX bloklamaz).
+    void (async () => {
+      if (accountId && routeId && repId) {
+        const now = new Date().toISOString();
+        // repId dahil: iki rep aynı rotayı paylaşırsa (atama/kopya) çakışma/veri-kaybı olmasın.
+        const idempotencyKey = `route_stop_${routeId}_${accountId}_${repId}`;
+        try {
+          const supabase = getTypedClient();
+          const { error: visitErr } = await supabase.from('saha_visits').insert({
+            account_id: accountId,
+            rep_id: repId,
+            route_id: routeId,
+            check_in_at: now,
+            check_out_at: now,
+            status: 'completed',
+            outcome: 'route_stop',
+            idempotency_key: idempotencyKey,
+          } as never);
+          // 23505 = unique_violation → idempotency çakışması, kayıt zaten var, sorun değil.
+          if (visitErr && (visitErr as { code?: string }).code !== '23505') {
+            toast.error('Ziyaret kaydedilemedi: ' + visitErr.message);
+          }
+        } catch (e) {
+          toast.error('Ziyaret kaydedilemedi: ' + (e instanceof Error ? e.message : String(e)));
+        }
+      }
+      // Index her koşulda ilerle.
+      setCurrentStopIndex((idx) => Math.min(idx + 1, totalStops));
+    })();
   };
 
   const [removingId, setRemovingId] = useState<string | null>(null);

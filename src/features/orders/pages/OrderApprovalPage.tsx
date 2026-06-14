@@ -95,7 +95,7 @@ function OrderApprovalPage(): JSX.Element {
   const queryClient = useQueryClient();
   const profile = useAuthStore((s) => s.profile);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [rejectFor, setRejectFor] = useState<string | null>(null);
+  const [rejectFor, setRejectFor] = useState<{ id: string; repId: string | null; orderNumber: string | null } | null>(null);
   const [rejectReason, setRejectReason] = useState<string>('');
 
   const { data, isLoading, isError, error } = useQuery({
@@ -122,7 +122,15 @@ function OrderApprovalPage(): JSX.Element {
   }, [queryClient]);
 
   const approveMutation = useMutation({
-    mutationFn: async (orderId: string) => {
+    mutationFn: async ({
+      orderId,
+      repId: _repId,
+      orderNumber: _orderNumber,
+    }: {
+      orderId: string;
+      repId: string | null;
+      orderNumber: string | null;
+    }) => {
       // Doğrudan UPDATE yerine server-side yetki kapısı RPC'si — neden: eskiden
       // bu mutation doğrudan orders.status='approved' yazıyordu, REP kendi
       // >5000₺ siparişini onaylayabiliyordu (#70). RPC eşik uygular ve
@@ -134,9 +142,28 @@ function OrderApprovalPage(): JSX.Element {
       });
       if (err) throw err;
     },
-    onSuccess: () => {
+    onSuccess: async (_data, variables) => {
       toast.success('Sipariş onaylandı.');
       void queryClient.invalidateQueries({ queryKey: ['order-approval-list'] });
+      // Plasiyere bildirim — hata onay akışını bozmamalı
+      if (variables.repId) {
+        try {
+          const supabase = getTypedClient();
+          const { error: notifErr } = await (supabase as ReturnType<typeof getTypedClient> & {
+            rpc(fn: string, args: Record<string, unknown>): Promise<{ error: unknown }>;
+          }).rpc('saha_notify_rep', {
+            p_user_id: variables.repId,
+            p_saha_type: 'order_approval',
+            p_title: 'Siparişiniz onaylandı',
+            p_body: `${variables.orderNumber ?? 'Sipariş'} — onaylandı`,
+            p_data: { kind: 'order', route: '/orders/history', deeplink: '/orders/history', order_id: variables.orderId },
+            p_push: true,
+          });
+          if (notifErr) console.warn('[OrderApproval] approve bildirim hatası:', notifErr);
+        } catch (notifErr) {
+          console.warn('[OrderApproval] approve bildirim gönderilemedi:', notifErr);
+        }
+      }
     },
     onError: (err: unknown) => {
       // RPC exception mesajına göre anlamlı toast — backend otorite.
@@ -159,7 +186,17 @@ function OrderApprovalPage(): JSX.Element {
   });
 
   const rejectMutation = useMutation({
-    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+    mutationFn: async ({
+      id,
+      reason,
+      repId: _repId,
+      orderNumber: _orderNumber,
+    }: {
+      id: string;
+      reason: string;
+      repId: string | null;
+      orderNumber: string | null;
+    }) => {
       const supabase = getTypedClient();
       const { error: err } = await supabase
         .from('orders')
@@ -172,11 +209,30 @@ function OrderApprovalPage(): JSX.Element {
         .eq('id', id);
       if (err) throw err;
     },
-    onSuccess: () => {
+    onSuccess: async (_data, variables) => {
       toast.success('Sipariş reddedildi.');
       setRejectFor(null);
       setRejectReason('');
       void queryClient.invalidateQueries({ queryKey: ['order-approval-list'] });
+      // Plasiyere bildirim — hata red akışını bozmamalı
+      if (variables.repId) {
+        try {
+          const supabase = getTypedClient();
+          const { error: notifErr } = await (supabase as ReturnType<typeof getTypedClient> & {
+            rpc(fn: string, args: Record<string, unknown>): Promise<{ error: unknown }>;
+          }).rpc('saha_notify_rep', {
+            p_user_id: variables.repId,
+            p_saha_type: 'order_approval',
+            p_title: 'Siparişiniz reddedildi',
+            p_body: `${variables.orderNumber ?? 'Sipariş'} — reddedildi${variables.reason ? ' · ' + variables.reason : ''}`,
+            p_data: { kind: 'order', route: '/orders/history', deeplink: '/orders/history', order_id: variables.id },
+            p_push: true,
+          });
+          if (notifErr) console.warn('[OrderApproval] reject bildirim hatası:', notifErr);
+        } catch (notifErr) {
+          console.warn('[OrderApproval] reject bildirim gönderilemedi:', notifErr);
+        }
+      }
     },
     onError: (err: unknown) => {
       toast.error(err instanceof Error ? err.message : 'Red işlemi başarısız.');
@@ -288,7 +344,7 @@ function OrderApprovalPage(): JSX.Element {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => approveMutation.mutate(o.id)}
+                      onClick={() => approveMutation.mutate({ orderId: o.id, repId: o.sales_rep_id, orderNumber: o.order_number })}
                       disabled={approveMutation.isPending || rejectMutation.isPending}
                       className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-green-600 text-white text-sm font-semibold min-h-tap-min disabled:opacity-50"
                     >
@@ -298,7 +354,7 @@ function OrderApprovalPage(): JSX.Element {
                     <button
                       type="button"
                       onClick={() => {
-                        setRejectFor(o.id);
+                        setRejectFor({ id: o.id, repId: o.sales_rep_id, orderNumber: o.order_number });
                         setRejectReason('');
                       }}
                       disabled={approveMutation.isPending || rejectMutation.isPending}
@@ -349,7 +405,7 @@ function OrderApprovalPage(): JSX.Element {
                     toast.error('Red sebebi gerekli.');
                     return;
                   }
-                  rejectMutation.mutate({ id: rejectFor, reason });
+                  rejectMutation.mutate({ id: rejectFor.id, reason, repId: rejectFor.repId, orderNumber: rejectFor.orderNumber });
                 }}
                 disabled={rejectMutation.isPending}
                 className="flex-1 px-3 py-2.5 rounded-lg bg-red-600 text-white text-sm font-semibold min-h-tap-min disabled:opacity-50"
