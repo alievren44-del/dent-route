@@ -131,7 +131,17 @@ export function ReminderDetailSheet(props: {
   onComplete: (id: string, outcome: string, note: string) => void;
   onReopen?: (id: string) => void;
 }): JSX.Element {
-  const { item, clinic, attachments, assignerName, onClose, onSnooze, onAddToRoute, onComplete, onReopen } = props;
+  const {
+    item,
+    clinic,
+    attachments,
+    assignerName,
+    onClose,
+    onSnooze,
+    onAddToRoute,
+    onComplete,
+    onReopen,
+  } = props;
 
   const [completionOpen, setCompletionOpen] = useState(false);
   const [selectedOutcome, setSelectedOutcome] = useState<string | null>(null);
@@ -161,15 +171,10 @@ export function ReminderDetailSheet(props: {
     >
       {/* Sheet */}
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-background p-4 shadow-xl sm:rounded-2xl">
-
         {/* Header */}
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-base font-semibold">Detay</h2>
-          <button
-            onClick={onClose}
-            className="rounded-full p-1 hover:bg-muted"
-            aria-label="Kapat"
-          >
+          <button onClick={onClose} className="rounded-full p-1 hover:bg-muted" aria-label="Kapat">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -225,7 +230,7 @@ export function ReminderDetailSheet(props: {
                   </button>
                 ) : (
                   <audio key={att.id} src={att.url} controls className="h-10 max-w-[240px]" />
-                )
+                ),
               )}
             </div>
           </div>
@@ -261,8 +266,7 @@ export function ReminderDetailSheet(props: {
             onClick={() => onSnooze(item.id, 3_600_000, '1 saat')}
             className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-sm hover:bg-muted"
           >
-            <Clock className="h-4 w-4" />
-            1 saat ertele
+            <Clock className="h-4 w-4" />1 saat ertele
           </button>
           <button
             onClick={() => onSnooze(item.id, 86_400_000, 'Yarın')}
@@ -294,8 +298,7 @@ export function ReminderDetailSheet(props: {
             </div>
             {item.outcome && (
               <p className="text-sm">
-                Sonuç:{' '}
-                <span className="font-medium">{outcomeLabel(outcomes, item.outcome)}</span>
+                Sonuç: <span className="font-medium">{outcomeLabel(outcomes, item.outcome)}</span>
               </p>
             )}
             {item.completionNote && (
