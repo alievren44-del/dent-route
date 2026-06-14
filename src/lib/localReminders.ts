@@ -119,7 +119,8 @@ export async function syncReminderNotifications(): Promise<void> {
             account_id: r.account_id,
             clinic_name: clinic?.name ?? null,
             clinic_phone: clinic?.phone ?? null,
-            route: '/takvim',
+            // Deep-link spesifik randevuya (CalendarPage ?reminder= ile highlight/scroll eder).
+            route: '/takvim?reminder=' + r.id,
           },
         };
       });

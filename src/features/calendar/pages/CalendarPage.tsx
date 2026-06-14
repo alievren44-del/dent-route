@@ -16,8 +16,8 @@
  * Rol: sales_rep yalnız kendi (RLS); admin rep-seçici ile herhangi plasiyer.
  */
 
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -184,6 +184,11 @@ function CalendarPage(): JSX.Element {
   });
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+
+  // ?reminder=<id> → scroll + highlight (state sadece; effect allItems'tan sonra)
+  const [searchParams] = useSearchParams();
+  const focusReminderId = searchParams.get('reminder');
+  const [focusId, setFocusId] = useState<string | null>(null);
 
   const targetRepId = isAdmin && repFilter !== 'self' ? repFilter : selfId;
 
@@ -361,6 +366,26 @@ function CalendarPage(): JSX.Element {
     }
     return items;
   }, [reminders, visits]);
+
+  // ?reminder=<id> → ajanda aç + scroll + 3.5sn highlight
+  useEffect(() => {
+    if (!focusReminderId || dataQuery.isLoading) return;
+    const exists = allItems.some((i) => i.id === focusReminderId);
+    if (!exists) return;
+    setView('agenda');
+    setFilter('all');
+    setFocusId(focusReminderId);
+    const t = setTimeout(() => {
+      document
+        .getElementById(`reminder-${focusReminderId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 150);
+    const clear = setTimeout(() => setFocusId(null), 3500);
+    return () => {
+      clearTimeout(t);
+      clearTimeout(clear);
+    };
+  }, [focusReminderId, dataQuery.isLoading, allItems]);
 
   // Ajanda görünümü: güne göre grupla
   const grouped = useMemo(() => {
@@ -571,6 +596,7 @@ function CalendarPage(): JSX.Element {
                       onDone={markDone}
                       onSnooze={snooze}
                       assignerName={it.assignedBy ? (assignerMap[it.assignedBy] ?? null) : null}
+                      highlighted={it.id === focusId}
                     />
                   ))}
                 </ul>
@@ -674,6 +700,7 @@ function CalendarPage(): JSX.Element {
                       onDone={markDone}
                       onSnooze={snooze}
                       assignerName={it.assignedBy ? (assignerMap[it.assignedBy] ?? null) : null}
+                      highlighted={it.id === focusId}
                     />
                   ))}
                 </ul>
@@ -721,19 +748,24 @@ function AgendaCard({
   onDone,
   onSnooze,
   assignerName,
+  highlighted,
 }: {
   it: AgendaItem;
   clinic: { name: string; phone: string | null } | null;
   onDone: (id: string) => void;
   onSnooze: (id: string, ms: number, label: string) => void;
   assignerName?: string | null;
+  highlighted?: boolean;
 }): JSX.Element {
   const meta = typeMeta(it.type);
   const done = it.status === 'done';
   const phone = clinic?.phone ? clinic.phone.replace(/[^\d+]/g, '') : null;
   const waPhone = phone ? phone.replace(/^0/, '90').replace(/^\+/, '') : null;
   return (
-    <li className={`rounded-2xl border border-border bg-card p-3 ${done ? 'opacity-60' : ''}`}>
+    <li
+      id={`reminder-${it.id}`}
+      className={`rounded-2xl border border-border bg-card p-3 ${done ? 'opacity-60' : ''} ${highlighted ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+    >
       <div className="flex items-start gap-3">
         <div className="flex flex-col items-center pt-0.5">
           <meta.Icon className={`h-5 w-5 ${meta.color}`} aria-hidden="true" />
@@ -884,17 +916,21 @@ function AddReminderModal({
     const finalTitle = title.trim() || (clinic ? `${typeLabel} — ${clinic.name}` : typeLabel);
     const isAssignment = targetRep !== selfId;
     const sb = getSupabaseClient();
-    const { error } = await sb.from('saha_reminders').insert({
-      rep_id: targetRep,
-      created_by: selfId,
-      assigned_by: isAssignment ? selfId : null,
-      account_id: clinic?.id ?? null,
-      type,
-      title: finalTitle,
-      note: note.trim() || null,
-      due_at: due.toISOString(),
-      status: 'open',
-    });
+    const { data: inserted, error } = await sb
+      .from('saha_reminders')
+      .insert({
+        rep_id: targetRep,
+        created_by: selfId,
+        assigned_by: isAssignment ? selfId : null,
+        account_id: clinic?.id ?? null,
+        type,
+        title: finalTitle,
+        note: note.trim() || null,
+        due_at: due.toISOString(),
+        status: 'open',
+      })
+      .select('id')
+      .single();
     if (error) {
       setSaving(false);
       toast.error(`Eklenemedi: ${error.message}`);
@@ -910,7 +946,12 @@ function AddReminderModal({
         p_saha_type: 'system',
         p_title: `${typeLabel} atandı`,
         p_body: `${finalTitle} — ${due.toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' })}`,
-        p_data: { kind: 'visit_reminder', route: '/takvim', deeplink: '/takvim' },
+        p_data: {
+          kind: 'visit_reminder',
+          route: `/takvim?reminder=${inserted?.id ?? ''}`,
+          deeplink: `/takvim?reminder=${inserted?.id ?? ''}`,
+          reminder_id: inserted?.id,
+        },
         p_push: true,
       });
       if (notifErr) notifFailed = true;
