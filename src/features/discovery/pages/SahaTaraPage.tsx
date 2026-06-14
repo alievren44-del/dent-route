@@ -116,8 +116,8 @@ async function fetchRepRegion(repId: string): Promise<RepRegion> {
     .single();
   if (error || !data) return { provinces: [], districts: [] };
   return {
-    provinces: ((data.region_provinces ?? [])).map(normalizeRegionSlug),
-    districts: ((data.region_districts ?? [])).map(normalizeRegionSlug),
+    provinces: (data.region_provinces ?? []).map(normalizeRegionSlug),
+    districts: (data.region_districts ?? []).map(normalizeRegionSlug),
   };
 }
 
