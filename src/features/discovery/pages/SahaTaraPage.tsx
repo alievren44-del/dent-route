@@ -116,8 +116,8 @@ async function fetchRepRegion(repId: string): Promise<RepRegion> {
     .single();
   if (error || !data) return { provinces: [], districts: [] };
   return {
-    provinces: ((data.region_provinces ?? []) as string[]).map(normalizeRegionSlug),
-    districts: ((data.region_districts ?? []) as string[]).map(normalizeRegionSlug),
+    provinces: ((data.region_provinces ?? [])).map(normalizeRegionSlug),
+    districts: ((data.region_districts ?? [])).map(normalizeRegionSlug),
   };
 }
 
@@ -380,7 +380,7 @@ export default function SahaTaraPage() {
     } finally {
       setScanning(false);
     }
-  }, [geo.position, districtInfo, usage.remaining, radius, loadDb]);
+  }, [searchOrigin, districtInfo, usage.remaining, radius, loadDb]);
 
   // Soft territory filter: klinik listesini rep'in bölgesine göre filtrele.
   // districtInfo (mevcut ilçe) normalizeRegionSlug ile karşılaştırılır.

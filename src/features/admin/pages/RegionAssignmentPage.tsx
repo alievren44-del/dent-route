@@ -57,8 +57,8 @@ async function fetchAssignment(repId: string): Promise<AssignmentDraft> {
   const first = meta ?? data?.[0];
   // Normalize on load — any legacy mixed-case values are slugified before use
   return {
-    provinces: ((first?.region_provinces ?? []) as string[]).map(normalizeRegionSlug),
-    districts: ((first?.region_districts ?? []) as string[]).map(normalizeRegionSlug),
+    provinces: (first?.region_provinces ?? []).map(normalizeRegionSlug),
+    districts: (first?.region_districts ?? []).map(normalizeRegionSlug),
     rowId: first?.id ?? null,
   };
 }

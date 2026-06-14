@@ -13,6 +13,7 @@
  */
 
 import { getTypedClient } from '@lib/supabase';
+import type { Json } from '@/types/database.types';
 
 export type ClinicEditAction = 'create_manual' | 'update' | 'delete';
 
@@ -49,8 +50,8 @@ export async function logClinicEdit(input: ClinicEditLogInput): Promise<void> {
       clinic_id: input.clinicId,
       edited_by: userId,
       action: input.action,
-      before: (input.before ?? null) as unknown as import('@/types/database.types').Json | null,
-      after: (input.after ?? null) as unknown as import('@/types/database.types').Json | null,
+      before: (input.before ?? null) as unknown as Json | null,
+      after: (input.after ?? null) as unknown as Json | null,
     });
     if (error) {
       console.warn('clinic edit audit failed:', error.message);

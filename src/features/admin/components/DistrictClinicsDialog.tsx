@@ -221,7 +221,7 @@ export default function DistrictClinicsDialog({
     },
   });
 
-  const allClinics = data ?? [];
+  const allClinics = useMemo(() => data ?? [], [data]);
 
   // Filter + sort (client-side).
   const filteredSorted = useMemo<SahaClinicRow[]>(() => {

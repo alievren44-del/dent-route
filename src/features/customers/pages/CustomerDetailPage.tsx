@@ -135,7 +135,7 @@ function CustomerDetailPage(): JSX.Element {
       if (!repId) throw new Error('Oturum bulunamadı. Lütfen tekrar giriş yapın.');
       const { error } = await supabase
         .from('saha_account_notes')
-        .insert({ account_id: id!, rep_id: repId!, body });
+        .insert({ account_id: id!, rep_id: repId, body });
       if (error) throw error;
     },
     onSuccess: () => {

@@ -195,7 +195,6 @@ export async function getReminderAttachmentsMap(
     if (!result[row.reminder_id]) {
       result[row.reminder_id] = [];
     }
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     result[row.reminder_id]!.push({ id: row.id, kind: row.kind, url });
   }
 

@@ -27,8 +27,12 @@ export default function AdminBroadcastPage() {
     null,
   );
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent): void {
     e.preventDefault();
+    void handleSubmitAsync(e);
+  }
+
+  async function handleSubmitAsync(_e: React.FormEvent) {
     if (!title.trim() || !body.trim()) return;
 
     setLoading(true);
@@ -36,7 +40,7 @@ export default function AdminBroadcastPage() {
 
     try {
       const supabase = getSupabaseClient();
-      const { data, error } = await (supabase as ReturnType<typeof getSupabaseClient>).rpc(
+      const { data, error } = await supabase.rpc(
         'saha_broadcast' as never,
         { p_title: title.trim(), p_body: body.trim(), p_target: target } as never,
       );

@@ -230,7 +230,7 @@ function SalesHubPage(): JSX.Element {
     },
   });
 
-  const orders = ordersQuery.data ?? [];
+  const orders = useMemo(() => ordersQuery.data ?? [], [ordersQuery.data]);
 
   const { orderCount, totalTl } = useMemo(() => {
     const count = orders.length;

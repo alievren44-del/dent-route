@@ -605,7 +605,7 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
           originalError: cariErr,
         });
       }
-      cariId = resolvedCari as string;
+      cariId = resolvedCari;
     }
 
     // order_number DB şemasında NOT NULL required. Trigger yoksa timestamp tabanlı

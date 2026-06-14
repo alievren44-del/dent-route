@@ -29,6 +29,7 @@ export interface CustomerFiltersValue {
   hasBalance: boolean;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const DEFAULT_CUSTOMER_FILTERS: CustomerFiltersValue = {
   types: [],
   province: '',

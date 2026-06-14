@@ -116,7 +116,7 @@ export default function AuditLogPage(): JSX.Element {
     queryFn: () => fetchAuditLogs({ action: actionFilter, from, to, limit }),
   });
 
-  const rows = logsQuery.data ?? [];
+  const rows = useMemo(() => logsQuery.data ?? [], [logsQuery.data]);
   const reachedEnd = rows.length < limit;
 
   const detailsPreview = useMemo(

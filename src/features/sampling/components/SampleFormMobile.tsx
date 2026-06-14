@@ -71,7 +71,7 @@ interface ProductRow {
 
 /** Varyant için kısa etiket: iso / size / shade / sku + grit/shaft. */
 function variantLabel(v: VariantLite): string {
-  const a = (v.attributes ?? {}) as Record<string, unknown>;
+  const a = v.attributes ?? {};
   const pick = (k: string): string | undefined => {
     const val = a[k];
     return val == null || val === '' ? undefined : String(val);
@@ -257,7 +257,7 @@ function SampleFormMobile({
 
   // ----- Photo
   const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const photoPreviewUrl = useMemo<string | null>(() => {
+  const photoPreviewUrl = useMemo(() => {
     if (!photoFile) return null;
     return URL.createObjectURL(photoFile);
   }, [photoFile]);
