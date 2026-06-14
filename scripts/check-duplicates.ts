@@ -24,6 +24,24 @@ const EXCLUDED_DIRS = new Set([
   '.supabase',
   'android',
   'ios',
+  // Veri/çıktı dizinleri — kod değil, duplicate basename kontrolü dışı.
+  'exports',
+  'diş hekimi listesi için',
+  'kullanıcı yapacak',
+  'tests',
+]);
+
+// Kod-olmayan veri dosyaları (aynı isim farklı klasör normaldir).
+const EXCLUDED_EXTS = new Set([
+  '.xlsx',
+  '.xls',
+  '.csv',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.pdf',
+  '.zip',
+  '.md',
 ]);
 
 const EXCLUDED_FILES = new Set([
@@ -33,6 +51,9 @@ const EXCLUDED_FILES = new Set([
   'types.ts',
   'README.md',
   '.gitkeep',
+  // Modül başına konvansiyonel dosya adları (farklı feature'larda normal).
+  'factory.ts',
+  'provider.ts',
 ]);
 
 const fileMap = new Map<string, string[]>();
@@ -47,7 +68,7 @@ function walk(dir: string) {
     const stat = statSync(full);
     if (stat.isDirectory()) {
       walk(full);
-    } else if (!EXCLUDED_FILES.has(entry)) {
+    } else if (!EXCLUDED_FILES.has(entry) && !EXCLUDED_EXTS.has(entry.slice(entry.lastIndexOf('.')).toLowerCase())) {
       const list = fileMap.get(entry) ?? [];
       list.push(relative(ROOT, full).replace(/\\/g, '/'));
       fileMap.set(entry, list);

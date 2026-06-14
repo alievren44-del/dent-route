@@ -97,66 +97,11 @@ CREATE POLICY "saha_clinics_auth_select" ON public.saha_clinics
 -- ----------------------------------------------------------------------------
 -- 5. saha_search_nearby_clinics — Discovery RPC
 -- ----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.saha_search_nearby_clinics(
-  _lat float8,
-  _lng float8,
-  _radius_m integer,
-  _vertical_key text DEFAULT 'dental',
-  _limit integer DEFAULT 100
-)
-RETURNS TABLE (
-  id                  uuid,
-  google_place_id     text,
-  name                text,
-  lat                 double precision,
-  lng                 double precision,
-  address             text,
-  phone               text,
-  rating              numeric,
-  user_ratings_total  integer,
-  types               text[],
-  province_slug       text,
-  district_slug       text,
-  distance_m          double precision
-)
-LANGUAGE plpgsql
-STABLE
-SECURITY INVOKER
-AS $$
-DECLARE
-  search_point geography;
-BEGIN
-  search_point := ST_SetSRID(ST_MakePoint(_lng, _lat), 4326)::geography;
-
-  RETURN QUERY
-  SELECT
-    c.id,
-    c.google_place_id,
-    c.name,
-    c.lat,
-    c.lng,
-    c.address,
-    c.phone,
-    c.rating,
-    c.user_ratings_total,
-    c.types,
-    c.province_slug,
-    c.district_slug,
-    ST_Distance(c.location, search_point) AS distance_m
-  FROM public.saha_clinics c
-  WHERE
-    c.status = 'active'
-    AND c.vertical_key = _vertical_key
-    AND ST_DWithin(c.location, search_point, _radius_m)
-  ORDER BY distance_m ASC
-  LIMIT _limit;
-END;
-$$;
-
-COMMENT ON FUNCTION public.saha_search_nearby_clinics IS
-  'Discovery: saha_clinics tablosundan yakındaki klinikleri ST_DWithin ile döner. Live Google çağrısı yapmaz. Hız: <50ms.';
-
-GRANT EXECUTE ON FUNCTION public.saha_search_nearby_clinics(float8, float8, integer, text, integer) TO authenticated;
+-- NOT: saha_search_nearby_clinics burada TANIMLANMAZ. Bu dosyadaki eski 13-kolon
+-- sürümü, hemen ÖNCE uygulanan 20260528000006_saha_search_nearby_clinics_v2.sql'in
+-- 15-kolon sürümünü (clinic_segment + last_verified_at) `CREATE OR REPLACE` ile
+-- DOWNGRADE etmeye çalışıyordu → psql "cannot change return type of existing function"
+-- → deploy-migrations job FAIL (her push'ta "run failed" mail). Doğru/canlı sürüm v2'de.
 
 COMMIT;
 
