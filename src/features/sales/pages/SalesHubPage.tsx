@@ -24,6 +24,8 @@ import {
   TrendingUp,
   ShoppingCart,
   ChevronRight,
+  MapPin,
+  Banknote,
 } from 'lucide-react';
 
 import { getTypedClient } from '@lib/supabase';
@@ -129,6 +131,88 @@ function SalesHubPage(): JSX.Element {
     },
   });
 
+  // Bugün + aylık ziyaret/tahsilat (rep için; admin'e gösterilmez)
+  const todayQuery = useQuery({
+    queryKey: ['sales-hub-today', userId],
+    enabled: Boolean(userId) && !isAdmin,
+    queryFn: async (): Promise<{
+      visitsToday: number;
+      collectionsTodayTl: number;
+      ordersToday: number;
+      visitsMonth: number;
+      collectionsMonthTl: number;
+    }> => {
+      const supabase = getTypedClient();
+
+      // Bugün başlangıcı (ISO + DATE string)
+      const todayDate = new Date();
+      todayDate.setHours(0, 0, 0, 0);
+      const todayISO = todayDate.toISOString();
+      const todayYMD = todayISO.slice(0, 10); // 'YYYY-MM-DD'
+
+      // Ay başı
+      const monthStart = monthStartISO(); // 'YYYY-MM-DD'
+
+      try {
+        const [visitsTodayRes, visitsMonthRes, odTodayRes, odMonthRes, ordTodayRes] =
+          await Promise.all([
+            // Bugünkü ziyaret adedi
+            supabase
+              .from('saha_visits')
+              .select('id', { count: 'exact', head: true })
+              .eq('rep_id', userId!)
+              .gte('check_in_at', todayISO),
+            // Aylık ziyaret adedi
+            supabase
+              .from('saha_visits')
+              .select('id', { count: 'exact', head: true })
+              .eq('rep_id', userId!)
+              .gte('check_in_at', monthStart),
+            // Bugünkü tahsilat ₺ (tarih = DATE sütun)
+            supabase
+              .from('saha_odemeler')
+              .select('tutar')
+              .eq('created_by', userId!)
+              .gte('tarih', todayYMD),
+            // Aylık tahsilat ₺
+            supabase
+              .from('saha_odemeler')
+              .select('tutar')
+              .eq('created_by', userId!)
+              .gte('tarih', monthStart),
+            // Bugünkü sipariş adedi
+            supabase
+              .from('orders')
+              .select('id', { count: 'exact', head: true })
+              .eq('sales_rep_id', userId!)
+              .gte('created_at', todayISO),
+          ]);
+
+        const visitsToday = visitsTodayRes.count ?? 0;
+        const visitsMonth = visitsMonthRes.count ?? 0;
+        const collectionsTodayTl = (odTodayRes.data ?? []).reduce(
+          (acc, r) => acc + Number(r.tutar ?? 0),
+          0,
+        );
+        const collectionsMonthTl = (odMonthRes.data ?? []).reduce(
+          (acc, r) => acc + Number(r.tutar ?? 0),
+          0,
+        );
+        const ordersToday = ordTodayRes.count ?? 0;
+
+        return { visitsToday, collectionsTodayTl, ordersToday, visitsMonth, collectionsMonthTl };
+      } catch {
+        return {
+          visitsToday: 0,
+          collectionsTodayTl: 0,
+          ordersToday: 0,
+          visitsMonth: 0,
+          collectionsMonthTl: 0,
+        };
+      }
+    },
+  });
+
   // Aylık hedef (varsa) — rep kendi hedefi
   const targetQuery = useQuery({
     queryKey: ['sales-hub-target', userId],
@@ -156,6 +240,23 @@ function SalesHubPage(): JSX.Element {
 
   const targetTl = Number(targetQuery.data?.order_target_tl ?? 0);
   const targetPct = targetTl > 0 ? Math.min(100, Math.round((totalTl / targetTl) * 100)) : 0;
+
+  // Ziyaret + tahsilat hedef ilerleme (aylık)
+  const visitTargetCount = targetQuery.data?.visit_target ?? 0;
+  const collectionTargetTl = Number(targetQuery.data?.collection_target_tl ?? 0);
+  const visitsMonth = todayQuery.data?.visitsMonth ?? 0;
+  const collectionsMonthTl = todayQuery.data?.collectionsMonthTl ?? 0;
+  const visitPct =
+    visitTargetCount > 0 ? Math.min(100, Math.round((visitsMonth / visitTargetCount) * 100)) : 0;
+  const collectionPct =
+    collectionTargetTl > 0
+      ? Math.min(100, Math.round((collectionsMonthTl / collectionTargetTl) * 100))
+      : 0;
+
+  // Bugün kart verileri
+  const visitsToday = todayQuery.data?.visitsToday ?? 0;
+  const collectionsTodayTl = todayQuery.data?.collectionsTodayTl ?? 0;
+  const ordersToday = todayQuery.data?.ordersToday ?? 0;
 
   const actions = [
     {
@@ -204,6 +305,32 @@ function SalesHubPage(): JSX.Element {
       </div>
 
       <div className="flex-1 px-4 py-3 space-y-4">
+        {/* Bugün özet kartı (sadece plasiyer) */}
+        {!isAdmin && (
+          <div className="rounded-xl border border-border bg-card p-3">
+            <p className="text-xs font-semibold text-muted-foreground mb-2">Bugün</p>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="flex flex-col items-center gap-1">
+                <MapPin className="h-4 w-4 text-primary" />
+                <p className="text-lg font-bold text-foreground leading-none">{visitsToday}</p>
+                <p className="text-[10px] text-muted-foreground text-center">Ziyaret</p>
+              </div>
+              <div className="flex flex-col items-center gap-1">
+                <ShoppingCart className="h-4 w-4 text-primary" />
+                <p className="text-lg font-bold text-foreground leading-none">{ordersToday}</p>
+                <p className="text-[10px] text-muted-foreground text-center">Sipariş</p>
+              </div>
+              <div className="flex flex-col items-center gap-1">
+                <Banknote className="h-4 w-4 text-primary" />
+                <p className="text-lg font-bold text-foreground leading-none">
+                  {collectionsTodayTl > 0 ? formatTRY(collectionsTodayTl) : '₺0'}
+                </p>
+                <p className="text-[10px] text-muted-foreground text-center">Tahsilat</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* KPI kartları */}
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-xl border border-border bg-card p-3">
@@ -216,25 +343,68 @@ function SalesHubPage(): JSX.Element {
           </div>
         </div>
 
-        {/* Hedef ilerleme (rep, hedef varsa) */}
-        {!isAdmin && targetTl > 0 && (
-          <div className="rounded-xl border border-border bg-card p-3">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-                <TrendingUp className="h-4 w-4 text-primary" />
-                Aylık Hedef
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {formatTRY(totalTl)} / {formatTRY(targetTl)}
-              </span>
-            </div>
-            <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-              <div
-                className="h-full rounded-full bg-primary transition-all"
-                style={{ width: `${targetPct}%` }}
-              />
-            </div>
-            <p className="mt-1 text-right text-[11px] text-muted-foreground">%{targetPct}</p>
+        {/* Hedef ilerleme (rep, en az bir hedef varsa) */}
+        {!isAdmin && (targetTl > 0 || visitTargetCount > 0 || collectionTargetTl > 0) && (
+          <div className="rounded-xl border border-border bg-card p-3 space-y-3">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+              <TrendingUp className="h-4 w-4 text-primary" />
+              Aylık Hedef İlerlemesi
+            </span>
+
+            {/* Sipariş ₺ hedefi */}
+            {targetTl > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] text-muted-foreground">Satış ₺</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {formatTRY(totalTl)} / {formatTRY(targetTl)} · %{targetPct}
+                  </span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all"
+                    style={{ width: `${targetPct}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Ziyaret hedefi */}
+            {visitTargetCount > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] text-muted-foreground">Ziyaret</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {visitsMonth} / {visitTargetCount} · %{visitPct}
+                  </span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-blue-500 transition-all"
+                    style={{ width: `${visitPct}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Tahsilat ₺ hedefi */}
+            {collectionTargetTl > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] text-muted-foreground">Tahsilat ₺</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {formatTRY(collectionsMonthTl)} / {formatTRY(collectionTargetTl)} · %
+                    {collectionPct}
+                  </span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-emerald-500 transition-all"
+                    style={{ width: `${collectionPct}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
 

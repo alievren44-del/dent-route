@@ -1,5 +1,5 @@
 import { offlineDB, type OfflineOp } from './db';
-import { getTypedClient } from '@lib/supabase';
+import { getSupabaseClient, getTypedClient } from '@lib/supabase';
 import { SupabaseCRMAdapter } from '@core/adapters/builtin/SupabaseCRMAdapter';
 
 export type OpType = OfflineOp['opType'];
@@ -178,6 +178,13 @@ async function executeOp(op: OfflineOp): Promise<void> {
         .from('saha_routes')
         .update(rest as never)
         .eq('id', routeId);
+      if (error) throw error;
+      return;
+    }
+    case 'reminder.create': {
+      // Takvim manuel ekleme offline iken kuyruğa alınır → online'da insert edilir.
+      // saha_reminders types.ts'de yok → untyped client (getTypedClient .from() reddeder).
+      const { error } = await getSupabaseClient().from('saha_reminders').insert(op.payload as never);
       if (error) throw error;
       return;
     }

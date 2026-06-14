@@ -16,34 +16,41 @@
  * Rol: sales_rep yalnız kendi (RLS); admin rep-seçici ile herhangi plasiyer.
  */
 
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  AlarmClock,
   Banknote,
   CalendarClock,
   CalendarDays,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Loader2,
   MapPin,
   Megaphone,
   MessageCircle,
+  Paperclip,
   Phone,
   Plus,
   Stethoscope,
   StickyNote,
   X,
 } from 'lucide-react';
+import { ReminderDetailSheet, type ReminderDetailItem } from '@features/calendar/components/ReminderDetailSheet';
 import { getSupabaseClient, getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 import { usePermissions } from '@core/auth/usePermissions';
 import { syncReminderNotifications } from '@lib/localReminders';
+import { enqueueOp } from '@core/offline/syncQueue';
+import { useRouteBasket } from '@features/routes/store/routeBasketStore';
+import {
+  uploadReminderAttachment,
+  getReminderAttachmentsMap,
+  type ReminderAttachment,
+} from '@lib/reminderAttachments';
 
-type FilterMode = 'upcoming' | 'past' | 'all';
+type FilterMode = 'upcoming' | 'past' | 'all' | 'overdue';
 type ViewMode = 'agenda' | 'month';
 type ReminderType = 'revisit' | 'appointment' | 'tahsilat' | 'tanitim' | 'task' | 'note';
 
@@ -58,6 +65,9 @@ interface ReminderRow {
   due_at: string;
   status: 'open' | 'done' | 'cancelled';
   assigned_by: string | null;
+  recurrence: 'none' | 'weekly' | 'monthly';
+  outcome: string | null;
+  completion_note: string | null;
 }
 
 interface VisitRow {
@@ -84,6 +94,9 @@ interface AgendaItem {
   status?: ReminderRow['status'];
   visitId?: string | null;
   assignedBy?: string | null;
+  recurrence?: 'none' | 'weekly' | 'monthly';
+  outcome?: string | null;
+  completionNote?: string | null;
 }
 
 const OUTCOME_LABEL: Record<string, string> = {
@@ -92,6 +105,9 @@ const OUTCOME_LABEL: Record<string, string> = {
   no_meeting: 'Görüşülemedi',
   order_taken: 'Sipariş Alındı',
   sample_given: 'Numune Verildi',
+  tahsil_edildi: 'Tahsil Edildi',
+  soz_verildi: 'Söz Verildi',
+  odenmedi: 'Ödenmedi',
 };
 
 // Manuel ekleme tip seçenekleri.
@@ -184,6 +200,12 @@ function CalendarPage(): JSX.Element {
   });
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<AgendaItem | null>(null);
+
+  // ?reminder=<id> → scroll + highlight (state sadece; effect allItems'tan sonra)
+  const [searchParams] = useSearchParams();
+  const focusReminderId = searchParams.get('reminder');
+  const [focusId, setFocusId] = useState<string | null>(null);
 
   const targetRepId = isAdmin && repFilter !== 'self' ? repFilter : selfId;
 
@@ -222,12 +244,14 @@ function CalendarPage(): JSX.Element {
 
       let rq = sb
         .from('saha_reminders')
-        .select('id, rep_id, account_id, visit_id, type, title, note, due_at, status, assigned_by')
+        .select('id, rep_id, account_id, visit_id, type, title, note, due_at, status, assigned_by, recurrence, outcome, completion_note')
         .eq('rep_id', targetRepId)
         .neq('status', 'cancelled')
         .order('due_at', { ascending: true });
       if (effectiveFilter === 'upcoming') rq = rq.gte('due_at', startOfTodayISO());
       if (effectiveFilter === 'past') rq = rq.lt('due_at', startOfTodayISO());
+      if (effectiveFilter === 'overdue')
+        rq = rq.lt('due_at', new Date().toISOString()).eq('status', 'open');
 
       let vq = typed
         .from('saha_visits')
@@ -236,11 +260,16 @@ function CalendarPage(): JSX.Element {
         .eq('status', 'completed')
         .order('check_in_at', { ascending: false })
         .limit(200);
+      // overdue filtresi sadece reminderlar için; ziyaret sorgusu boş kalsın
       if (effectiveFilter === 'upcoming') vq = vq.gte('check_in_at', startOfTodayISO());
       if (effectiveFilter === 'past') vq = vq.lt('check_in_at', startOfTodayISO());
 
-      const [rRes, vRes] = await Promise.all([rq, vq]);
+      const [rRes, vRes] = await Promise.all([
+        rq,
+        effectiveFilter === 'overdue' ? Promise.resolve({ data: [], error: null }) : vq,
+      ]);
       if (rRes.error) throw rRes.error;
+      if (vRes.error) throw vRes.error;
       return {
         reminders: (rRes.data ?? []) as ReminderRow[],
         visits: (vRes.data ?? []) as VisitRow[],
@@ -304,6 +333,16 @@ function CalendarPage(): JSX.Element {
   });
   const assignerMap = assignerQuery.data ?? {};
 
+  // Foto/ses ekleri — görünür reminder id'leri için yükle.
+  const reminderIds = useMemo(() => reminders.map((r) => r.id), [reminders]);
+  const attachmentsQuery = useQuery({
+    queryKey: ['calendar-attachments', reminderIds.slice().sort().join(',')],
+    enabled: reminderIds.length > 0,
+    staleTime: 60_000,
+    queryFn: () => getReminderAttachmentsMap(reminderIds),
+  });
+  const attachmentsMap = attachmentsQuery.data ?? {};
+
   // Admin: atama yapılabilir plasiyerler (user_permissions grant).
   const assignableQuery = useQuery({
     queryKey: ['calendar-assignable-reps'],
@@ -344,6 +383,9 @@ function CalendarPage(): JSX.Element {
         status: r.status,
         visitId: r.visit_id,
         assignedBy: r.assigned_by,
+        recurrence: r.recurrence,
+        outcome: r.outcome,
+        completionNote: r.completion_note,
       });
     }
     for (const v of visits) {
@@ -361,6 +403,26 @@ function CalendarPage(): JSX.Element {
     }
     return items;
   }, [reminders, visits]);
+
+  // ?reminder=<id> → ajanda aç + scroll + 3.5sn highlight
+  useEffect(() => {
+    if (!focusReminderId || dataQuery.isLoading) return;
+    const exists = allItems.some((i) => i.id === focusReminderId);
+    if (!exists) return;
+    setView('agenda');
+    setFilter('all');
+    setFocusId(focusReminderId);
+    const t = setTimeout(() => {
+      document
+        .getElementById(`reminder-${focusReminderId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 150);
+    const clear = setTimeout(() => setFocusId(null), 3500);
+    return () => {
+      clearTimeout(t);
+      clearTimeout(clear);
+    };
+  }, [focusReminderId, dataQuery.isLoading, allItems]);
 
   // Ajanda görünümü: güne göre grupla
   const grouped = useMemo(() => {
@@ -405,24 +467,86 @@ function CalendarPage(): JSX.Element {
     return cells;
   }, [monthCursor]);
 
-  async function markDone(id: string): Promise<void> {
-    const sb = getSupabaseClient();
-    const { error } = await sb.from('saha_reminders').update({ status: 'done' }).eq('id', id);
-    if (error) {
-      toast.error('Güncellenemedi');
+  // B3 — rota sepeti
+  const addToBasket = useRouteBasket((s) => s.add);
+
+  // B1 — klinik telefonu ekle
+  async function addClinicPhone(accountId: string, phone: string): Promise<void> {
+    const clean = phone.replace(/[^\d+]/g, '');
+    if (clean.length < 7) {
+      toast.error('Geçerli numara girin.');
       return;
     }
-    toast.success('Tamamlandı', {
-      action: {
-        label: 'Geri al',
-        onClick: () => {
-          void (async () => {
-            await sb.from('saha_reminders').update({ status: 'open' }).eq('id', id);
-            void queryClient.invalidateQueries({ queryKey: ['calendar'] });
-          })();
-        },
-      },
+    const sb = getSupabaseClient();
+    const { error } = await sb.from('saha_clinics').update({ phone: clean }).eq('id', accountId);
+    if (error) {
+      toast.error('Numara kaydedilemedi.');
+      return;
+    }
+    toast.success('Numara eklendi.');
+    void queryClient.invalidateQueries({ queryKey: ['calendar-clinic-names'] });
+  }
+
+  // B3 — randevu kliniğini rota sepetine ekle
+  async function addReminderToRoute(accountId: string): Promise<void> {
+    const sb = getTypedClient();
+    const { data } = await sb
+      .from('saha_clinics')
+      .select('id, name, lat, lng')
+      .eq('id', accountId)
+      .single();
+    if (!data || data.lat == null || data.lng == null) {
+      toast.error('Klinik konumu yok, rotaya eklenemedi.');
+      return;
+    }
+    const res = addToBasket({
+      id: data.id as string,
+      name: data.name as string,
+      lat: data.lat as number,
+      lng: data.lng as number,
+      source: 'saha',
     });
+    if (res.ok) toast.success('Rota sepetine eklendi.');
+    else toast.error(res.reason === 'full' ? 'Sepet dolu (max 12).' : 'Zaten sepette.');
+  }
+
+  async function completeReminder(id: string, outcome: string, note: string): Promise<void> {
+    const sb = getSupabaseClient();
+    const { error } = await sb
+      .from('saha_reminders')
+      .update({ status: 'done', outcome, completion_note: note.trim() || null, completed_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) { toast.error('Kaydedilemedi'); return; }
+    toast.success('Tamamlandı');
+    // C3 — Tekrarlayan: tamamlananın recurrence'ı varsa sonraki occurrence'ı oluştur.
+    const sourceReminder = reminders.find((r) => r.id === id);
+    if (sourceReminder && sourceReminder.recurrence && sourceReminder.recurrence !== 'none') {
+      const nextDue = new Date(sourceReminder.due_at);
+      if (sourceReminder.recurrence === 'weekly') nextDue.setDate(nextDue.getDate() + 7);
+      else nextDue.setMonth(nextDue.getMonth() + 1);
+      const { error: recurErr } = await sb.from('saha_reminders').insert({
+        rep_id: sourceReminder.rep_id,
+        account_id: sourceReminder.account_id,
+        type: sourceReminder.type,
+        title: sourceReminder.title,
+        note: sourceReminder.note,
+        due_at: nextDue.toISOString(),
+        status: 'open',
+        recurrence: sourceReminder.recurrence,
+        assigned_by: sourceReminder.assigned_by,
+        created_by: sourceReminder.rep_id,
+      });
+      if (recurErr) toast.warning('Tamamlandı, fakat sonraki tekrar oluşturulamadı.');
+    }
+    void queryClient.invalidateQueries({ queryKey: ['calendar'] });
+  }
+
+  async function reopenReminder(id: string): Promise<void> {
+    const sb = getSupabaseClient();
+    await sb
+      .from('saha_reminders')
+      .update({ status: 'open', outcome: null, completion_note: null, completed_at: null })
+      .eq('id', id);
     void queryClient.invalidateQueries({ queryKey: ['calendar'] });
   }
 
@@ -526,22 +650,27 @@ function CalendarPage(): JSX.Element {
       {/* ----- AJANDA GÖRÜNÜMÜ ----- */}
       {view === 'agenda' && (
         <>
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-4 gap-1.5">
             {(
               [
                 ['upcoming', 'Yaklaşan'],
                 ['past', 'Geçmiş'],
                 ['all', 'Tümü'],
+                ['overdue', 'Gecikti'],
               ] as [FilterMode, string][]
             ).map(([k, label]) => (
               <button
                 key={k}
                 type="button"
                 onClick={() => setFilter(k)}
-                className={`h-9 rounded-lg border px-3 text-sm font-medium ${
+                className={`h-9 rounded-lg border px-2 text-xs font-medium ${
                   filter === k
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border bg-background hover:bg-muted'
+                    ? k === 'overdue'
+                      ? 'border-red-500 bg-red-500 text-white'
+                      : 'border-primary bg-primary text-primary-foreground'
+                    : k === 'overdue'
+                      ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                      : 'border-border bg-background hover:bg-muted'
                 }`}
               >
                 {label}
@@ -568,9 +697,11 @@ function CalendarPage(): JSX.Element {
                       key={`${it.kind}-${it.id}`}
                       it={it}
                       clinic={it.accountId ? (nameMap[it.accountId] ?? null) : null}
-                      onDone={markDone}
-                      onSnooze={snooze}
                       assignerName={it.assignedBy ? (assignerMap[it.assignedBy] ?? null) : null}
+                      highlighted={it.id === focusId}
+                      onAddPhone={addClinicPhone}
+                      attachments={attachmentsMap[it.id]}
+                      onOpen={setSelectedItem}
                     />
                   ))}
                 </ul>
@@ -671,9 +802,11 @@ function CalendarPage(): JSX.Element {
                       key={`${it.kind}-${it.id}`}
                       it={it}
                       clinic={it.accountId ? (nameMap[it.accountId] ?? null) : null}
-                      onDone={markDone}
-                      onSnooze={snooze}
                       assignerName={it.assignedBy ? (assignerMap[it.assignedBy] ?? null) : null}
+                      highlighted={it.id === focusId}
+                      onAddPhone={addClinicPhone}
+                      attachments={attachmentsMap[it.id]}
+                      onOpen={setSelectedItem}
                     />
                   ))}
                 </ul>
@@ -710,6 +843,32 @@ function CalendarPage(): JSX.Element {
           }}
         />
       )}
+
+      {selectedItem && (
+        <ReminderDetailSheet
+          item={{
+            id: selectedItem.id,
+            kind: selectedItem.kind,
+            type: selectedItem.type,
+            title: selectedItem.title,
+            note: selectedItem.note,
+            at: selectedItem.at,
+            accountId: selectedItem.accountId,
+            status: selectedItem.status,
+            assignedBy: selectedItem.assignedBy,
+            outcome: selectedItem.outcome,
+            completionNote: selectedItem.completionNote,
+          } as ReminderDetailItem}
+          clinic={selectedItem.accountId ? (nameMap[selectedItem.accountId] ?? null) : null}
+          attachments={attachmentsMap[selectedItem.id]}
+          assignerName={selectedItem.assignedBy ? (assignerMap[selectedItem.assignedBy] ?? null) : null}
+          onClose={() => setSelectedItem(null)}
+          onSnooze={(id, ms, label) => { void snooze(id, ms, label); setSelectedItem(null); }}
+          onAddToRoute={(aid) => { void addReminderToRoute(aid); }}
+          onComplete={(id, outcome, note) => { void completeReminder(id, outcome, note); setSelectedItem(null); }}
+          onReopen={(id) => { void reopenReminder(id); setSelectedItem(null); }}
+        />
+      )}
     </div>
   );
 }
@@ -718,23 +877,38 @@ function CalendarPage(): JSX.Element {
 function AgendaCard({
   it,
   clinic,
-  onDone,
-  onSnooze,
   assignerName,
+  highlighted,
+  onAddPhone,
+  attachments,
+  onOpen,
 }: {
   it: AgendaItem;
   clinic: { name: string; phone: string | null } | null;
-  onDone: (id: string) => void;
-  onSnooze: (id: string, ms: number, label: string) => void;
   assignerName?: string | null;
+  highlighted?: boolean;
+  onAddPhone?: (accountId: string, phone: string) => void;
+  attachments?: ReminderAttachment[];
+  onOpen?: (it: AgendaItem) => void;
 }): JSX.Element {
   const meta = typeMeta(it.type);
   const done = it.status === 'done';
   const phone = clinic?.phone ? clinic.phone.replace(/[^\d+]/g, '') : null;
   const waPhone = phone ? phone.replace(/^0/, '90').replace(/^\+/, '') : null;
+
+  // B1 — numara ekleme inline state
+  const [addingPhone, setAddingPhone] = useState(false);
+  const [phoneInput, setPhoneInput] = useState('');
   return (
-    <li className={`rounded-2xl border border-border bg-card p-3 ${done ? 'opacity-60' : ''}`}>
-      <div className="flex items-start gap-3">
+    <li
+      id={`reminder-${it.id}`}
+      className={`rounded-2xl border border-border bg-card p-3 ${done ? 'opacity-60' : ''} ${highlighted ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+    >
+      <div
+        className={`flex items-start gap-3 ${it.kind === 'reminder' ? 'cursor-pointer' : ''}`}
+        role={it.kind === 'reminder' ? 'button' : undefined}
+        onClick={it.kind === 'reminder' ? () => onOpen?.(it) : undefined}
+      >
         <div className="flex flex-col items-center pt-0.5">
           <meta.Icon className={`h-5 w-5 ${meta.color}`} aria-hidden="true" />
           <span className="mt-1 text-[10px] font-medium text-muted-foreground">
@@ -742,8 +916,13 @@ function AgendaCard({
           </span>
         </div>
         <div className="min-w-0 flex-1">
-          <p className={`text-sm font-medium text-foreground ${done ? 'line-through' : ''}`}>
-            {it.title}
+          <p className={`flex flex-wrap items-center gap-1.5 text-sm font-medium text-foreground ${done ? 'line-through' : ''}`}>
+            <span className="min-w-0 truncate">{it.title}</span>
+            {it.kind === 'reminder' && it.status === 'open' && new Date(it.at) < new Date() && (
+              <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-red-100 text-red-700">
+                Gecikti
+              </span>
+            )}
           </p>
           {clinic && (
             <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
@@ -755,11 +934,18 @@ function AgendaCard({
           {assignerName && (
             <p className="mt-1 text-[11px] font-medium text-indigo-600">Atayan: {assignerName}</p>
           )}
+          {/* Done outcome özeti */}
+          {done && it.outcome && (
+            <p className="mt-1 text-[11px] font-medium text-green-600">
+              ✓ {OUTCOME_LABEL[it.outcome] ?? it.outcome}{it.completionNote ? ` — ${it.completionNote}` : ''}
+            </p>
+          )}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className={`text-[11px] font-medium ${meta.color}`}>{meta.label}</span>
             {it.visitId && (
               <Link
                 to={`/visits/${it.visitId}`}
+                onClick={(e) => e.stopPropagation()}
                 className="text-[11px] font-medium text-primary hover:underline"
               >
                 Ziyareti aç
@@ -772,6 +958,7 @@ function AgendaCard({
               {phone && (
                 <a
                   href={`tel:${phone}`}
+                  onClick={(e) => e.stopPropagation()}
                   className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background px-2 text-[11px] font-medium hover:bg-muted"
                 >
                   <Phone className="h-3.5 w-3.5 text-blue-600" aria-hidden="true" />
@@ -783,39 +970,94 @@ function AgendaCard({
                   href={`https://wa.me/${waPhone}`}
                   target="_blank"
                   rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
                   className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background px-2 text-[11px] font-medium hover:bg-muted"
                 >
                   <MessageCircle className="h-3.5 w-3.5 text-green-600" aria-hidden="true" />
                   WhatsApp
                 </a>
               )}
-              <button
-                type="button"
-                onClick={() => onSnooze(it.id, 60 * 60 * 1000, '1 saat')}
-                className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background px-2 text-[11px] font-medium hover:bg-muted"
-              >
-                <AlarmClock className="h-3.5 w-3.5 text-amber-600" aria-hidden="true" />1 saat
-              </button>
-              <button
-                type="button"
-                onClick={() => onSnooze(it.id, 24 * 60 * 60 * 1000, 'Yarın')}
-                className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background px-2 text-[11px] font-medium hover:bg-muted"
-              >
-                <AlarmClock className="h-3.5 w-3.5 text-amber-600" aria-hidden="true" />
-                Yarın
-              </button>
-              <button
-                type="button"
-                onClick={() => onDone(it.id)}
-                className="inline-flex h-8 items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-2 text-[11px] font-medium text-green-700 hover:bg-green-100"
-              >
-                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-                Tamamlandı
-              </button>
+              {/* B1 — numara ekle (klinik varsa ama telefon yoksa) */}
+              {it.accountId && !clinic?.phone && onAddPhone && (
+                addingPhone ? (
+                  <>
+                    <input
+                      type="tel"
+                      value={phoneInput}
+                      onChange={(e) => setPhoneInput(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      placeholder="Numara girin"
+                      className="h-8 w-32 rounded-lg border border-border bg-background px-2 text-[11px]"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAddPhone(it.accountId!, phoneInput);
+                        setAddingPhone(false);
+                        setPhoneInput('');
+                      }}
+                      className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background px-2 text-[11px] font-medium hover:bg-muted"
+                    >
+                      Kaydet
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setAddingPhone(false); setPhoneInput(''); }}
+                      className="inline-flex h-8 items-center justify-center rounded-lg border border-border bg-background px-2 text-[11px] hover:bg-muted"
+                      aria-label="İptal"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setAddingPhone(true); }}
+                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background px-2 text-[11px] font-medium hover:bg-muted"
+                  >
+                    <Phone className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                    Numara ekle
+                  </button>
+                )
+              )}
             </div>
           )}
         </div>
       </div>
+
+      {/* Foto / ses ekleri */}
+      {attachments && attachments.length > 0 && (
+        <div className="mt-2 border-t border-border pt-2">
+          <p className="mb-1.5 flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+            <Paperclip className="h-3 w-3" aria-hidden="true" />
+            {attachments.length} ek
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {attachments.map((att) =>
+              att.kind === 'photo' ? (
+                <button
+                  key={att.id}
+                  type="button"
+                  onClick={() => window.open(att.url, '_blank')}
+                  className="block overflow-hidden rounded-lg border border-border"
+                  aria-label="Fotoğrafı aç"
+                >
+                  <img
+                    src={att.url}
+                    alt="ek fotoğraf"
+                    className="h-14 w-14 object-cover"
+                    loading="lazy"
+                  />
+                </button>
+              ) : (
+                <audio key={att.id} src={att.url} controls className="h-8 max-w-[240px]" />
+              ),
+            )}
+          </div>
+        </div>
+      )}
     </li>
   );
 }
@@ -845,6 +1087,69 @@ function AddReminderModal({
   const [clinicQuery, setClinicQuery] = useState('');
   const [clinic, setClinic] = useState<{ id: string; name: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [recurrence, setRecurrence] = useState<'none' | 'weekly' | 'monthly'>('none');
+
+  // Foto / ses ekleri (kaydetmeden önce toplanır, insert sonrası yüklenir)
+  const [attachments, setAttachments] = useState<{ kind: 'photo' | 'audio'; blob: Blob }[]>([]);
+  const [recording, setRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  // Modal kapanırsa/unmount olursa aktif kaydı + mikrofon track'lerini durdur
+  // (aksi halde getUserMedia stream'i açık kalır → mikrofon göstergesi yanar).
+  useEffect(() => {
+    return () => {
+      try {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+        }
+      } catch {
+        /* yut */
+      }
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>): void {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAttachments((prev) => [...prev, { kind: 'photo', blob: file }]);
+    // input sıfırla (aynı dosyayı tekrar seçilebilsin)
+    e.target.value = '';
+  }
+
+  async function startRecording(): Promise<void> {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      audioChunksRef.current = [];
+      const mr = new MediaRecorder(stream);
+      mediaRecorderRef.current = mr;
+      mr.ondataavailable = (ev) => {
+        if (ev.data.size > 0) audioChunksRef.current.push(ev.data);
+      };
+      mr.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        setAttachments((prev) => [...prev, { kind: 'audio', blob }]);
+        stream.getTracks().forEach((t) => t.stop());
+        setRecording(false);
+      };
+      mr.start();
+      setRecording(true);
+    } catch {
+      toast.error('Mikrofon izni alınamadı.');
+    }
+  }
+
+  function stopRecording(): void {
+    mediaRecorderRef.current?.stop();
+  }
+
+  function removeAttachment(idx: number): void {
+    setAttachments((prev) => prev.filter((_, i) => i !== idx));
+  }
 
   const searchQuery = useQuery({
     queryKey: ['add-reminder-clinic-search', clinicQuery],
@@ -883,23 +1188,67 @@ function AddReminderModal({
     const typeLabel = ADD_TYPES.find((t) => t.value === type)?.label ?? 'Hatırlatma';
     const finalTitle = title.trim() || (clinic ? `${typeLabel} — ${clinic.name}` : typeLabel);
     const isAssignment = targetRep !== selfId;
+
+    // B2 — Offline: kuyruğa al, online olunca insert edilir.
+    if (!navigator.onLine) {
+      await enqueueOp('reminder.create', {
+        rep_id: targetRep,
+        created_by: selfId,
+        assigned_by: isAssignment ? selfId : null,
+        account_id: clinic?.id ?? null,
+        type,
+        title: finalTitle,
+        note: note.trim() || null,
+        due_at: due.toISOString(),
+        status: 'open',
+        recurrence,
+      });
+      setSaving(false);
+      if (attachments.length > 0) toast.warning('Çevrimdışı: ekler kaydedilmedi.');
+      else toast.success('Çevrimdışı: bağlantı gelince kaydedilecek.');
+      onAdded(isAssignment ? targetRep : undefined);
+      return;
+    }
+
     const sb = getSupabaseClient();
-    const { error } = await sb.from('saha_reminders').insert({
-      rep_id: targetRep,
-      created_by: selfId,
-      assigned_by: isAssignment ? selfId : null,
-      account_id: clinic?.id ?? null,
-      type,
-      title: finalTitle,
-      note: note.trim() || null,
-      due_at: due.toISOString(),
-      status: 'open',
-    });
+    const { data: inserted, error } = await sb
+      .from('saha_reminders')
+      .insert({
+        rep_id: targetRep,
+        created_by: selfId,
+        assigned_by: isAssignment ? selfId : null,
+        account_id: clinic?.id ?? null,
+        type,
+        title: finalTitle,
+        note: note.trim() || null,
+        due_at: due.toISOString(),
+        status: 'open',
+        recurrence,
+      })
+      .select('id')
+      .single();
     if (error) {
       setSaving(false);
       toast.error(`Eklenemedi: ${error.message}`);
       return;
     }
+
+    // Ek yükleme — insert başarılıysa ve ek varsa paralel yükle.
+    // allSettled + try/catch: bir ek throw etse bile save akışı (success toast +
+    // onAdded) kesilmesin (reminder zaten kaydedildi).
+    if (attachments.length > 0 && inserted?.id) {
+      try {
+        const results = await Promise.allSettled(
+          attachments.map((a) => uploadReminderAttachment(inserted.id, a.blob, a.kind)),
+        );
+        if (results.some((r) => r.status === 'rejected' || !r.value.ok)) {
+          toast.warning('Bazı ekler yüklenemedi.');
+        }
+      } catch {
+        toast.warning('Ekler yüklenemedi.');
+      }
+    }
+
     // Atama ise hedef plasiyere anında bildirim (bell + push).
     // saha_notify_rep RPC her iki tabloya yazar (notifications INSERT RLS=service_role-only
     // olduğu için client doğrudan yazamaz; RPC SECURITY DEFINER ile bypass eder).
@@ -910,7 +1259,12 @@ function AddReminderModal({
         p_saha_type: 'system',
         p_title: `${typeLabel} atandı`,
         p_body: `${finalTitle} — ${due.toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' })}`,
-        p_data: { kind: 'visit_reminder', route: '/takvim', deeplink: '/takvim' },
+        p_data: {
+          kind: 'visit_reminder',
+          route: `/takvim?reminder=${inserted?.id ?? ''}`,
+          deeplink: `/takvim?reminder=${inserted?.id ?? ''}`,
+          reminder_id: inserted?.id,
+        },
         p_push: true,
       });
       if (notifErr) notifFailed = true;
@@ -982,6 +1336,32 @@ function AddReminderModal({
                   }`}
                 >
                   {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Tekrar</label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(
+                [
+                  ['none', 'Yok'],
+                  ['weekly', 'Haftalık'],
+                  ['monthly', 'Aylık'],
+                ] as ['none' | 'weekly' | 'monthly', string][]
+              ).map(([v, lbl]) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setRecurrence(v)}
+                  className={`h-9 rounded-lg border px-2 text-xs font-medium ${
+                    recurrence === v
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-border bg-background hover:bg-muted'
+                  }`}
+                >
+                  {lbl}
                 </button>
               ))}
             </div>
@@ -1074,6 +1454,67 @@ function AddReminderModal({
               maxLength={500}
               className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm"
             />
+          </div>
+
+          {/* Foto / ses ekleri */}
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">Ekler (opsiyonel)</p>
+            <div className="flex flex-wrap gap-2">
+              {/* Gizli dosya input'u */}
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handlePhotoSelect}
+              />
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-medium hover:bg-muted"
+              >
+                Foto ekle
+              </button>
+              {recording ? (
+                <button
+                  type="button"
+                  onClick={stopRecording}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-3 text-xs font-medium text-red-700 hover:bg-red-100"
+                >
+                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-red-600" />
+                  Kaydediliyor — Durdur
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void startRecording()}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-medium hover:bg-muted"
+                >
+                  Ses kaydet
+                </button>
+              )}
+            </div>
+
+            {attachments.length > 0 && (
+              <ul className="space-y-1">
+                {attachments.map((a, idx) => (
+                  <li key={idx} className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-1.5 text-xs">
+                    <span className="text-muted-foreground">
+                      {a.kind === 'photo' ? 'Fotoğraf' : 'Ses kaydı'} #{idx + 1}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(idx)}
+                      className="ml-2 text-muted-foreground hover:text-destructive"
+                      aria-label="Eki kaldır"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <button

@@ -19,6 +19,7 @@ const OP_LABEL: Record<OfflineOp['opType'], string> = {
   'visit.update': 'Ziyaret güncelleme',
   'order.create': 'Sipariş',
   'route.complete': 'Rota tamamlama',
+  'reminder.create': 'Hatırlatma',
 };
 
 /**
