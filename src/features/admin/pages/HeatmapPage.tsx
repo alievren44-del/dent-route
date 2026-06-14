@@ -37,11 +37,15 @@ export default function HeatmapPage() {
         map.resize();
         try {
           const supabase = getTypedClient();
+          const since90 = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
           const { data, error } = await supabase
             .from('saha_visits')
             .select('check_in_lat, check_in_lng, check_in_at')
             .not('check_in_lat', 'is', null)
-            .not('check_in_lng', 'is', null);
+            .not('check_in_lng', 'is', null)
+            .gte('check_in_at', since90)
+            .order('check_in_at', { ascending: false })
+            .limit(10000);
 
           if (error) throw error;
 
@@ -157,6 +161,9 @@ export default function HeatmapPage() {
               ? 'Yükleniyor...'
               : `${pointCount.toLocaleString('tr-TR')} ziyaret noktası`}
           </p>
+          {pointCount === 10000 && (
+            <p className="text-xs text-amber-600">Son 10.000 ziyaret gösteriliyor</p>
+          )}
         </div>
       </div>
 
