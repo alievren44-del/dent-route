@@ -42,12 +42,22 @@ export function RouteCard({
   const label = index === 0 ? 'Önerilen' : `Alternatif ${index}`;
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-pressed={isSelected}
+      aria-label={`${label} rotasını seç`}
       className={`rounded-xl border p-3 transition cursor-pointer ${
         isSelected
           ? 'border-blue-600 bg-white shadow-md ring-2 ring-blue-200'
           : 'border-slate-200 bg-white hover:border-slate-300'
       }`}
       onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">

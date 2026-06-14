@@ -41,19 +41,38 @@ interface DistanceTier {
   tone: 'green' | 'yellow' | 'warning' | 'red';
   label: string;
   blocked: boolean;
+  /** true = klinik koordinatı yok, mesafe doğrulanamıyor; kullanıcı onayıyla geçilebilir. */
+  needsOverride?: boolean;
 }
 
-function tierFor(distanceM: number | null): DistanceTier {
-  if (distanceM === null) {
+/**
+ * @param distanceM  - Haversine mesafesi (metre). Rep konumu yoksa veya klinik
+ *                     koordinatı yoksa null gelir.
+ * @param clinicHasCoords - Klinikte lat/lng kaydı var mı?
+ */
+function tierFor(distanceM: number | null, clinicHasCoords: boolean): DistanceTier {
+  // Rep konumu henüz gelmedi (klinik koordinatından bağımsız).
+  if (distanceM === null && clinicHasCoords) {
     return { tone: 'yellow', label: 'Konum bekleniyor…', blocked: true };
   }
-  if (distanceM < 50) {
+  // Klinik koordinatı yok — mesafe doğrulaması imkansız, override ile geçilebilir.
+  if (!clinicHasCoords) {
+    return {
+      tone: 'yellow',
+      label: 'Bu kliniğin GPS konumu kayıtlı değil. Mesafe doğrulanamıyor.',
+      blocked: false,
+      needsOverride: true,
+    };
+  }
+  // distanceM kesinlikle number buradan itibaren (clinicHasCoords && position her ikisi de var).
+  const d = distanceM as number;
+  if (d < 50) {
     return { tone: 'green', label: 'GPS doğrulandı — hedeftesiniz.', blocked: false };
   }
-  if (distanceM < 200) {
+  if (d < 200) {
     return { tone: 'green', label: 'Hedefin çok yakınındasınız.', blocked: false };
   }
-  if (distanceM < 2000) {
+  if (d < 2000) {
     return {
       tone: 'warning',
       label: 'Hedeften uzaktasınız, yine de devam edebilirsiniz.',
@@ -166,10 +185,13 @@ function CheckInPage(): JSX.Element {
     return haversineMeters(position.lat, position.lng, account.lat, account.lng);
   }, [position, account]);
 
-  const tier = tierFor(distanceM);
+  const clinicHasCoords = Boolean(account) && account!.lat !== null && account!.lng !== null;
+  const tier = tierFor(distanceM, clinicHasCoords);
 
   // Submit
   const [submitting, setSubmitting] = useState(false);
+  // Override onayı — koordinatsız klinik için kullanıcı onayladıysa true.
+  const [overrideConfirmed, setOverrideConfirmed] = useState(false);
   // Check-in anında hızlı not (opsiyonel) — saha_visits.notes'a yazılır.
   const [note, setNote] = useState('');
   const [showNote, setShowNote] = useState(false);
@@ -189,6 +211,10 @@ function CheckInPage(): JSX.Element {
     }
     if (tier.blocked) {
       toast.error(tier.label);
+      return;
+    }
+    if (tier.needsOverride && !overrideConfirmed) {
+      toast.error('Lütfen önce konum doğrulaması olmadan devam etmek istediğinizi onaylayın.');
       return;
     }
     setSubmitting(true);
@@ -353,10 +379,29 @@ function CheckInPage(): JSX.Element {
                   </>
                 )}
               </p>
-              {account && account.lat === null && (
-                <p className="text-xs mt-1 italic">
-                  Müşteri koordinatı kayıtlı değil — mesafe doğrulanamadı.
-                </p>
+
+              {/* Koordinatsız klinik — override onay kutusu */}
+              {tier.needsOverride && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs italic">
+                    Mevcut konumunuz (
+                    {position
+                      ? `${position.lat.toFixed(5)}, ${position.lng.toFixed(5)}`
+                      : 'bekleniyor…'}
+                    ) check-in kaydına eklenecek; klinik mesafesi doğrulanmayacak.
+                  </p>
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={overrideConfirmed}
+                      onChange={(e) => setOverrideConfirmed(e.target.checked)}
+                      className="h-4 w-4 rounded border-current accent-amber-700"
+                    />
+                    <span className="text-xs font-medium">
+                      Anladım, mesafe doğrulaması olmadan check-in yapmak istiyorum.
+                    </span>
+                  </label>
+                </div>
               )}
             </div>
           </div>
@@ -427,6 +472,7 @@ function CheckInPage(): JSX.Element {
             !position ||
             accountLoading ||
             tier.blocked ||
+            (tier.needsOverride === true && !overrideConfirmed) ||
             status === 'denied' ||
             status === 'unavailable'
           }

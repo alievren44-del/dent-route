@@ -41,6 +41,7 @@ import {
   TrendingUp,
   ClipboardList,
   CalendarDays,
+  Megaphone,
 } from 'lucide-react';
 import { useRouteBasket } from '@features/routes/store/routeBasketStore';
 
@@ -113,6 +114,7 @@ const SECTIONS: NavSection[] = [
       { to: '/admin/regions', label: 'Bölge Atama', Icon: MapPinned },
       { to: '/admin/users', label: 'Kullanıcı Yönetimi', Icon: UserCog },
       { to: '/admin/audit-logs', label: 'Audit Log', Icon: ScrollText },
+      { to: '/admin/broadcast', label: 'Toplu Bildirim', Icon: Megaphone },
     ],
   },
 ];
