@@ -40,6 +40,7 @@ const ScanRoutePlanner = lazy(() => import('@features/admin/pages/ScanRoutePlann
 const UsersPage = lazy(() => import('@features/admin/pages/UsersPage'));
 const TrSeedPage = lazy(() => import('@features/admin/pages/TrSeedPage'));
 const AuditLogPage = lazy(() => import('@features/admin/pages/AuditLogPage'));
+const AdminBroadcastPage = lazy(() => import('@features/admin/pages/AdminBroadcastPage'));
 
 // Visits (Sprint 4)
 const CheckInPage = lazy(() => import('@features/visits/pages/CheckInPage'));
@@ -535,6 +536,16 @@ export function AppRouter() {
             <ProtectedRoute requireRole="admin">
               <AppShell>
                 <ScanRoutePlanner />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/broadcast"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <AdminBroadcastPage />
               </AppShell>
             </ProtectedRoute>
           }

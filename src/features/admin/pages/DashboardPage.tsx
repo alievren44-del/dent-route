@@ -6,7 +6,7 @@
  */
 
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Users,
@@ -31,6 +31,74 @@ import {
 } from 'lucide-react';
 
 import { getTypedClient } from '@/lib/supabase';
+
+// ---- Canlı aktivite tipleri ----
+interface LiveVisitRow {
+  id: string;
+  account_id: string | null;
+  rep_id: string | null;
+  check_in_at: string | null;
+  outcome: string | null;
+  status: string | null;
+}
+
+const OUTCOME_LABEL: Record<string, string> = {
+  met: 'Görüşüldü',
+  not_met: 'Görüşülemedi',
+  left_material: 'Materyal Bırakıldı',
+  follow_up: 'Takip Gerekli',
+  sale: 'Satış',
+  no_answer: 'Cevap Yok',
+};
+
+function todayStartISO(): string {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
+async function fetchLiveActivity(): Promise<{
+  visits: LiveVisitRow[];
+  repNames: Record<string, string>;
+  clinicNames: Record<string, string>;
+}> {
+  const supabase = getTypedClient();
+  const todayISO = todayStartISO();
+
+  const { data: visits, error: visitsErr } = await supabase
+    .from('saha_visits')
+    .select('id, account_id, rep_id, check_in_at, outcome, status')
+    .gte('check_in_at', todayISO)
+    .order('check_in_at', { ascending: false })
+    .limit(30);
+
+  if (visitsErr) throw visitsErr;
+  const rows = (visits ?? []) as LiveVisitRow[];
+
+  const repIds = [...new Set(rows.map((r) => r.rep_id).filter(Boolean) as string[])];
+  const accountIds = [...new Set(rows.map((r) => r.account_id).filter(Boolean) as string[])];
+
+  const [repsRes, clinicsRes] = await Promise.all([
+    repIds.length > 0
+      ? supabase.from('profiles').select('id, ad_soyad').in('id', repIds)
+      : { data: [], error: null },
+    accountIds.length > 0
+      ? supabase.from('saha_clinics').select('id, name').in('id', accountIds)
+      : { data: [], error: null },
+  ]);
+
+  const repNames: Record<string, string> = {};
+  for (const r of (repsRes.data ?? []) as Array<{ id: string; ad_soyad: string | null }>) {
+    repNames[r.id] = r.ad_soyad ?? r.id.slice(0, 8);
+  }
+
+  const clinicNames: Record<string, string> = {};
+  for (const c of (clinicsRes.data ?? []) as Array<{ id: string; name: string | null }>) {
+    clinicNames[c.id] = c.name ?? c.id.slice(0, 8);
+  }
+
+  return { visits: rows, repNames, clinicNames };
+}
 
 type RangeKey = '7' | '30' | '90';
 
@@ -258,12 +326,19 @@ function formatKm(km: number): string {
 }
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
   const [range, setRange] = useState<RangeKey>('30');
   const sinceIso = useMemo(() => sinceIsoFor(range), [range]);
 
   const dashboardQuery = useQuery({
     queryKey: ['admin', 'dashboard', sinceIso],
     queryFn: () => fetchDashboard(sinceIso),
+  });
+
+  const liveQuery = useQuery({
+    queryKey: ['admin-live-activity'],
+    queryFn: fetchLiveActivity,
+    refetchInterval: 60_000,
   });
 
   const data = dashboardQuery.data;
@@ -402,6 +477,79 @@ export default function DashboardPage() {
           </div>
         </section>
 
+        {/* Canlı Aktivite */}
+        <section className="overflow-hidden rounded-lg border border-emerald-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-emerald-100 bg-emerald-50 px-4 py-3">
+            <div>
+              <h2 className="text-sm font-semibold text-emerald-800">Canlı Aktivite</h2>
+              <p className="text-xs text-emerald-600">Bugünkü saha ziyaretleri (son 30)</p>
+            </div>
+            <span className="flex items-center gap-1.5 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+              Canlı · 60s
+            </span>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {liveQuery.isLoading && (
+              <p className="px-4 py-5 text-center text-sm text-slate-400">Yükleniyor...</p>
+            )}
+            {liveQuery.isError && (
+              <p className="px-4 py-5 text-center text-sm text-rose-500">
+                Veri alınamadı: {(liveQuery.error as Error | null)?.message ?? 'hata'}
+              </p>
+            )}
+            {!liveQuery.isLoading && !liveQuery.isError && (liveQuery.data?.visits.length ?? 0) === 0 && (
+              <p className="px-4 py-5 text-center text-sm text-slate-400">
+                Bugün henüz ziyaret yok.
+              </p>
+            )}
+            {(liveQuery.data?.visits ?? []).map((visit) => {
+              const repName = visit.rep_id
+                ? (liveQuery.data?.repNames[visit.rep_id] ?? visit.rep_id.slice(0, 8))
+                : '—';
+              const clinicName = visit.account_id
+                ? (liveQuery.data?.clinicNames[visit.account_id] ?? visit.account_id.slice(0, 8))
+                : '—';
+              const timeStr = visit.check_in_at
+                ? new Date(visit.check_in_at).toLocaleTimeString('tr-TR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })
+                : '—';
+              const isInProgress = visit.status === 'in_progress';
+              const outcomeText = isInProgress
+                ? null
+                : visit.outcome
+                  ? (OUTCOME_LABEL[visit.outcome] ?? visit.outcome)
+                  : null;
+
+              return (
+                <div
+                  key={visit.id}
+                  className="flex flex-wrap items-center gap-2 px-4 py-2.5 text-sm"
+                >
+                  <span className="font-medium text-slate-800">{repName}</span>
+                  <span className="text-slate-400">·</span>
+                  <span className="text-slate-600">{clinicName}</span>
+                  <span className="text-slate-400">·</span>
+                  <span className="tabular-nums text-slate-500">{timeStr}</span>
+                  {isInProgress && (
+                    <span className="flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                      <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-green-500" />
+                      Devam ediyor
+                    </span>
+                  )}
+                  {!isInProgress && outcomeText && (
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                      {outcomeText}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
         {/* Kart grid */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
@@ -497,7 +645,20 @@ export default function DashboardPage() {
                   };
                   const isTop = idx < 3;
                   return (
-                    <tr key={rep.id} className={isTop ? 'bg-emerald-50/50' : 'hover:bg-slate-50'}>
+                    <tr
+                      key={rep.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${repLabel(rep)} KPI detayına git`}
+                      onClick={() => navigate(`/admin/rep-kpi?rep=${rep.id}`)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          navigate(`/admin/rep-kpi?rep=${rep.id}`);
+                        }
+                      }}
+                      className={`cursor-pointer ${isTop ? 'bg-emerald-50/50 hover:bg-emerald-100/60' : 'hover:bg-slate-50'}`}
+                    >
                       <td className="px-3 py-2 text-xs font-semibold text-slate-500">{idx + 1}</td>
                       <td className="px-3 py-2">
                         <div className="font-medium text-slate-800">{repLabel(rep)}</div>
