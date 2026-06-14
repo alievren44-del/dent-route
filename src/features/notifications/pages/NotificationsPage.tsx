@@ -199,8 +199,9 @@ export default function NotificationsPage() {
                         type="button"
                         onClick={() => {
                           if (!n.read_at) markRead.mutate(n.id);
-                          const route =
-                            (n.payload?.route ?? n.payload?.deeplink) as string | undefined;
+                          const route = (n.payload?.route ?? n.payload?.deeplink) as
+                            | string
+                            | undefined;
                           if (route) navigate(route);
                         }}
                         className={`w-full text-left p-3 hover:bg-muted ${

@@ -95,7 +95,11 @@ function OrderApprovalPage(): JSX.Element {
   const queryClient = useQueryClient();
   const profile = useAuthStore((s) => s.profile);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [rejectFor, setRejectFor] = useState<{ id: string; repId: string | null; orderNumber: string | null } | null>(null);
+  const [rejectFor, setRejectFor] = useState<{
+    id: string;
+    repId: string | null;
+    orderNumber: string | null;
+  } | null>(null);
   const [rejectReason, setRejectReason] = useState<string>('');
 
   const { data, isLoading, isError, error } = useQuery({
@@ -149,14 +153,21 @@ function OrderApprovalPage(): JSX.Element {
       if (variables.repId) {
         try {
           const supabase = getTypedClient();
-          const { error: notifErr } = await (supabase as ReturnType<typeof getTypedClient> & {
-            rpc(fn: string, args: Record<string, unknown>): Promise<{ error: unknown }>;
-          }).rpc('saha_notify_rep', {
+          const { error: notifErr } = await (
+            supabase as ReturnType<typeof getTypedClient> & {
+              rpc(fn: string, args: Record<string, unknown>): Promise<{ error: unknown }>;
+            }
+          ).rpc('saha_notify_rep', {
             p_user_id: variables.repId,
             p_saha_type: 'order_approval',
             p_title: 'Siparişiniz onaylandı',
             p_body: `${variables.orderNumber ?? 'Sipariş'} — onaylandı`,
-            p_data: { kind: 'order', route: '/orders/history', deeplink: '/orders/history', order_id: variables.orderId },
+            p_data: {
+              kind: 'order',
+              route: '/orders/history',
+              deeplink: '/orders/history',
+              order_id: variables.orderId,
+            },
             p_push: true,
           });
           if (notifErr) console.warn('[OrderApproval] approve bildirim hatası:', notifErr);
@@ -218,14 +229,21 @@ function OrderApprovalPage(): JSX.Element {
       if (variables.repId) {
         try {
           const supabase = getTypedClient();
-          const { error: notifErr } = await (supabase as ReturnType<typeof getTypedClient> & {
-            rpc(fn: string, args: Record<string, unknown>): Promise<{ error: unknown }>;
-          }).rpc('saha_notify_rep', {
+          const { error: notifErr } = await (
+            supabase as ReturnType<typeof getTypedClient> & {
+              rpc(fn: string, args: Record<string, unknown>): Promise<{ error: unknown }>;
+            }
+          ).rpc('saha_notify_rep', {
             p_user_id: variables.repId,
             p_saha_type: 'order_approval',
             p_title: 'Siparişiniz reddedildi',
             p_body: `${variables.orderNumber ?? 'Sipariş'} — reddedildi${variables.reason ? ' · ' + variables.reason : ''}`,
-            p_data: { kind: 'order', route: '/orders/history', deeplink: '/orders/history', order_id: variables.id },
+            p_data: {
+              kind: 'order',
+              route: '/orders/history',
+              deeplink: '/orders/history',
+              order_id: variables.id,
+            },
             p_push: true,
           });
           if (notifErr) console.warn('[OrderApproval] reject bildirim hatası:', notifErr);
@@ -344,7 +362,13 @@ function OrderApprovalPage(): JSX.Element {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => approveMutation.mutate({ orderId: o.id, repId: o.sales_rep_id, orderNumber: o.order_number })}
+                      onClick={() =>
+                        approveMutation.mutate({
+                          orderId: o.id,
+                          repId: o.sales_rep_id,
+                          orderNumber: o.order_number,
+                        })
+                      }
                       disabled={approveMutation.isPending || rejectMutation.isPending}
                       className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-green-600 text-white text-sm font-semibold min-h-tap-min disabled:opacity-50"
                     >
@@ -354,7 +378,11 @@ function OrderApprovalPage(): JSX.Element {
                     <button
                       type="button"
                       onClick={() => {
-                        setRejectFor({ id: o.id, repId: o.sales_rep_id, orderNumber: o.order_number });
+                        setRejectFor({
+                          id: o.id,
+                          repId: o.sales_rep_id,
+                          orderNumber: o.order_number,
+                        });
                         setRejectReason('');
                       }}
                       disabled={approveMutation.isPending || rejectMutation.isPending}
@@ -405,7 +433,12 @@ function OrderApprovalPage(): JSX.Element {
                     toast.error('Red sebebi gerekli.');
                     return;
                   }
-                  rejectMutation.mutate({ id: rejectFor.id, reason, repId: rejectFor.repId, orderNumber: rejectFor.orderNumber });
+                  rejectMutation.mutate({
+                    id: rejectFor.id,
+                    reason,
+                    repId: rejectFor.repId,
+                    orderNumber: rejectFor.orderNumber,
+                  });
                 }}
                 disabled={rejectMutation.isPending}
                 className="flex-1 px-3 py-2.5 rounded-lg bg-red-600 text-white text-sm font-semibold min-h-tap-min disabled:opacity-50"

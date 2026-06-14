@@ -498,11 +498,13 @@ export default function DashboardPage() {
                 Veri alınamadı: {(liveQuery.error as Error | null)?.message ?? 'hata'}
               </p>
             )}
-            {!liveQuery.isLoading && !liveQuery.isError && (liveQuery.data?.visits.length ?? 0) === 0 && (
-              <p className="px-4 py-5 text-center text-sm text-slate-400">
-                Bugün henüz ziyaret yok.
-              </p>
-            )}
+            {!liveQuery.isLoading &&
+              !liveQuery.isError &&
+              (liveQuery.data?.visits.length ?? 0) === 0 && (
+                <p className="px-4 py-5 text-center text-sm text-slate-400">
+                  Bugün henüz ziyaret yok.
+                </p>
+              )}
             {(liveQuery.data?.visits ?? []).map((visit) => {
               const repName = visit.rep_id
                 ? (liveQuery.data?.repNames[visit.rep_id] ?? visit.rep_id.slice(0, 8))

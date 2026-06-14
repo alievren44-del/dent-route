@@ -185,8 +185,7 @@ function CheckInPage(): JSX.Element {
     return haversineMeters(position.lat, position.lng, account.lat, account.lng);
   }, [position, account]);
 
-  const clinicHasCoords =
-    Boolean(account) && account!.lat !== null && account!.lng !== null;
+  const clinicHasCoords = Boolean(account) && account!.lat !== null && account!.lng !== null;
   const tier = tierFor(distanceM, clinicHasCoords);
 
   // Submit
@@ -385,7 +384,11 @@ function CheckInPage(): JSX.Element {
               {tier.needsOverride && (
                 <div className="mt-3 space-y-2">
                   <p className="text-xs italic">
-                    Mevcut konumunuz ({position ? `${position.lat.toFixed(5)}, ${position.lng.toFixed(5)}` : 'bekleniyor…'}) check-in kaydına eklenecek; klinik mesafesi doğrulanmayacak.
+                    Mevcut konumunuz (
+                    {position
+                      ? `${position.lat.toFixed(5)}, ${position.lng.toFixed(5)}`
+                      : 'bekleniyor…'}
+                    ) check-in kaydına eklenecek; klinik mesafesi doğrulanmayacak.
                   </p>
                   <label className="flex items-center gap-2 cursor-pointer select-none">
                     <input

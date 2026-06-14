@@ -112,7 +112,11 @@ export function NotificationBell() {
                 Tümü
               </Link>
             </div>
-            <div className="max-h-96 overflow-y-auto divide-y divide-border" aria-live="polite" aria-atomic="false">
+            <div
+              className="max-h-96 overflow-y-auto divide-y divide-border"
+              aria-live="polite"
+              aria-atomic="false"
+            >
               {(data ?? []).length === 0 ? (
                 <div className="p-6 text-center text-sm text-muted-foreground">Bildirim yok</div>
               ) : (
