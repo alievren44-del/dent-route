@@ -138,12 +138,15 @@ function VisitCard({ visit, outcomeMeta, onClick }: VisitCardProps): JSX.Element
       {photoCount > 0 && (
         <div className="mt-3 flex items-center gap-1.5">
           {thumbs.slice(0, 3).map((url, i) => (
-            <div
+            <button
               key={`${visit.id}-thumb-${i}`}
-              className="w-12 h-12 rounded-lg overflow-hidden border border-border bg-muted shrink-0"
+              type="button"
+              onClick={() => window.open(url, '_blank')}
+              aria-label={`Fotoğrafı büyük gör ${i + 1}`}
+              className="w-12 h-12 rounded-lg overflow-hidden border border-border bg-muted shrink-0 p-0 cursor-zoom-in"
             >
               <img src={url} alt={`foto ${i + 1}`} className="w-full h-full object-cover" />
-            </div>
+            </button>
           ))}
           {thumbs.length === 0 && (
             <div className="inline-flex items-center gap-1 text-xs text-muted-foreground">

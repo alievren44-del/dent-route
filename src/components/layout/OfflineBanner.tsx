@@ -159,7 +159,7 @@ export function OfflineBanner() {
                 <button
                   type="button"
                   onClick={() => void handleRemove(op.id)}
-                  className="flex items-center gap-1 shrink-0 rounded-md bg-white/15 px-2 py-1 text-[11px] font-semibold hover:bg-white/25"
+                  className="inline-flex items-center gap-1 shrink-0 rounded-md bg-white/15 px-2 min-h-[44px] text-[11px] font-semibold hover:bg-white/25"
                   aria-label="Bu işlemi kuyruktan kaldır"
                   title="Kuyruktan kaldır"
                 >

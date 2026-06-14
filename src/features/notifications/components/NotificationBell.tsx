@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Bell } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -36,6 +36,22 @@ export function NotificationBell() {
   const userId = useAuthStore((s) => s.session?.userId);
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const popupRef = useRef<HTMLDivElement>(null);
+
+  // Escape ile kapat
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('keydown', onKeyDown);
+    // Popup açıldığında ilk odaklanılabilir öğeye focus ver
+    const firstFocusable = popupRef.current?.querySelector<HTMLElement>(
+      'a, button, [tabindex]:not([tabindex="-1"])',
+    );
+    firstFocusable?.focus();
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open]);
 
   const { data } = useQuery({
     queryKey: ['notifications', userId],
@@ -79,7 +95,13 @@ export function NotificationBell() {
       {open && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} aria-hidden="true" />
-          <div className="absolute right-0 top-12 z-30 w-80 max-w-[90vw] rounded-xl border border-border bg-card shadow-xl">
+          <div
+            ref={popupRef}
+            className="absolute right-0 top-12 z-30 w-80 max-w-[90vw] rounded-xl border border-border bg-card shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Bildirimler paneli"
+          >
             <div className="border-b border-border p-3 flex items-center justify-between">
               <h2 className="font-semibold text-sm">Bildirimler</h2>
               <Link
@@ -90,7 +112,7 @@ export function NotificationBell() {
                 Tümü
               </Link>
             </div>
-            <div className="max-h-96 overflow-y-auto divide-y divide-border">
+            <div className="max-h-96 overflow-y-auto divide-y divide-border" aria-live="polite" aria-atomic="false">
               {(data ?? []).length === 0 ? (
                 <div className="p-6 text-center text-sm text-muted-foreground">Bildirim yok</div>
               ) : (

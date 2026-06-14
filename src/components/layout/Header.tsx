@@ -41,7 +41,7 @@ export function Header() {
             <button
               type="button"
               onClick={handleSignOut}
-              className="rounded-md bg-muted px-3 py-1.5 text-xs font-medium text-foreground"
+              className="inline-flex items-center justify-center rounded-md bg-muted px-3 h-11 text-xs font-medium text-foreground"
               aria-label="Çıkış yap"
             >
               Çıkış

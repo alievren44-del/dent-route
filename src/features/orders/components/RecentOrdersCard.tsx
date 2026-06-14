@@ -15,6 +15,7 @@ import { ChevronRight, ShoppingBag } from 'lucide-react';
 
 import { getTypedClient } from '@lib/supabase';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
+import { orderStatusMeta } from '@features/orders/lib/orderStatus';
 
 interface RecentOrdersCardProps {
   customerId: string;
@@ -29,30 +30,6 @@ interface OrderRow {
   status: string | null;
   created_at: string | null;
 }
-
-const STATUS_STYLES: Record<string, string> = {
-  draft: 'bg-gray-200 text-gray-700',
-  pending: 'bg-amber-100 text-amber-800',
-  approval_pending: 'bg-purple-100 text-purple-800',
-  approved: 'bg-blue-100 text-blue-800',
-  confirmed: 'bg-blue-100 text-blue-800',
-  rejected: 'bg-red-100 text-red-800',
-  shipped: 'bg-indigo-100 text-indigo-800',
-  delivered: 'bg-green-100 text-green-800',
-  cancelled: 'bg-red-100 text-red-800',
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  draft: 'Taslak',
-  pending: 'Beklemede',
-  approval_pending: 'Onay Bekliyor',
-  approved: 'Onaylandı',
-  confirmed: 'Onaylandı',
-  rejected: 'Reddedildi',
-  shipped: 'Kargoda',
-  delivered: 'Teslim Edildi',
-  cancelled: 'İptal',
-};
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -117,7 +94,8 @@ export function RecentOrdersCard({ customerId, limit = 5 }: RecentOrdersCardProp
       {!isLoading && !isError && (data ?? []).length > 0 && (
         <ul className="divide-y divide-border -mx-1">
           {(data ?? []).map((o) => {
-            const status = String(o.status ?? '').toLowerCase();
+            const statusStr = String(o.status ?? '');
+            const meta = orderStatusMeta(statusStr);
             const total = Number(o.total ?? o.total_amount ?? 0);
             return (
               <li key={o.id} className="px-1 py-2 first:pt-0 last:pb-0">
@@ -133,11 +111,9 @@ export function RecentOrdersCard({ customerId, limit = 5 }: RecentOrdersCardProp
                       {formatTRY(total)}
                     </span>
                     <span
-                      className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                        STATUS_STYLES[status] ?? 'bg-gray-200 text-gray-700'
-                      }`}
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${meta.color}`}
                     >
-                      {STATUS_LABELS[status] ?? status}
+                      {meta.label}
                     </span>
                   </div>
                 </div>
