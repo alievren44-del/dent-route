@@ -46,7 +46,7 @@ import { syncReminderNotifications } from '@lib/localReminders';
 import { enqueueOp } from '@core/offline/syncQueue';
 import { useRouteBasket } from '@features/routes/store/routeBasketStore';
 
-type FilterMode = 'upcoming' | 'past' | 'all';
+type FilterMode = 'upcoming' | 'past' | 'all' | 'overdue';
 type ViewMode = 'agenda' | 'month';
 type ReminderType = 'revisit' | 'appointment' | 'tahsilat' | 'tanitim' | 'task' | 'note';
 
@@ -61,6 +61,7 @@ interface ReminderRow {
   due_at: string;
   status: 'open' | 'done' | 'cancelled';
   assigned_by: string | null;
+  recurrence: 'none' | 'weekly' | 'monthly';
 }
 
 interface VisitRow {
@@ -87,6 +88,7 @@ interface AgendaItem {
   status?: ReminderRow['status'];
   visitId?: string | null;
   assignedBy?: string | null;
+  recurrence?: 'none' | 'weekly' | 'monthly';
 }
 
 const OUTCOME_LABEL: Record<string, string> = {
@@ -230,12 +232,14 @@ function CalendarPage(): JSX.Element {
 
       let rq = sb
         .from('saha_reminders')
-        .select('id, rep_id, account_id, visit_id, type, title, note, due_at, status, assigned_by')
+        .select('id, rep_id, account_id, visit_id, type, title, note, due_at, status, assigned_by, recurrence')
         .eq('rep_id', targetRepId)
         .neq('status', 'cancelled')
         .order('due_at', { ascending: true });
       if (effectiveFilter === 'upcoming') rq = rq.gte('due_at', startOfTodayISO());
       if (effectiveFilter === 'past') rq = rq.lt('due_at', startOfTodayISO());
+      if (effectiveFilter === 'overdue')
+        rq = rq.lt('due_at', new Date().toISOString()).eq('status', 'open');
 
       let vq = typed
         .from('saha_visits')
@@ -244,11 +248,16 @@ function CalendarPage(): JSX.Element {
         .eq('status', 'completed')
         .order('check_in_at', { ascending: false })
         .limit(200);
+      // overdue filtresi sadece reminderlar için; ziyaret sorgusu boş kalsın
       if (effectiveFilter === 'upcoming') vq = vq.gte('check_in_at', startOfTodayISO());
       if (effectiveFilter === 'past') vq = vq.lt('check_in_at', startOfTodayISO());
 
-      const [rRes, vRes] = await Promise.all([rq, vq]);
+      const [rRes, vRes] = await Promise.all([
+        rq,
+        effectiveFilter === 'overdue' ? Promise.resolve({ data: [], error: null }) : vq,
+      ]);
       if (rRes.error) throw rRes.error;
+      if (vRes.error) throw vRes.error;
       return {
         reminders: (rRes.data ?? []) as ReminderRow[],
         visits: (vRes.data ?? []) as VisitRow[],
@@ -352,6 +361,7 @@ function CalendarPage(): JSX.Element {
         status: r.status,
         visitId: r.visit_id,
         assignedBy: r.assigned_by,
+        recurrence: r.recurrence,
       });
     }
     for (const v of visits) {
@@ -483,12 +493,42 @@ function CalendarPage(): JSX.Element {
       toast.error('Güncellenemedi');
       return;
     }
+
+    // C3 — Tekrarlayan: tamamlananın recurrence'ı varsa sonraki occurrence'ı oluştur.
+    // childId yakalanır → "Geri al" hem original'i açar HEM bu child'ı siler (çift-aktif önle).
+    let childId: string | null = null;
+    const sourceReminder = reminders.find((r) => r.id === id);
+    if (sourceReminder && sourceReminder.recurrence && sourceReminder.recurrence !== 'none') {
+      const nextDue = new Date(sourceReminder.due_at);
+      if (sourceReminder.recurrence === 'weekly') nextDue.setDate(nextDue.getDate() + 7);
+      else nextDue.setMonth(nextDue.getMonth() + 1); // monthly
+      const { data: child, error: insertErr } = await sb
+        .from('saha_reminders')
+        .insert({
+          rep_id: sourceReminder.rep_id,
+          account_id: sourceReminder.account_id,
+          type: sourceReminder.type,
+          title: sourceReminder.title,
+          note: sourceReminder.note,
+          due_at: nextDue.toISOString(),
+          status: 'open',
+          recurrence: sourceReminder.recurrence,
+          assigned_by: sourceReminder.assigned_by,
+          created_by: sourceReminder.rep_id,
+        })
+        .select('id')
+        .single();
+      if (insertErr) toast.error('Sonraki tekrar oluşturulamadı.');
+      else childId = (child as { id: string } | null)?.id ?? null;
+    }
+
     toast.success('Tamamlandı', {
       action: {
         label: 'Geri al',
         onClick: () => {
           void (async () => {
             await sb.from('saha_reminders').update({ status: 'open' }).eq('id', id);
+            if (childId) await sb.from('saha_reminders').delete().eq('id', childId);
             void queryClient.invalidateQueries({ queryKey: ['calendar'] });
           })();
         },
@@ -597,22 +637,27 @@ function CalendarPage(): JSX.Element {
       {/* ----- AJANDA GÖRÜNÜMÜ ----- */}
       {view === 'agenda' && (
         <>
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-4 gap-1.5">
             {(
               [
                 ['upcoming', 'Yaklaşan'],
                 ['past', 'Geçmiş'],
                 ['all', 'Tümü'],
+                ['overdue', 'Gecikti'],
               ] as [FilterMode, string][]
             ).map(([k, label]) => (
               <button
                 key={k}
                 type="button"
                 onClick={() => setFilter(k)}
-                className={`h-9 rounded-lg border px-3 text-sm font-medium ${
+                className={`h-9 rounded-lg border px-2 text-xs font-medium ${
                   filter === k
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border bg-background hover:bg-muted'
+                    ? k === 'overdue'
+                      ? 'border-red-500 bg-red-500 text-white'
+                      : 'border-primary bg-primary text-primary-foreground'
+                    : k === 'overdue'
+                      ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                      : 'border-border bg-background hover:bg-muted'
                 }`}
               >
                 {label}
@@ -832,8 +877,13 @@ function AgendaCard({
           </span>
         </div>
         <div className="min-w-0 flex-1">
-          <p className={`text-sm font-medium text-foreground ${done ? 'line-through' : ''}`}>
-            {it.title}
+          <p className={`flex flex-wrap items-center gap-1.5 text-sm font-medium text-foreground ${done ? 'line-through' : ''}`}>
+            <span className="min-w-0 truncate">{it.title}</span>
+            {it.kind === 'reminder' && it.status === 'open' && new Date(it.at) < new Date() && (
+              <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-red-100 text-red-700">
+                Gecikti
+              </span>
+            )}
           </p>
           {clinic && (
             <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
@@ -991,6 +1041,7 @@ function AddReminderModal({
   const [clinicQuery, setClinicQuery] = useState('');
   const [clinic, setClinic] = useState<{ id: string; name: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [recurrence, setRecurrence] = useState<'none' | 'weekly' | 'monthly'>('none');
 
   const searchQuery = useQuery({
     queryKey: ['add-reminder-clinic-search', clinicQuery],
@@ -1042,6 +1093,7 @@ function AddReminderModal({
         note: note.trim() || null,
         due_at: due.toISOString(),
         status: 'open',
+        recurrence,
       });
       setSaving(false);
       toast.success('Çevrimdışı: bağlantı gelince kaydedilecek.');
@@ -1062,6 +1114,7 @@ function AddReminderModal({
         note: note.trim() || null,
         due_at: due.toISOString(),
         status: 'open',
+        recurrence,
       })
       .select('id')
       .single();
@@ -1157,6 +1210,32 @@ function AddReminderModal({
                   }`}
                 >
                   {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Tekrar</label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(
+                [
+                  ['none', 'Yok'],
+                  ['weekly', 'Haftalık'],
+                  ['monthly', 'Aylık'],
+                ] as ['none' | 'weekly' | 'monthly', string][]
+              ).map(([v, lbl]) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setRecurrence(v)}
+                  className={`h-9 rounded-lg border px-2 text-xs font-medium ${
+                    recurrence === v
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-border bg-background hover:bg-muted'
+                  }`}
+                >
+                  {lbl}
                 </button>
               ))}
             </div>
