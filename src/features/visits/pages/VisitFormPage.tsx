@@ -526,7 +526,11 @@ function VisitFormPage(): JSX.Element {
         try {
           await enqueueOp('visit.update', { id, ...updatePayload });
           toast.success('Bağlantı hatası — ziyaret kaydedildi, bağlantı geldiğinde gönderilecek');
-          try { await upsertReminders(); } catch { /* offline — reminder daha sonra eklenebilir, akışı bozma */ }
+          try {
+            await upsertReminders();
+          } catch {
+            /* offline — reminder daha sonra eklenebilir, akışı bozma */
+          }
           doNavigate();
           return;
         } catch {

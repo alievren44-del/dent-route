@@ -44,7 +44,7 @@ function uuidToInt(uuid: string): number {
 /** Yaklaşan açık hatırlatmaları cihaza yerel bildirim olarak (yeniden) kur. */
 export async function syncReminderNotifications(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
-  if (syncing) return;        // hızlı çift-çağrı cancel/schedule race'ini önle
+  if (syncing) return; // hızlı çift-çağrı cancel/schedule race'ini önle
   syncing = true;
   try {
     try {
@@ -76,7 +76,9 @@ export async function syncReminderNotifications(): Promise<void> {
       const reminders = (data ?? []) as ReminderRow[];
 
       // Klinik ad + telefon (aksiyon butonları için).
-      const accountIds = [...new Set(reminders.map((r) => r.account_id).filter(Boolean))] as string[];
+      const accountIds = [
+        ...new Set(reminders.map((r) => r.account_id).filter(Boolean)),
+      ] as string[];
       const phoneById: Record<string, { name: string; phone: string | null }> = {};
       if (accountIds.length > 0) {
         const { data: clinics } = await sb

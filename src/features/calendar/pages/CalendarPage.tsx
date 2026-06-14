@@ -37,7 +37,10 @@ import {
   StickyNote,
   X,
 } from 'lucide-react';
-import { ReminderDetailSheet, type ReminderDetailItem } from '@features/calendar/components/ReminderDetailSheet';
+import {
+  ReminderDetailSheet,
+  type ReminderDetailItem,
+} from '@features/calendar/components/ReminderDetailSheet';
 import { getSupabaseClient, getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 import { usePermissions } from '@core/auth/usePermissions';
@@ -244,7 +247,9 @@ function CalendarPage(): JSX.Element {
 
       let rq = sb
         .from('saha_reminders')
-        .select('id, rep_id, account_id, visit_id, type, title, note, due_at, status, assigned_by, recurrence, outcome, completion_note')
+        .select(
+          'id, rep_id, account_id, visit_id, type, title, note, due_at, status, assigned_by, recurrence, outcome, completion_note',
+        )
         .eq('rep_id', targetRepId)
         .neq('status', 'cancelled')
         .order('due_at', { ascending: true });
@@ -514,9 +519,17 @@ function CalendarPage(): JSX.Element {
     const sb = getSupabaseClient();
     const { error } = await sb
       .from('saha_reminders')
-      .update({ status: 'done', outcome, completion_note: note.trim() || null, completed_at: new Date().toISOString() })
+      .update({
+        status: 'done',
+        outcome,
+        completion_note: note.trim() || null,
+        completed_at: new Date().toISOString(),
+      })
       .eq('id', id);
-    if (error) { toast.error('Kaydedilemedi'); return; }
+    if (error) {
+      toast.error('Kaydedilemedi');
+      return;
+    }
     toast.success('Tamamlandı');
     // C3 — Tekrarlayan: tamamlananın recurrence'ı varsa sonraki occurrence'ı oluştur.
     const sourceReminder = reminders.find((r) => r.id === id);
@@ -821,12 +834,10 @@ function CalendarPage(): JSX.Element {
           repId={targetRepId}
           selfId={selfId}
           isAdmin={isAdmin}
-          assignableReps={
-            (assignableQuery.data && assignableQuery.data.length > 0
-              ? assignableQuery.data
-              : (repsQuery.data ?? [])
-            ).filter((r) => r.id !== selfId)
-          }
+          assignableReps={(assignableQuery.data && assignableQuery.data.length > 0
+            ? assignableQuery.data
+            : (repsQuery.data ?? [])
+          ).filter((r) => r.id !== selfId)}
           onClose={() => setShowAdd(false)}
           onAdded={(assignedRepId) => {
             setShowAdd(false);
@@ -846,27 +857,42 @@ function CalendarPage(): JSX.Element {
 
       {selectedItem && (
         <ReminderDetailSheet
-          item={{
-            id: selectedItem.id,
-            kind: selectedItem.kind,
-            type: selectedItem.type,
-            title: selectedItem.title,
-            note: selectedItem.note,
-            at: selectedItem.at,
-            accountId: selectedItem.accountId,
-            status: selectedItem.status,
-            assignedBy: selectedItem.assignedBy,
-            outcome: selectedItem.outcome,
-            completionNote: selectedItem.completionNote,
-          } as ReminderDetailItem}
+          item={
+            {
+              id: selectedItem.id,
+              kind: selectedItem.kind,
+              type: selectedItem.type,
+              title: selectedItem.title,
+              note: selectedItem.note,
+              at: selectedItem.at,
+              accountId: selectedItem.accountId,
+              status: selectedItem.status,
+              assignedBy: selectedItem.assignedBy,
+              outcome: selectedItem.outcome,
+              completionNote: selectedItem.completionNote,
+            } as ReminderDetailItem
+          }
           clinic={selectedItem.accountId ? (nameMap[selectedItem.accountId] ?? null) : null}
           attachments={attachmentsMap[selectedItem.id]}
-          assignerName={selectedItem.assignedBy ? (assignerMap[selectedItem.assignedBy] ?? null) : null}
+          assignerName={
+            selectedItem.assignedBy ? (assignerMap[selectedItem.assignedBy] ?? null) : null
+          }
           onClose={() => setSelectedItem(null)}
-          onSnooze={(id, ms, label) => { void snooze(id, ms, label); setSelectedItem(null); }}
-          onAddToRoute={(aid) => { void addReminderToRoute(aid); }}
-          onComplete={(id, outcome, note) => { void completeReminder(id, outcome, note); setSelectedItem(null); }}
-          onReopen={(id) => { void reopenReminder(id); setSelectedItem(null); }}
+          onSnooze={(id, ms, label) => {
+            void snooze(id, ms, label);
+            setSelectedItem(null);
+          }}
+          onAddToRoute={(aid) => {
+            void addReminderToRoute(aid);
+          }}
+          onComplete={(id, outcome, note) => {
+            void completeReminder(id, outcome, note);
+            setSelectedItem(null);
+          }}
+          onReopen={(id) => {
+            void reopenReminder(id);
+            setSelectedItem(null);
+          }}
         />
       )}
     </div>
@@ -916,7 +942,9 @@ function AgendaCard({
           </span>
         </div>
         <div className="min-w-0 flex-1">
-          <p className={`flex flex-wrap items-center gap-1.5 text-sm font-medium text-foreground ${done ? 'line-through' : ''}`}>
+          <p
+            className={`flex flex-wrap items-center gap-1.5 text-sm font-medium text-foreground ${done ? 'line-through' : ''}`}
+          >
             <span className="min-w-0 truncate">{it.title}</span>
             {it.kind === 'reminder' && it.status === 'open' && new Date(it.at) < new Date() && (
               <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-red-100 text-red-700">
@@ -937,7 +965,8 @@ function AgendaCard({
           {/* Done outcome özeti */}
           {done && it.outcome && (
             <p className="mt-1 text-[11px] font-medium text-green-600">
-              ✓ {OUTCOME_LABEL[it.outcome] ?? it.outcome}{it.completionNote ? ` — ${it.completionNote}` : ''}
+              ✓ {OUTCOME_LABEL[it.outcome] ?? it.outcome}
+              {it.completionNote ? ` — ${it.completionNote}` : ''}
             </p>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -978,8 +1007,10 @@ function AgendaCard({
                 </a>
               )}
               {/* B1 — numara ekle (klinik varsa ama telefon yoksa) */}
-              {it.accountId && !clinic?.phone && onAddPhone && (
-                addingPhone ? (
+              {it.accountId &&
+                !clinic?.phone &&
+                onAddPhone &&
+                (addingPhone ? (
                   <>
                     <input
                       type="tel"
@@ -1004,7 +1035,11 @@ function AgendaCard({
                     </button>
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); setAddingPhone(false); setPhoneInput(''); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAddingPhone(false);
+                        setPhoneInput('');
+                      }}
                       className="inline-flex h-8 items-center justify-center rounded-lg border border-border bg-background px-2 text-[11px] hover:bg-muted"
                       aria-label="İptal"
                     >
@@ -1014,14 +1049,16 @@ function AgendaCard({
                 ) : (
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); setAddingPhone(true); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setAddingPhone(true);
+                    }}
                     className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background px-2 text-[11px] font-medium hover:bg-muted"
                   >
                     <Phone className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
                     Numara ekle
                   </button>
-                )
-              )}
+                ))}
             </div>
           )}
         </div>
@@ -1499,7 +1536,10 @@ function AddReminderModal({
             {attachments.length > 0 && (
               <ul className="space-y-1">
                 {attachments.map((a, idx) => (
-                  <li key={idx} className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-1.5 text-xs">
+                  <li
+                    key={idx}
+                    className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-1.5 text-xs"
+                  >
                     <span className="text-muted-foreground">
                       {a.kind === 'photo' ? 'Fotoğraf' : 'Ses kaydı'} #{idx + 1}
                     </span>

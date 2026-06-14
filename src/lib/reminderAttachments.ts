@@ -104,14 +104,12 @@ export async function uploadReminderAttachment(
 
   // 4. DB satırı ekle
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: insertError } = await (sb as any)
-    .from('saha_reminder_attachments')
-    .insert({
-      reminder_id: reminderId,
-      kind,
-      storage_path: path,
-      created_by: user.id,
-    });
+  const { error: insertError } = await (sb as any).from('saha_reminder_attachments').insert({
+    reminder_id: reminderId,
+    kind,
+    storage_path: path,
+    created_by: user.id,
+  });
 
   if (insertError) {
     // DB insert başarısız — storage'daki dosyayı geri al (best-effort)

@@ -184,7 +184,9 @@ async function executeOp(op: OfflineOp): Promise<void> {
     case 'reminder.create': {
       // Takvim manuel ekleme offline iken kuyruğa alınır → online'da insert edilir.
       // saha_reminders types.ts'de yok → untyped client (getTypedClient .from() reddeder).
-      const { error } = await getSupabaseClient().from('saha_reminders').insert(op.payload as never);
+      const { error } = await getSupabaseClient()
+        .from('saha_reminders')
+        .insert(op.payload as never);
       if (error) throw error;
       return;
     }
