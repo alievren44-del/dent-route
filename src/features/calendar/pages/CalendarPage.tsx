@@ -16,7 +16,7 @@
  * Rol: sales_rep yalnız kendi (RLS); admin rep-seçici ile herhangi plasiyer.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -33,6 +33,7 @@ import {
   Megaphone,
   MessageCircle,
   Navigation,
+  Paperclip,
   Phone,
   Plus,
   Stethoscope,
@@ -45,6 +46,11 @@ import { usePermissions } from '@core/auth/usePermissions';
 import { syncReminderNotifications } from '@lib/localReminders';
 import { enqueueOp } from '@core/offline/syncQueue';
 import { useRouteBasket } from '@features/routes/store/routeBasketStore';
+import {
+  uploadReminderAttachment,
+  getReminderAttachmentsMap,
+  type ReminderAttachment,
+} from '@lib/reminderAttachments';
 
 type FilterMode = 'upcoming' | 'past' | 'all' | 'overdue';
 type ViewMode = 'agenda' | 'month';
@@ -320,6 +326,16 @@ function CalendarPage(): JSX.Element {
     },
   });
   const assignerMap = assignerQuery.data ?? {};
+
+  // Foto/ses ekleri — görünür reminder id'leri için yükle.
+  const reminderIds = useMemo(() => reminders.map((r) => r.id), [reminders]);
+  const attachmentsQuery = useQuery({
+    queryKey: ['calendar-attachments', reminderIds.slice().sort().join(',')],
+    enabled: reminderIds.length > 0,
+    staleTime: 60_000,
+    queryFn: () => getReminderAttachmentsMap(reminderIds),
+  });
+  const attachmentsMap = attachmentsQuery.data ?? {};
 
   // Admin: atama yapılabilir plasiyerler (user_permissions grant).
   const assignableQuery = useQuery({
@@ -690,6 +706,7 @@ function CalendarPage(): JSX.Element {
                       highlighted={it.id === focusId}
                       onAddPhone={addClinicPhone}
                       onAddToRoute={addReminderToRoute}
+                      attachments={attachmentsMap[it.id]}
                     />
                   ))}
                 </ul>
@@ -796,6 +813,7 @@ function CalendarPage(): JSX.Element {
                       highlighted={it.id === focusId}
                       onAddPhone={addClinicPhone}
                       onAddToRoute={addReminderToRoute}
+                      attachments={attachmentsMap[it.id]}
                     />
                   ))}
                 </ul>
@@ -846,6 +864,7 @@ function AgendaCard({
   highlighted,
   onAddPhone,
   onAddToRoute,
+  attachments,
 }: {
   it: AgendaItem;
   clinic: { name: string; phone: string | null } | null;
@@ -855,6 +874,7 @@ function AgendaCard({
   highlighted?: boolean;
   onAddPhone?: (accountId: string, phone: string) => void;
   onAddToRoute?: (accountId: string) => void;
+  attachments?: ReminderAttachment[];
 }): JSX.Element {
   const meta = typeMeta(it.type);
   const done = it.status === 'done';
@@ -1012,6 +1032,38 @@ function AgendaCard({
           )}
         </div>
       </div>
+
+      {/* Foto / ses ekleri */}
+      {attachments && attachments.length > 0 && (
+        <div className="mt-2 border-t border-border pt-2">
+          <p className="mb-1.5 flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+            <Paperclip className="h-3 w-3" aria-hidden="true" />
+            {attachments.length} ek
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {attachments.map((att) =>
+              att.kind === 'photo' ? (
+                <button
+                  key={att.id}
+                  type="button"
+                  onClick={() => window.open(att.url, '_blank')}
+                  className="block overflow-hidden rounded-lg border border-border"
+                  aria-label="Fotoğrafı aç"
+                >
+                  <img
+                    src={att.url}
+                    alt="ek fotoğraf"
+                    className="h-14 w-14 object-cover"
+                    loading="lazy"
+                  />
+                </button>
+              ) : (
+                <audio key={att.id} src={att.url} controls className="h-8 max-w-[240px]" />
+              ),
+            )}
+          </div>
+        </div>
+      )}
     </li>
   );
 }
@@ -1042,6 +1094,68 @@ function AddReminderModal({
   const [clinic, setClinic] = useState<{ id: string; name: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [recurrence, setRecurrence] = useState<'none' | 'weekly' | 'monthly'>('none');
+
+  // Foto / ses ekleri (kaydetmeden önce toplanır, insert sonrası yüklenir)
+  const [attachments, setAttachments] = useState<{ kind: 'photo' | 'audio'; blob: Blob }[]>([]);
+  const [recording, setRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  // Modal kapanırsa/unmount olursa aktif kaydı + mikrofon track'lerini durdur
+  // (aksi halde getUserMedia stream'i açık kalır → mikrofon göstergesi yanar).
+  useEffect(() => {
+    return () => {
+      try {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+        }
+      } catch {
+        /* yut */
+      }
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>): void {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAttachments((prev) => [...prev, { kind: 'photo', blob: file }]);
+    // input sıfırla (aynı dosyayı tekrar seçilebilsin)
+    e.target.value = '';
+  }
+
+  async function startRecording(): Promise<void> {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      audioChunksRef.current = [];
+      const mr = new MediaRecorder(stream);
+      mediaRecorderRef.current = mr;
+      mr.ondataavailable = (ev) => {
+        if (ev.data.size > 0) audioChunksRef.current.push(ev.data);
+      };
+      mr.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        setAttachments((prev) => [...prev, { kind: 'audio', blob }]);
+        stream.getTracks().forEach((t) => t.stop());
+        setRecording(false);
+      };
+      mr.start();
+      setRecording(true);
+    } catch {
+      toast.error('Mikrofon izni alınamadı.');
+    }
+  }
+
+  function stopRecording(): void {
+    mediaRecorderRef.current?.stop();
+  }
+
+  function removeAttachment(idx: number): void {
+    setAttachments((prev) => prev.filter((_, i) => i !== idx));
+  }
 
   const searchQuery = useQuery({
     queryKey: ['add-reminder-clinic-search', clinicQuery],
@@ -1096,7 +1210,8 @@ function AddReminderModal({
         recurrence,
       });
       setSaving(false);
-      toast.success('Çevrimdışı: bağlantı gelince kaydedilecek.');
+      if (attachments.length > 0) toast.warning('Çevrimdışı: ekler kaydedilmedi.');
+      else toast.success('Çevrimdışı: bağlantı gelince kaydedilecek.');
       onAdded(isAssignment ? targetRep : undefined);
       return;
     }
@@ -1123,6 +1238,23 @@ function AddReminderModal({
       toast.error(`Eklenemedi: ${error.message}`);
       return;
     }
+
+    // Ek yükleme — insert başarılıysa ve ek varsa paralel yükle.
+    // allSettled + try/catch: bir ek throw etse bile save akışı (success toast +
+    // onAdded) kesilmesin (reminder zaten kaydedildi).
+    if (attachments.length > 0 && inserted?.id) {
+      try {
+        const results = await Promise.allSettled(
+          attachments.map((a) => uploadReminderAttachment(inserted.id, a.blob, a.kind)),
+        );
+        if (results.some((r) => r.status === 'rejected' || !r.value.ok)) {
+          toast.warning('Bazı ekler yüklenemedi.');
+        }
+      } catch {
+        toast.warning('Ekler yüklenemedi.');
+      }
+    }
+
     // Atama ise hedef plasiyere anında bildirim (bell + push).
     // saha_notify_rep RPC her iki tabloya yazar (notifications INSERT RLS=service_role-only
     // olduğu için client doğrudan yazamaz; RPC SECURITY DEFINER ile bypass eder).
@@ -1328,6 +1460,67 @@ function AddReminderModal({
               maxLength={500}
               className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm"
             />
+          </div>
+
+          {/* Foto / ses ekleri */}
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">Ekler (opsiyonel)</p>
+            <div className="flex flex-wrap gap-2">
+              {/* Gizli dosya input'u */}
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handlePhotoSelect}
+              />
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-medium hover:bg-muted"
+              >
+                Foto ekle
+              </button>
+              {recording ? (
+                <button
+                  type="button"
+                  onClick={stopRecording}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-3 text-xs font-medium text-red-700 hover:bg-red-100"
+                >
+                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-red-600" />
+                  Kaydediliyor — Durdur
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void startRecording()}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-medium hover:bg-muted"
+                >
+                  Ses kaydet
+                </button>
+              )}
+            </div>
+
+            {attachments.length > 0 && (
+              <ul className="space-y-1">
+                {attachments.map((a, idx) => (
+                  <li key={idx} className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-1.5 text-xs">
+                    <span className="text-muted-foreground">
+                      {a.kind === 'photo' ? 'Fotoğraf' : 'Ses kaydı'} #{idx + 1}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(idx)}
+                      className="ml-2 text-muted-foreground hover:text-destructive"
+                      aria-label="Eki kaldır"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <button
