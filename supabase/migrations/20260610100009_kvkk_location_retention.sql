@@ -114,7 +114,7 @@ BEGIN
     PERFORM cron.schedule(
       'kvkk-purge-checkin-coords',   -- job adı
       '17 3 * * *',                  -- cron ifadesi
-      $$SELECT public.purge_old_checkin_coords()$$
+      'SELECT public.purge_old_checkin_coords()'  -- nested $$ DIŞ DO bloğunu kırıyordu → tek tırnak
     );
 
     RAISE NOTICE 'pg_cron job oluşturuldu: kvkk-purge-checkin-coords (günlük 03:17 UTC)';
