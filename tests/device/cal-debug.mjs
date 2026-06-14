@@ -1,0 +1,15 @@
+import { chromium } from '@playwright/test';
+const b=await chromium.connectOverCDP('http://localhost:9222');
+const page=b.contexts()[0].pages()[0];
+const errs=[];
+page.on('console',m=>{if(m.type()==='error')errs.push(m.text().slice(0,180));});
+page.on('pageerror',e=>errs.push('PAGEERR '+e.message.slice(0,180)));
+const reqs=[];
+page.on('response',async r=>{if(/saha_reminders\?select/.test(r.url())){try{const j=await r.json();reqs.push('reminders rows: '+(Array.isArray(j)?j.length:'?'));}catch(e){}}});
+await page.evaluate(()=>{history.pushState({},'','/clinics');dispatchEvent(new PopStateEvent('popstate'));});
+await page.waitForTimeout(800);
+await page.evaluate(()=>{history.pushState({},'','/takvim');dispatchEvent(new PopStateEvent('popstate'));});
+await page.waitForTimeout(3000);
+console.log('ERRS:',JSON.stringify([...new Set(errs)].slice(0,5)));
+console.log('REQS:',JSON.stringify(reqs));
+await b.close();

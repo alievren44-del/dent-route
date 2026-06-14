@@ -21,9 +21,10 @@ import { toast } from 'sonner';
 import { UserPlus, Search, Key, Power, MapPin, X, User as UserIcon, Copy } from 'lucide-react';
 
 import { getSupabaseClient, getTypedClient } from '@/lib/supabase';
-import { Receipt } from 'lucide-react';
+import { Receipt, CalendarDays } from 'lucide-react';
 
 const INVOICING_PERM = 'saha:invoicing:access';
+const CALENDAR_ASSIGN_PERM = 'saha:calendar:assignable';
 
 type Role = 'ADMIN' | 'MANAGER' | 'REP' | 'USER';
 
@@ -241,6 +242,51 @@ export default function UsersPage(): JSX.Element {
     },
   });
 
+  // Hangi plasiyerlere admin takvim ataması yapabilir?
+  const assignGrants = useQuery({
+    queryKey: ['admin', 'calendar-assign-grants'],
+    queryFn: async (): Promise<Set<string>> => {
+      const sb = getSupabaseClient();
+      const { data, error } = await sb
+        .from('user_permissions')
+        .select('user_id, effect')
+        .eq('permission_code', CALENDAR_ASSIGN_PERM);
+      if (error) throw error;
+      const granted = new Set<string>();
+      ((data ?? []) as { user_id: string; effect: string }[]).forEach((r) => {
+        if (r.effect === 'grant') granted.add(r.user_id);
+      });
+      return granted;
+    },
+  });
+
+  const toggleAssign = useMutation({
+    mutationFn: async (input: { userId: string; grant: boolean }) => {
+      const sb = getSupabaseClient();
+      const del = await sb
+        .from('user_permissions')
+        .delete()
+        .eq('user_id', input.userId)
+        .eq('permission_code', CALENDAR_ASSIGN_PERM);
+      if (del.error) throw del.error;
+      if (input.grant) {
+        const ins = await sb.from('user_permissions').insert({
+          user_id: input.userId,
+          permission_code: CALENDAR_ASSIGN_PERM,
+          effect: 'grant',
+        });
+        if (ins.error) throw ins.error;
+      }
+    },
+    onSuccess: (_, vars) => {
+      toast.success(vars.grant ? 'Takvim atama açıldı' : 'Takvim atama kapatıldı');
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'calendar-assign-grants'] });
+    },
+    onError: (err) => {
+      toast.error(`İşlem başarısız: ${err.message}`);
+    },
+  });
+
   const users = usersQuery.data ?? [];
 
   const filtered = useMemo<ProfileRow[]>(() => {
@@ -431,6 +477,32 @@ export default function UsersPage(): JSX.Element {
                               >
                                 <Receipt className="h-3.5 w-3.5" />
                                 {hasInv ? 'Fatura ✓' : 'Fatura'}
+                              </button>
+                            );
+                          })()}
+                        {currentRole !== 'ADMIN' &&
+                          (() => {
+                            const hasAssign = assignGrants.data?.has(u.id) ?? false;
+                            return (
+                              <button
+                                type="button"
+                                disabled={toggleAssign.isPending}
+                                onClick={() =>
+                                  toggleAssign.mutate({ userId: u.id, grant: !hasAssign })
+                                }
+                                className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs disabled:opacity-50 ${
+                                  hasAssign
+                                    ? 'border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                                    : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                                }`}
+                                title={
+                                  hasAssign
+                                    ? 'Takvim atama yetkisini kaldır'
+                                    : 'Bu plasiyere takvim görev/randevu atamayı aç'
+                                }
+                              >
+                                <CalendarDays className="h-3.5 w-3.5" />
+                                {hasAssign ? 'Takvim ✓' : 'Takvim'}
                               </button>
                             );
                           })()}

@@ -1,18 +1,18 @@
 import { NavLink } from 'react-router-dom';
-import { Map, Users, Route, BarChart3, Gift, ShoppingCart } from 'lucide-react';
+import { CalendarDays, Users, Route, BarChart3, Gift, ShoppingCart } from 'lucide-react';
 import { usePermissions } from '@core/auth/usePermissions';
 import { useRouteBasket } from '@features/routes/store/routeBasketStore';
 
 interface NavItem {
   to: string;
   label: string;
-  Icon: typeof Map;
+  Icon: typeof CalendarDays;
   adminOnly?: boolean;
   showBasketBadge?: boolean;
 }
 
 const items: NavItem[] = [
-  { to: '/', label: 'Harita', Icon: Map },
+  { to: '/takvim', label: 'Takvim', Icon: CalendarDays },
   { to: '/clinics/discover', label: 'Klinikler', Icon: Users },
   { to: '/routes/plan', label: 'Rota', Icon: Route, showBasketBadge: true },
   { to: '/samples', label: 'Numune', Icon: Gift },

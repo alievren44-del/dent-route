@@ -67,7 +67,7 @@ const SECTIONS: NavSection[] = [
   {
     title: 'Saha',
     items: [
-      { to: '/', label: 'Harita', Icon: Map },
+      { to: '/harita', label: 'Harita', Icon: Map },
       { to: '/nearby-provinces', label: 'Yakınımdaki İller', Icon: Compass },
       { to: '/clinics/discover', label: 'Çevremdeki Klinikler', Icon: Search },
       { to: '/saha/tara', label: 'Saha Tarama', Icon: Radar },
