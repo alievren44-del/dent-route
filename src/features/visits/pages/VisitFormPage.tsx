@@ -405,8 +405,7 @@ function VisitFormPage(): JSX.Element {
       const revisitDue = nextVisitDate
         ? new Date(`${nextVisitDate}T09:00:00`)
         : (() => {
-            const d = new Date();
-            d.setMonth(d.getMonth() + 1);
+            const d = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
             d.setHours(9, 0, 0, 0);
             return d;
           })();
@@ -527,6 +526,7 @@ function VisitFormPage(): JSX.Element {
         try {
           await enqueueOp('visit.update', { id, ...updatePayload });
           toast.success('Bağlantı hatası — ziyaret kaydedildi, bağlantı geldiğinde gönderilecek');
+          try { await upsertReminders(); } catch { /* offline — reminder daha sonra eklenebilir, akışı bozma */ }
           doNavigate();
           return;
         } catch {
@@ -587,7 +587,7 @@ function VisitFormPage(): JSX.Element {
       <div className="flex-1 px-4 py-4 space-y-5">
         {alreadyCompleted && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-            Bu ziyaret zaten tamamlanmış. Yine de güncelleyebilirsiniz.
+            Bu ziyaret zaten tamamlanmış; düzenlenemez.
           </div>
         )}
 
