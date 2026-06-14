@@ -176,7 +176,7 @@ function SampleListView({
     enabled: Boolean(effectiveRepId) || filterRepId === undefined,
   });
 
-  const samples = samplesQuery.data ?? [];
+  const samples = useMemo(() => samplesQuery.data ?? [], [samplesQuery.data]);
   const accountIds = useMemo(() => {
     const set = new Set<string>();
     for (const row of samples) set.add(row.account_id);
@@ -208,7 +208,7 @@ function SampleListView({
     enabled: accountIds.length > 0,
   });
 
-  const accountMap = accountsQuery.data ?? {};
+  const accountMap = useMemo(() => accountsQuery.data ?? {}, [accountsQuery.data]);
 
   const filteredSamples = useMemo(() => {
     const term = searchTerm.trim().toLocaleLowerCase('tr');
