@@ -32,6 +32,7 @@ import {
   MapPin,
   Megaphone,
   MessageCircle,
+  Navigation,
   Phone,
   Plus,
   Stethoscope,
@@ -42,6 +43,8 @@ import { getSupabaseClient, getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 import { usePermissions } from '@core/auth/usePermissions';
 import { syncReminderNotifications } from '@lib/localReminders';
+import { enqueueOp } from '@core/offline/syncQueue';
+import { useRouteBasket } from '@features/routes/store/routeBasketStore';
 
 type FilterMode = 'upcoming' | 'past' | 'all';
 type ViewMode = 'agenda' | 'month';
@@ -430,6 +433,49 @@ function CalendarPage(): JSX.Element {
     return cells;
   }, [monthCursor]);
 
+  // B3 — rota sepeti
+  const addToBasket = useRouteBasket((s) => s.add);
+
+  // B1 — klinik telefonu ekle
+  async function addClinicPhone(accountId: string, phone: string): Promise<void> {
+    const clean = phone.replace(/[^\d+]/g, '');
+    if (clean.length < 7) {
+      toast.error('Geçerli numara girin.');
+      return;
+    }
+    const sb = getSupabaseClient();
+    const { error } = await sb.from('saha_clinics').update({ phone: clean }).eq('id', accountId);
+    if (error) {
+      toast.error('Numara kaydedilemedi.');
+      return;
+    }
+    toast.success('Numara eklendi.');
+    void queryClient.invalidateQueries({ queryKey: ['calendar-clinic-names'] });
+  }
+
+  // B3 — randevu kliniğini rota sepetine ekle
+  async function addReminderToRoute(accountId: string): Promise<void> {
+    const sb = getTypedClient();
+    const { data } = await sb
+      .from('saha_clinics')
+      .select('id, name, lat, lng')
+      .eq('id', accountId)
+      .single();
+    if (!data || data.lat == null || data.lng == null) {
+      toast.error('Klinik konumu yok, rotaya eklenemedi.');
+      return;
+    }
+    const res = addToBasket({
+      id: data.id as string,
+      name: data.name as string,
+      lat: data.lat as number,
+      lng: data.lng as number,
+      source: 'saha',
+    });
+    if (res.ok) toast.success('Rota sepetine eklendi.');
+    else toast.error(res.reason === 'full' ? 'Sepet dolu (max 12).' : 'Zaten sepette.');
+  }
+
   async function markDone(id: string): Promise<void> {
     const sb = getSupabaseClient();
     const { error } = await sb.from('saha_reminders').update({ status: 'done' }).eq('id', id);
@@ -597,6 +643,8 @@ function CalendarPage(): JSX.Element {
                       onSnooze={snooze}
                       assignerName={it.assignedBy ? (assignerMap[it.assignedBy] ?? null) : null}
                       highlighted={it.id === focusId}
+                      onAddPhone={addClinicPhone}
+                      onAddToRoute={addReminderToRoute}
                     />
                   ))}
                 </ul>
@@ -701,6 +749,8 @@ function CalendarPage(): JSX.Element {
                       onSnooze={snooze}
                       assignerName={it.assignedBy ? (assignerMap[it.assignedBy] ?? null) : null}
                       highlighted={it.id === focusId}
+                      onAddPhone={addClinicPhone}
+                      onAddToRoute={addReminderToRoute}
                     />
                   ))}
                 </ul>
@@ -749,6 +799,8 @@ function AgendaCard({
   onSnooze,
   assignerName,
   highlighted,
+  onAddPhone,
+  onAddToRoute,
 }: {
   it: AgendaItem;
   clinic: { name: string; phone: string | null } | null;
@@ -756,11 +808,17 @@ function AgendaCard({
   onSnooze: (id: string, ms: number, label: string) => void;
   assignerName?: string | null;
   highlighted?: boolean;
+  onAddPhone?: (accountId: string, phone: string) => void;
+  onAddToRoute?: (accountId: string) => void;
 }): JSX.Element {
   const meta = typeMeta(it.type);
   const done = it.status === 'done';
   const phone = clinic?.phone ? clinic.phone.replace(/[^\d+]/g, '') : null;
   const waPhone = phone ? phone.replace(/^0/, '90').replace(/^\+/, '') : null;
+
+  // B1 — numara ekleme inline state
+  const [addingPhone, setAddingPhone] = useState(false);
+  const [phoneInput, setPhoneInput] = useState('');
   return (
     <li
       id={`reminder-${it.id}`}
@@ -820,6 +878,62 @@ function AgendaCard({
                   <MessageCircle className="h-3.5 w-3.5 text-green-600" aria-hidden="true" />
                   WhatsApp
                 </a>
+              )}
+              {/* B1 — numara ekle (klinik varsa ama telefon yoksa) */}
+              {it.accountId && !clinic?.phone && onAddPhone && (
+                addingPhone ? (
+                  <>
+                    <input
+                      type="tel"
+                      value={phoneInput}
+                      onChange={(e) => setPhoneInput(e.target.value)}
+                      placeholder="Numara girin"
+                      className="h-8 w-32 rounded-lg border border-border bg-background px-2 text-[11px]"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onAddPhone(it.accountId!, phoneInput);
+                        setAddingPhone(false);
+                        setPhoneInput('');
+                      }}
+                      className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background px-2 text-[11px] font-medium hover:bg-muted"
+                    >
+                      Kaydet
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAddingPhone(false); setPhoneInput(''); }}
+                      className="inline-flex h-8 items-center justify-center rounded-lg border border-border bg-background px-2 text-[11px] hover:bg-muted"
+                      aria-label="İptal"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setAddingPhone(true)}
+                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background px-2 text-[11px] font-medium hover:bg-muted"
+                  >
+                    <Phone className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                    Numara ekle
+                  </button>
+                )
+              )}
+              {/* B3 — rotaya ekle (klinik ve uygun tip) */}
+              {it.accountId &&
+                (['appointment', 'tahsilat', 'tanitim', 'revisit'] as AgendaItem['type'][]).includes(it.type) &&
+                onAddToRoute && (
+                <button
+                  type="button"
+                  onClick={() => onAddToRoute(it.accountId!)}
+                  className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background px-2 text-[11px] font-medium hover:bg-muted"
+                >
+                  <Navigation className="h-3.5 w-3.5 text-indigo-600" aria-hidden="true" />
+                  Rotaya Ekle
+                </button>
               )}
               <button
                 type="button"
@@ -915,6 +1029,26 @@ function AddReminderModal({
     const typeLabel = ADD_TYPES.find((t) => t.value === type)?.label ?? 'Hatırlatma';
     const finalTitle = title.trim() || (clinic ? `${typeLabel} — ${clinic.name}` : typeLabel);
     const isAssignment = targetRep !== selfId;
+
+    // B2 — Offline: kuyruğa al, online olunca insert edilir.
+    if (!navigator.onLine) {
+      await enqueueOp('reminder.create', {
+        rep_id: targetRep,
+        created_by: selfId,
+        assigned_by: isAssignment ? selfId : null,
+        account_id: clinic?.id ?? null,
+        type,
+        title: finalTitle,
+        note: note.trim() || null,
+        due_at: due.toISOString(),
+        status: 'open',
+      });
+      setSaving(false);
+      toast.success('Çevrimdışı: bağlantı gelince kaydedilecek.');
+      onAdded(isAssignment ? targetRep : undefined);
+      return;
+    }
+
     const sb = getSupabaseClient();
     const { data: inserted, error } = await sb
       .from('saha_reminders')

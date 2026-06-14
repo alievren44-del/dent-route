@@ -2,7 +2,13 @@ import Dexie, { type Table } from 'dexie';
 
 export interface OfflineOp {
   id?: number;
-  opType: 'sample.create' | 'visit.create' | 'order.create' | 'route.complete' | 'visit.update';
+  opType:
+    | 'sample.create'
+    | 'visit.create'
+    | 'order.create'
+    | 'route.complete'
+    | 'visit.update'
+    | 'reminder.create';
   payload: Record<string, unknown>;
   /** UUID — replay'de duplicate önler; orders için Supabase idempotency_key olarak da kullanılır. */
   idempotencyKey: string;
