@@ -12,7 +12,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Phone, MessageCircle, ShoppingCart, ArrowLeft, CalendarPlus, Receipt } from 'lucide-react';
-import { getTypedClient } from '@lib/supabase';
+import { getSupabaseClient, getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 import { mapParlaToSahaRole } from '@core/auth/types';
 
@@ -48,6 +48,25 @@ interface AccountNoteRow {
   body: string;
   created_at: string;
 }
+
+interface LastReminderRow {
+  id: string;
+  type: string | null;
+  outcome: string | null;
+  completion_note: string | null;
+  completed_at: string | null;
+}
+
+const REMINDER_OUTCOME_LABEL: Record<string, string> = {
+  met: 'Görüşüldü',
+  callback: 'Tekrar Aranacak',
+  no_meeting: 'Görüşülemedi',
+  order_taken: 'Sipariş Alındı',
+  sample_given: 'Numune Verildi',
+  tahsil_edildi: 'Tahsil Edildi',
+  soz_verildi: 'Söz Verildi',
+  odenmedi: 'Ödenmedi',
+};
 
 const SAMPLE_STATUS_STYLES: Record<string, string> = {
   verildi: 'bg-blue-100 text-blue-800',
@@ -89,7 +108,24 @@ function CustomerDetailPage(): JSX.Element {
         .eq('id', id!)
         .maybeSingle();
       if (error) throw error;
-      return (data ?? null) as ProfileRow | null;
+      if (data) return data as ProfileRow;
+      // Kayıtlı profil yok → keşfedilmiş saha_clinics kaydı (id = account_id).
+      // Başlık/telefon "Müşteri" generic fallback'ine düşmesin.
+      const { data: clinic } = await supabase
+        .from('saha_clinics')
+        .select('id, name, phone, province_slug')
+        .eq('id', id!)
+        .maybeSingle();
+      if (!clinic) return null;
+      return {
+        id: clinic.id,
+        ad_soyad: null,
+        email: null,
+        telefon: clinic.phone,
+        klinik_adi: clinic.name,
+        city: clinic.province_slug,
+        role: 'klinik',
+      } as ProfileRow;
     },
   });
 
@@ -121,6 +157,28 @@ function CustomerDetailPage(): JSX.Element {
         .order('created_at', { ascending: false });
       if (error) throw error;
       return (data ?? []) as AccountNoteRow[];
+    },
+  });
+
+  // R2 — Özet'te "Son Görüşme" kartı: en son tamamlanmış randevu notu.
+  // saha_reminders types.ts'de yok → untyped client.
+  const { data: lastReminder } = useQuery({
+    queryKey: ['customer-last-reminder', id],
+    enabled: !!id && activeTab === 'overview',
+    staleTime: 0,
+    refetchOnMount: 'always',
+    queryFn: async (): Promise<LastReminderRow | null> => {
+      const sb = getSupabaseClient();
+      const { data } = await sb
+        .from('saha_reminders')
+        .select('id, type, outcome, completion_note, completed_at')
+        .eq('account_id', id!)
+        .eq('status', 'done')
+        .not('completion_note', 'is', null)
+        .order('completed_at', { ascending: false, nullsFirst: false })
+        .limit(1);
+      const row = ((data ?? []) as LastReminderRow[])[0];
+      return row ?? null;
     },
   });
 
@@ -271,6 +329,24 @@ function CustomerDetailPage(): JSX.Element {
       <div className="flex-1 px-4 py-3 space-y-3">
         {activeTab === 'overview' && (
           <>
+            {lastReminder && (
+              <section className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4 shadow-sm">
+                <h3 className="mb-1 flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                  <CalendarPlus className="h-4 w-4 text-indigo-600" />
+                  Son Görüşme
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  {formatDateTime(lastReminder.completed_at)}
+                  {lastReminder.outcome &&
+                    ` · ${REMINDER_OUTCOME_LABEL[lastReminder.outcome] ?? lastReminder.outcome}`}
+                </p>
+                {lastReminder.completion_note && (
+                  <p className="mt-1.5 whitespace-pre-wrap text-sm text-foreground">
+                    {lastReminder.completion_note}
+                  </p>
+                )}
+              </section>
+            )}
             <RecentOrdersCard customerId={id} limit={5} />
             <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
               <h3 className="text-sm font-semibold text-foreground mb-3">Ziyaret Geçmişi</h3>

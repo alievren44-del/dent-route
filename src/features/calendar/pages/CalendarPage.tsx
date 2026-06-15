@@ -71,6 +71,7 @@ interface ReminderRow {
   recurrence: 'none' | 'weekly' | 'monthly';
   outcome: string | null;
   completion_note: string | null;
+  source_ref: string | null;
 }
 
 interface VisitRow {
@@ -84,6 +85,16 @@ interface VisitRow {
 interface RepOption {
   id: string;
   name: string;
+}
+
+// AddReminderModal'ı ön-dolu açmak için (Tekrar Randevu akışı).
+interface ReminderInitial {
+  type: ReminderType;
+  title: string;
+  note: string;
+  clinic: { id: string; name: string } | null;
+  recurrence: 'none' | 'weekly' | 'monthly';
+  sourceId: string | null; // kaynak randevu (R5 bağ → source_ref)
 }
 
 interface AgendaItem {
@@ -100,6 +111,7 @@ interface AgendaItem {
   recurrence?: 'none' | 'weekly' | 'monthly';
   outcome?: string | null;
   completionNote?: string | null;
+  sourceRef?: string | null;
 }
 
 const OUTCOME_LABEL: Record<string, string> = {
@@ -204,6 +216,11 @@ function CalendarPage(): JSX.Element {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [selectedItem, setSelectedItem] = useState<AgendaItem | null>(null);
+  // R1 — kliniksiz randevuya klinik bağla (LinkClinicModal için reminder id).
+  const [linkClinicFor, setLinkClinicFor] = useState<string | null>(null);
+  // "Tekrar Randevu" → AddReminderModal'ı klinik/tür/başlık dolu açar (kullanıcı
+  // yalnız yeni tarih-saat seçer). null = normal boş ekleme.
+  const [followUpInit, setFollowUpInit] = useState<ReminderInitial | null>(null);
 
   // ?reminder=<id> → scroll + highlight (state sadece; effect allItems'tan sonra)
   const [searchParams] = useSearchParams();
@@ -248,7 +265,7 @@ function CalendarPage(): JSX.Element {
       let rq = sb
         .from('saha_reminders')
         .select(
-          'id, rep_id, account_id, visit_id, type, title, note, due_at, status, assigned_by, recurrence, outcome, completion_note',
+          'id, rep_id, account_id, visit_id, type, title, note, due_at, status, assigned_by, recurrence, outcome, completion_note, source_ref',
         )
         .eq('rep_id', targetRepId)
         .neq('status', 'cancelled')
@@ -391,6 +408,7 @@ function CalendarPage(): JSX.Element {
         recurrence: r.recurrence,
         outcome: r.outcome,
         completionNote: r.completion_note,
+        sourceRef: r.source_ref,
       });
     }
     for (const v of visits) {
@@ -552,6 +570,22 @@ function CalendarPage(): JSX.Element {
       if (recurErr) toast.warning('Tamamlandı, fakat sonraki tekrar oluşturulamadı.');
     }
     void queryClient.invalidateQueries({ queryKey: ['calendar'] });
+  }
+
+  // R1 — kliniksiz randevuya klinik bağla → not o klinik geçmişinde görünür.
+  async function linkReminderClinic(reminderId: string, clinicId: string): Promise<void> {
+    const sb = getSupabaseClient();
+    const { error } = await sb
+      .from('saha_reminders')
+      .update({ account_id: clinicId })
+      .eq('id', reminderId);
+    if (error) {
+      toast.error('Klinik bağlanamadı.');
+      return;
+    }
+    toast.success('Klinik bağlandı.');
+    void queryClient.invalidateQueries({ queryKey: ['calendar'] });
+    void queryClient.invalidateQueries({ queryKey: ['calendar-clinic-names'] });
   }
 
   async function reopenReminder(id: string): Promise<void> {
@@ -838,9 +872,14 @@ function CalendarPage(): JSX.Element {
             ? assignableQuery.data
             : (repsQuery.data ?? [])
           ).filter((r) => r.id !== selfId)}
-          onClose={() => setShowAdd(false)}
+          initial={followUpInit ?? undefined}
+          onClose={() => {
+            setShowAdd(false);
+            setFollowUpInit(null);
+          }}
           onAdded={(assignedRepId) => {
             setShowAdd(false);
+            setFollowUpInit(null);
             // Başka plasiyere atandıysa admin'in görünümünü o plasiyere geçir →
             // atanan kayıt anında görünür (aksi halde 'gözükmüyor' algısı).
             if (assignedRepId && assignedRepId !== selfId) {
@@ -870,6 +909,7 @@ function CalendarPage(): JSX.Element {
               assignedBy: selectedItem.assignedBy,
               outcome: selectedItem.outcome,
               completionNote: selectedItem.completionNote,
+              sourceRef: selectedItem.sourceRef,
             } as ReminderDetailItem
           }
           clinic={selectedItem.accountId ? (nameMap[selectedItem.accountId] ?? null) : null}
@@ -892,6 +932,42 @@ function CalendarPage(): JSX.Element {
           onReopen={(id) => {
             void reopenReminder(id);
             setSelectedItem(null);
+          }}
+          onCreateFollowUp={(it) => {
+            // Klinik adını nameMap'ten çöz; tür geçerli ReminderType değilse (visit) revisit'e düş.
+            const acct = it.accountId ? nameMap[it.accountId] : undefined;
+            const clinic = it.accountId && acct ? { id: it.accountId, name: acct.name } : null;
+            const followType: ReminderType = it.type === 'visit' ? 'revisit' : it.type;
+            // R3 — kaynak randevunun tekrar+notunu taşı. R5 — kaynak id bağı.
+            const src = reminders.find((r) => r.id === it.id);
+            setFollowUpInit({
+              type: followType,
+              title: it.title,
+              note: it.note ?? '',
+              clinic,
+              recurrence: src?.recurrence ?? 'none',
+              sourceId: it.id,
+            });
+            setSelectedItem(null);
+            setShowAdd(true);
+          }}
+          onLinkClinic={
+            !selectedItem.accountId && selectedItem.kind === 'reminder'
+              ? () => {
+                  setLinkClinicFor(selectedItem.id);
+                  setSelectedItem(null);
+                }
+              : undefined
+          }
+        />
+      )}
+
+      {linkClinicFor && (
+        <LinkClinicModal
+          onClose={() => setLinkClinicFor(null)}
+          onPick={(clinicId) => {
+            void linkReminderClinic(linkClinicFor, clinicId);
+            setLinkClinicFor(null);
           }}
         />
       )}
@@ -1105,6 +1181,7 @@ function AddReminderModal({
   selfId,
   isAdmin,
   assignableReps,
+  initial,
   onClose,
   onAdded,
 }: {
@@ -1112,19 +1189,25 @@ function AddReminderModal({
   selfId: string;
   isAdmin: boolean;
   assignableReps: RepOption[];
+  initial?: ReminderInitial;
   onClose: () => void;
   onAdded: (assignedRepId?: string) => void;
 }): JSX.Element {
   // Hedef plasiyer (kimin takvimine). Admin başka plasiyere atayabilir → assigned_by=self.
   const [targetRep, setTargetRep] = useState<string>(repId);
-  const [type, setType] = useState<ReminderType>('appointment');
-  const [title, setTitle] = useState('');
-  const [note, setNote] = useState('');
+  // initial varsa (Tekrar Randevu) tür/başlık/not/klinik ön-dolu; tarih boş kalır.
+  const [type, setType] = useState<ReminderType>(initial?.type ?? 'appointment');
+  const [title, setTitle] = useState(initial?.title ?? '');
+  const [note, setNote] = useState(initial?.note ?? '');
   const [at, setAt] = useState('');
   const [clinicQuery, setClinicQuery] = useState('');
-  const [clinic, setClinic] = useState<{ id: string; name: string } | null>(null);
+  const [clinic, setClinic] = useState<{ id: string; name: string } | null>(
+    initial?.clinic ?? null,
+  );
   const [saving, setSaving] = useState(false);
-  const [recurrence, setRecurrence] = useState<'none' | 'weekly' | 'monthly'>('none');
+  const [recurrence, setRecurrence] = useState<'none' | 'weekly' | 'monthly'>(
+    initial?.recurrence ?? 'none',
+  );
 
   // Foto / ses ekleri (kaydetmeden önce toplanır, insert sonrası yüklenir)
   const [attachments, setAttachments] = useState<{ kind: 'photo' | 'audio'; blob: Blob }[]>([]);
@@ -1239,6 +1322,7 @@ function AddReminderModal({
         due_at: due.toISOString(),
         status: 'open',
         recurrence,
+        source_ref: initial?.sourceId ? `followup:${initial.sourceId}` : null,
       });
       setSaving(false);
       if (attachments.length > 0) toast.warning('Çevrimdışı: ekler kaydedilmedi.');
@@ -1261,6 +1345,7 @@ function AddReminderModal({
         due_at: due.toISOString(),
         status: 'open',
         recurrence,
+        source_ref: initial?.sourceId ? `followup:${initial.sourceId}` : null,
       })
       .select('id')
       .single();
@@ -1567,6 +1652,82 @@ function AddReminderModal({
             Takvime Ekle
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- R1: Kliniksiz randevuya klinik bağlama modalı ----
+function LinkClinicModal({
+  onClose,
+  onPick,
+}: {
+  onClose: () => void;
+  onPick: (clinicId: string) => void;
+}): JSX.Element {
+  const [q, setQ] = useState('');
+  const searchQuery = useQuery({
+    queryKey: ['link-clinic-search', q],
+    enabled: q.trim().length >= 2,
+    queryFn: async (): Promise<{ id: string; name: string }[]> => {
+      const sb = getTypedClient();
+      const { data } = await sb
+        .from('saha_clinics')
+        .select('id, name')
+        .ilike('name', `%${q.trim()}%`)
+        .eq('status', 'active')
+        .limit(8);
+      return ((data ?? []) as { id: string; name: string }[]).map((c) => ({
+        id: c.id,
+        name: c.name,
+      }));
+    },
+  });
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Klinik bağla"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="max-h-[80vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-background p-4 shadow-xl sm:rounded-2xl">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-base font-semibold">Klinik Bağla</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Kapat"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-muted"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <input
+          type="text"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Klinik adı ara…"
+          className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm"
+        />
+        {(searchQuery.data ?? []).length > 0 && (
+          <ul className="mt-2 max-h-60 overflow-y-auto rounded-xl border border-border bg-card">
+            {(searchQuery.data ?? []).map((c) => (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  onClick={() => onPick(c.id)}
+                  className="w-full px-3 py-2.5 text-left text-sm hover:bg-muted"
+                >
+                  {c.name}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
