@@ -32,7 +32,7 @@ import {
 
 import { useVertical } from '@core/verticals/useVertical';
 import { useAuthStore } from '@core/auth/authStore';
-import { getTypedClient } from '@lib/supabase';
+import { getSupabaseClient, getTypedClient } from '@lib/supabase';
 import { SupabaseCRMAdapter } from '@core/adapters/builtin/SupabaseCRMAdapter';
 import { useGeolocation } from '@features/map/hooks/useGeolocation';
 import ClinicCard from '@features/discovery/components/ClinicCard';
@@ -76,6 +76,8 @@ interface CustomerListRow {
   balance: number | null;
   lastVisitAt: string | null;
   lastVisitOutcome: string | null;
+  /** Rep'in ziyaret/randevu/not bıraktığı kendi kliniği mi (üstte sabitlenir). */
+  isMine?: boolean;
 }
 
 const PAGE_SIZE = 50;
@@ -119,83 +121,110 @@ function useDebounced<T>(value: T, delayMs: number): T {
   return debounced;
 }
 
+const CLINIC_COLS =
+  'id, name, lat, lng, address, phone, rating, user_ratings_total, types, province_slug, district_slug, raw_payload';
+
+type ClinicSelectRow = {
+  id: string;
+  name: string;
+  lat: number | null;
+  lng: number | null;
+  address: string | null;
+  phone: string | null;
+  rating: number | string | null;
+  user_ratings_total: number | null;
+  types: string[] | null;
+  province_slug: string | null;
+  district_slug: string | null;
+  raw_payload?: Record<string, unknown> | null;
+};
+
+function clinicRowToCustomerListRow(c: ClinicSelectRow): CustomerListRow {
+  const cf = c.raw_payload ?? {};
+  const neighborhood =
+    typeof cf['neighborhood'] === 'string'
+      ? cf['neighborhood']
+      : typeof cf['mahalle'] === 'string'
+        ? cf['mahalle']
+        : null;
+  const balance = typeof cf['balance'] === 'number' ? cf['balance'] : null;
+  const ratingNum =
+    typeof c.rating === 'number'
+      ? c.rating
+      : typeof c.rating === 'string'
+        ? Number.parseFloat(c.rating)
+        : null;
+  return {
+    id: c.id,
+    name: c.name,
+    type: c.types?.[0] ?? null,
+    phone: c.phone,
+    whatsapp: null,
+    address: c.address,
+    city: c.province_slug,
+    district: c.district_slug,
+    neighborhood,
+    lat: c.lat,
+    lng: c.lng,
+    rating: ratingNum != null && Number.isFinite(ratingNum) ? ratingNum : null,
+    reviews: c.user_ratings_total,
+    balance,
+    lastVisitAt: null,
+    lastVisitOutcome: null,
+  };
+}
+
 /**
- * saha_clinics tabanlı klinik listesi. GPS varsa saha_search_nearby_clinics RPC
- * ile distance + 50km radius; yoksa düz saha_clinics query.
- * saha_visits varsa son ziyareti ayrı sorguda alır; yoksa boş geçer.
+ * Rep'in etkileşimde olduğu klinik id'leri (ziyaret + randevu + not).
+ * GPS'ten BAĞIMSIZ "benim kliniklerim" — uzaktayken bile listede kalsın.
  */
-async function fetchAccounts(geo: { lat: number; lng: number } | null): Promise<CustomerListRow[]> {
+async function fetchMyClinicIds(repId: string): Promise<string[]> {
+  const ids = new Set<string>();
+  const add = (rows: { account_id: string | null }[] | null | undefined): void => {
+    (rows ?? []).forEach((r) => {
+      if (r.account_id) ids.add(String(r.account_id));
+    });
+  };
+  const typed = getTypedClient();
+  const raw = getSupabaseClient();
+  const results = await Promise.allSettled([
+    typed.from('saha_visits').select('account_id').eq('rep_id', repId).limit(3000),
+    typed.from('saha_account_notes').select('account_id').eq('rep_id', repId).limit(3000),
+    raw.from('saha_reminders').select('account_id').eq('rep_id', repId).limit(3000),
+  ]);
+  for (const r of results) {
+    if (r.status === 'fulfilled') add(r.value.data as { account_id: string | null }[] | null);
+  }
+  return [...ids];
+}
+
+/**
+ * Klinik listesi — üç kaynak BİRLEŞİMİ (id'ye göre dedup):
+ *  1. Coğrafi keşif: GPS varsa saha_search_nearby_clinics (50km), yoksa adapter (ad sırası).
+ *  2. Benim kliniklerim: rep'in ziyaret/randevu/not bıraktığı klinikler (GPS'ten bağımsız).
+ *  3. Sunucu-tarafı ad araması: yazılan sorgu DB'de ilike (yakın olmayan klinik de bulunsun).
+ * Son ziyaret tüm id'ler için tek sorguda eklenir.
+ */
+async function fetchAccounts(
+  geo: { lat: number; lng: number } | null,
+  repId: string | null,
+  search: string,
+): Promise<CustomerListRow[]> {
   const supabase = getTypedClient();
 
-  type RpcRow = {
-    id: string;
+  type RpcRow = ClinicSelectRow & {
     google_place_id: string | null;
-    name: string;
-    lat: number | null;
-    lng: number | null;
-    address: string | null;
-    phone: string | null;
-    rating: number | string | null;
-    user_ratings_total: number | null;
-    types: string[] | null;
-    province_slug: string | null;
-    district_slug: string | null;
     clinic_segment: string | null;
     last_verified_at: string | null;
     distance_m: number | null;
   };
 
-  function rowToCustomerListRow(
-    c: {
-      id: string;
-      name: string;
-      lat: number | null;
-      lng: number | null;
-      address: string | null;
-      phone: string | null;
-      rating: number | string | null;
-      user_ratings_total: number | null;
-      types: string[] | null;
-      province_slug: string | null;
-      district_slug: string | null;
-      raw_payload?: Record<string, unknown> | null;
-    },
-    visit: VisitRow | undefined,
-  ): CustomerListRow {
-    const cf = c.raw_payload ?? {};
-    const neighborhood =
-      typeof cf['neighborhood'] === 'string'
-        ? cf['neighborhood']
-        : typeof cf['mahalle'] === 'string'
-          ? cf['mahalle']
-          : null;
-    const balance = typeof cf['balance'] === 'number' ? cf['balance'] : null;
-    const ratingNum =
-      typeof c.rating === 'number'
-        ? c.rating
-        : typeof c.rating === 'string'
-          ? Number.parseFloat(c.rating)
-          : null;
-    return {
-      id: c.id,
-      name: c.name,
-      type: c.types?.[0] ?? null,
-      phone: c.phone,
-      whatsapp: null,
-      address: c.address,
-      city: c.province_slug,
-      district: c.district_slug,
-      neighborhood,
-      lat: c.lat,
-      lng: c.lng,
-      rating: ratingNum != null && Number.isFinite(ratingNum) ? ratingNum : null,
-      reviews: c.user_ratings_total,
-      balance,
-      lastVisitAt: visit?.check_in_at ?? null,
-      lastVisitOutcome: visit?.outcome ?? null,
-    };
-  }
+  const byId = new Map<string, CustomerListRow>();
+  const merge = (rows: CustomerListRow[]): void => {
+    for (const r of rows) if (!byId.has(r.id)) byId.set(r.id, r);
+  };
 
+  // 1. Coğrafi keşif
   if (geo) {
     const { data: rpcData, error: rpcErr } = await supabase.rpc('saha_search_nearby_clinics', {
       _lat: geo.lat,
@@ -205,57 +234,83 @@ async function fetchAccounts(geo: { lat: number; lng: number } | null): Promise<
       _limit: 1000,
     });
     if (!rpcErr && rpcData) {
-      const rows = rpcData as RpcRow[];
-      const ids = rows.map((r) => r.id);
-      const lastVisit = await fetchLastVisitMap(ids);
-      return rows.map<CustomerListRow>((r) => rowToCustomerListRow(r, lastVisit.get(r.id)));
-    }
-    if (rpcErr) {
+      merge((rpcData as RpcRow[]).map(clinicRowToCustomerListRow));
+    } else if (rpcErr) {
       console.warn('saha_search_nearby_clinics başarısız, fallback:', rpcErr.message);
+    }
+  } else {
+    const { items: customers } = await adapter.listCustomers({ limit: 1000 });
+    merge(
+      customers.map<CustomerListRow>((c) => {
+        const primary = c.addresses?.[0];
+        const cf = c.customFields ?? {};
+        const ratingRaw = cf['rating'];
+        const ratingNum =
+          typeof ratingRaw === 'number'
+            ? ratingRaw
+            : typeof ratingRaw === 'string'
+              ? Number.parseFloat(ratingRaw)
+              : null;
+        const reviews =
+          typeof cf['user_ratings_total'] === 'number' ? cf['user_ratings_total'] : null;
+        return {
+          id: c.id,
+          name: c.name,
+          type: c.type ?? null,
+          phone: c.phone ?? null,
+          whatsapp: null,
+          address: primary?.addressLine ?? null,
+          city: c.region ?? primary?.city ?? null,
+          district: primary?.district ?? null,
+          neighborhood: null,
+          lat: primary?.location?.lat ?? null,
+          lng: primary?.location?.lng ?? null,
+          rating: ratingNum != null && Number.isFinite(ratingNum) ? ratingNum : null,
+          reviews,
+          balance: null,
+          lastVisitAt: null,
+          lastVisitOutcome: null,
+        };
+      }),
+    );
+  }
+
+  // 2. Benim kliniklerim (her zaman, GPS'ten bağımsız)
+  const myIdSet = new Set<string>();
+  if (repId) {
+    for (const id of await fetchMyClinicIds(repId)) myIdSet.add(id);
+    const missing = [...myIdSet].filter((id) => !byId.has(id));
+    for (let i = 0; i < missing.length; i += 100) {
+      const chunk = missing.slice(i, i + 100);
+      const { data } = await supabase.from('saha_clinics').select(CLINIC_COLS).in('id', chunk);
+      merge(((data ?? []) as ClinicSelectRow[]).map(clinicRowToCustomerListRow));
     }
   }
 
-  // Fallback (GPS yok): built-in adapter.listCustomers ile aktif müşteri listesi.
-  // saha_clinics → Customer mapping adapter içinde; burada CustomerListRow'a indiriyoruz.
-  // Not: neighborhood/balance yalnızca raw_payload'dan gelir (Customer modelinde yok);
-  // bunlar zaten geo (RPC) yolunda da null — fallback'te de null bırakılıyor.
-  const { items: customers } = await adapter.listCustomers({ limit: 1000 });
-  if (customers.length === 0) return [];
+  // 3. Sunucu-tarafı ad araması
+  const q = search.trim();
+  if (q.length >= 2) {
+    const { data } = await supabase
+      .from('saha_clinics')
+      .select(CLINIC_COLS)
+      .eq('status', 'active')
+      .ilike('name', `%${q}%`)
+      .limit(30);
+    merge(((data ?? []) as ClinicSelectRow[]).map(clinicRowToCustomerListRow));
+  }
 
-  const ids = customers.map((c) => c.id);
-  const lastVisitByClinic = await fetchLastVisitMap(ids);
-
-  return customers.map<CustomerListRow>((c) => {
-    const visit = lastVisitByClinic.get(c.id);
-    const primary = c.addresses?.[0];
-    const cf = c.customFields ?? {};
-    const ratingRaw = cf['rating'];
-    const ratingNum =
-      typeof ratingRaw === 'number'
-        ? ratingRaw
-        : typeof ratingRaw === 'string'
-          ? Number.parseFloat(ratingRaw)
-          : null;
-    const reviews = typeof cf['user_ratings_total'] === 'number' ? cf['user_ratings_total'] : null;
-    return {
-      id: c.id,
-      name: c.name,
-      type: c.type ?? null,
-      phone: c.phone ?? null,
-      whatsapp: null,
-      address: primary?.addressLine ?? null,
-      city: c.region ?? primary?.city ?? null,
-      district: primary?.district ?? null,
-      neighborhood: null,
-      lat: primary?.location?.lat ?? null,
-      lng: primary?.location?.lng ?? null,
-      rating: ratingNum != null && Number.isFinite(ratingNum) ? ratingNum : null,
-      reviews,
-      balance: null,
-      lastVisitAt: visit?.check_in_at ?? null,
-      lastVisitOutcome: visit?.outcome ?? null,
-    };
-  });
+  // 4. Son ziyaret + "benim kliniğim" işareti — tüm id'ler için tek sorgu
+  const allIds = [...byId.keys()];
+  const visitMap = await fetchLastVisitMap(allIds);
+  for (const [id, row] of byId) {
+    row.isMine = myIdSet.has(id);
+    const v = visitMap.get(id);
+    if (v) {
+      row.lastVisitAt = v.check_in_at;
+      row.lastVisitOutcome = v.outcome;
+    }
+  }
+  return [...byId.values()];
 }
 
 /**
@@ -323,6 +378,7 @@ function CustomerListPage(): JSX.Element {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const profile = useAuthStore((s) => s.profile);
+  const selfId = useAuthStore((s) => s.session?.userId ?? null);
   const role = (profile?.role ?? '').toUpperCase();
   const isAdmin = role === 'ADMIN';
   const isManager = role === 'MANAGER';
@@ -377,9 +433,16 @@ function CustomerListPage(): JSX.Element {
   // Veri — GPS varsa lat/lng dahil zenginleştirilmiş veri çekilir
   const geoKey = position ? `${position.lat.toFixed(3)}|${position.lng.toFixed(3)}` : 'no-geo';
   const accountsQuery = useQuery({
-    queryKey: ['customers', 'list', geoKey],
-    queryFn: () => fetchAccounts(position ? { lat: position.lat, lng: position.lng } : null),
-    staleTime: 60_000,
+    queryKey: ['customers', 'list', geoKey, selfId ?? 'anon', debouncedSearch],
+    queryFn: () =>
+      fetchAccounts(
+        position ? { lat: position.lat, lng: position.lng } : null,
+        selfId,
+        debouncedSearch,
+      ),
+    // Yeni ziyaret edilen/notlanan klinik anında listede görünsün (persisted-rq bayatlık fix).
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const repsQuery = useQuery({
@@ -506,7 +569,11 @@ function CustomerListPage(): JSX.Element {
           return (b.balance ?? 0) - (a.balance ?? 0);
       }
     });
-    return arr;
+    // "Benim kliniklerim" (ziyaret/randevu/not) üstte sabit — 1000+ alfabetik
+    // klinik arasında gömülmesin. Mevcut sıralama içlerinde korunur (stable).
+    const mine = arr.filter((r) => r.isMine);
+    const rest = arr.filter((r) => !r.isMine);
+    return [...mine, ...rest];
   }, [accountsQuery.data, debouncedSearch, filters, sortKey, position]);
 
   // Page reset, filtre/sıralama değişince başa al
@@ -755,7 +822,7 @@ function CustomerListPage(): JSX.Element {
                   whatsapp={r.whatsapp ?? undefined}
                   {...(distanceM !== undefined ? { distanceM } : {})}
                   {...(r.rating !== null ? { rating: r.rating } : {})}
-                  isExistingCustomer
+                  isExistingCustomer={!!r.isMine}
                   isInBasket={inBasket}
                   onAdd={() => {
                     if (r.lat === null || r.lng === null) {
