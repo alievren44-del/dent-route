@@ -11,8 +11,29 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { StickyNote, MapPin, Gift } from 'lucide-react';
-import { getTypedClient } from '@lib/supabase';
+import { StickyNote, MapPin, Gift, CalendarCheck } from 'lucide-react';
+import { getSupabaseClient, getTypedClient } from '@lib/supabase';
+
+// Randevu/hatırlatma sonuç etiketleri (CalendarPage OUTCOME_LABEL ile aynı).
+const OUTCOME_LABEL: Record<string, string> = {
+  met: 'Görüşüldü',
+  callback: 'Tekrar Aranacak',
+  no_meeting: 'Görüşülemedi',
+  order_taken: 'Sipariş Alındı',
+  sample_given: 'Numune Verildi',
+  tahsil_edildi: 'Tahsil Edildi',
+  soz_verildi: 'Söz Verildi',
+  odenmedi: 'Ödenmedi',
+};
+
+const REMINDER_TYPE_LABEL: Record<string, string> = {
+  appointment: 'Randevu',
+  tahsilat: 'Tahsilat',
+  tanitim: 'Tanıtım',
+  revisit: 'Tekrar Ziyaret',
+  task: 'Görev',
+  note: 'Not',
+};
 
 type ActivityEvent =
   | { kind: 'note'; id: string; ts: string; body: string }
@@ -23,6 +44,16 @@ type ActivityEvent =
       status: string;
       outcome: string | null;
       notes: string | null;
+    }
+  | {
+      kind: 'reminder';
+      id: string;
+      ts: string;
+      typeLabel: string;
+      title: string;
+      outcome: string | null;
+      note: string | null;
+      upcoming: boolean;
     }
   | {
       kind: 'sample';
@@ -65,6 +96,18 @@ interface SampleRow {
   saha_sample_lines: SampleLineRow[] | null;
 }
 
+interface ReminderRow {
+  id: string;
+  type: string | null;
+  title: string | null;
+  note: string | null;
+  outcome: string | null;
+  completion_note: string | null;
+  due_at: string | null;
+  completed_at: string | null;
+  status: string | null;
+}
+
 const VISIT_STATUS_STYLES: Record<string, string> = {
   in_progress: 'bg-amber-100 text-amber-800',
   completed: 'bg-green-100 text-green-800',
@@ -102,9 +145,15 @@ function CustomerActivityTimeline({ accountId, active }: Props): JSX.Element {
   const { data: events, isLoading } = useQuery({
     queryKey: ['customer-activity', accountId],
     enabled: !!accountId && active,
+    // Persisted react-query (asyncStorage) + staleTime → bayat snapshot gösterir
+    // (yeni eklenen/bağlanan randevu görünmez). Sunucu-değişen veri → her mount taze.
+    staleTime: 0,
+    refetchOnMount: 'always',
     queryFn: async (): Promise<ActivityEvent[]> => {
       const supabase = getTypedClient();
-      const [notesRes, visitsRes, samplesRes] = await Promise.all([
+      // saha_reminders types.ts'de yok → untyped client (CalendarPage paterni).
+      const sbRaw = getSupabaseClient();
+      const [notesRes, visitsRes, samplesRes, remindersRes] = await Promise.all([
         supabase
           .from('saha_account_notes')
           .select('id, body, rep_id, created_at')
@@ -122,11 +171,18 @@ function CustomerActivityTimeline({ accountId, active }: Props): JSX.Element {
           )
           .eq('account_id', accountId)
           .order('given_at', { ascending: false }),
+        sbRaw
+          .from('saha_reminders')
+          .select('id, type, title, note, outcome, completion_note, due_at, completed_at, status')
+          .eq('account_id', accountId)
+          .in('status', ['done', 'open'])
+          .order('due_at', { ascending: false }),
       ]);
 
       if (notesRes.error) throw notesRes.error;
       if (visitsRes.error) throw visitsRes.error;
       if (samplesRes.error) throw samplesRes.error;
+      if (remindersRes.error) throw remindersRes.error;
 
       const noteEvents: ActivityEvent[] = ((notesRes.data ?? []) as NoteRow[])
         .filter((n) => !!n.created_at)
@@ -148,6 +204,24 @@ function CustomerActivityTimeline({ accountId, active }: Props): JSX.Element {
           notes: v.notes,
         }));
 
+      // Tamamlanan randevu notları (içerik olanlar) + AÇIK/yaklaşan randevular (R6).
+      const reminderEvents: ActivityEvent[] = ((remindersRes.data ?? []) as ReminderRow[])
+        .filter((r) => (r.status === 'done' ? !!(r.completion_note || r.note || r.outcome) : true))
+        .map((r) => {
+          const done = r.status === 'done';
+          return {
+            kind: 'reminder' as const,
+            id: r.id,
+            ts: (done ? r.completed_at || r.due_at : r.due_at) as string,
+            typeLabel: REMINDER_TYPE_LABEL[r.type ?? ''] ?? 'Randevu',
+            title: r.title ?? '',
+            outcome: done ? r.outcome : null,
+            note: done ? r.completion_note || r.note : r.note,
+            upcoming: !done,
+          };
+        })
+        .filter((e) => !!e.ts);
+
       const sampleEvents: ActivityEvent[] = ((samplesRes.data ?? []) as SampleRow[])
         .filter((s) => !!s.given_at)
         .map((s) => ({
@@ -163,7 +237,7 @@ function CustomerActivityTimeline({ accountId, active }: Props): JSX.Element {
           notes: s.notes,
         }));
 
-      return [...noteEvents, ...visitEvents, ...sampleEvents].sort(
+      return [...noteEvents, ...visitEvents, ...reminderEvents, ...sampleEvents].sort(
         (a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime(),
       );
     },
@@ -227,6 +301,38 @@ function ActivityCard({ event }: { event: ActivityEvent }): JSX.Element {
           <p className="text-xs text-muted-foreground mt-1">Sonuç: {event.outcome}</p>
         )}
         {event.notes && <p className="text-xs text-foreground mt-1 line-clamp-2">{event.notes}</p>}
+      </div>
+    );
+  }
+
+  if (event.kind === 'reminder') {
+    return (
+      <div
+        className={`p-3 rounded-lg border bg-card ${event.upcoming ? 'border-indigo-300' : 'border-border'}`}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+            <CalendarCheck className="h-4 w-4 text-indigo-600" />
+            {event.typeLabel}
+          </span>
+          <div className="flex items-center gap-2">
+            {event.upcoming && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-indigo-100 text-indigo-800">
+                Yaklaşan
+              </span>
+            )}
+            <span className="text-xs text-muted-foreground">{formatDateTime(event.ts)}</span>
+          </div>
+        </div>
+        {event.title && <p className="text-xs text-foreground mt-1">{event.title}</p>}
+        {event.outcome && (
+          <p className="text-xs text-green-600 font-medium mt-1">
+            ✓ {OUTCOME_LABEL[event.outcome] ?? event.outcome}
+          </p>
+        )}
+        {event.note && (
+          <p className="text-xs text-foreground mt-1 whitespace-pre-wrap">{event.note}</p>
+        )}
       </div>
     );
   }

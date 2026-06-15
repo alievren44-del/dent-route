@@ -9,7 +9,18 @@
  */
 
 import { useState } from 'react';
-import { X, Phone, MessageCircle, Clock, RotateCcw, MapPin, CheckCircle2 } from 'lucide-react';
+import {
+  X,
+  Phone,
+  MessageCircle,
+  Clock,
+  RotateCcw,
+  MapPin,
+  CheckCircle2,
+  CalendarPlus,
+  Link2,
+  CornerDownRight,
+} from 'lucide-react';
 import type { ReminderAttachment } from '@lib/reminderAttachments';
 
 // ---------------------------------------------------------------------------
@@ -28,6 +39,7 @@ export interface ReminderDetailItem {
   assignedBy?: string | null;
   outcome?: string | null;
   completionNote?: string | null;
+  sourceRef?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +142,8 @@ export function ReminderDetailSheet(props: {
   onAddToRoute?: (accountId: string) => void;
   onComplete: (id: string, outcome: string, note: string) => void;
   onReopen?: (id: string) => void;
+  onCreateFollowUp?: (item: ReminderDetailItem) => void;
+  onLinkClinic?: () => void;
 }): JSX.Element {
   const {
     item,
@@ -141,6 +155,8 @@ export function ReminderDetailSheet(props: {
     onAddToRoute,
     onComplete,
     onReopen,
+    onCreateFollowUp,
+    onLinkClinic,
   } = props;
 
   const [completionOpen, setCompletionOpen] = useState(false);
@@ -186,6 +202,12 @@ export function ReminderDetailSheet(props: {
           </span>
           <p className="text-sm font-semibold leading-snug">{item.title}</p>
           <p className="text-xs text-muted-foreground">{formatAt(item.at)}</p>
+          {item.sourceRef?.startsWith('followup:') && (
+            <p className="flex items-center gap-1 text-[11px] font-medium text-indigo-600">
+              <CornerDownRight className="h-3 w-3" />
+              Önceki görüşmenin devamı
+            </p>
+          )}
         </div>
 
         {/* Klinik */}
@@ -283,6 +305,24 @@ export function ReminderDetailSheet(props: {
             >
               <MapPin className="h-4 w-4" />
               Rotaya Ekle
+            </button>
+          )}
+          {onCreateFollowUp && (
+            <button
+              onClick={() => onCreateFollowUp(item)}
+              className="flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/5 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/10"
+            >
+              <CalendarPlus className="h-4 w-4" />
+              Tekrar Randevu
+            </button>
+          )}
+          {!item.accountId && onLinkClinic && (
+            <button
+              onClick={onLinkClinic}
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-sm hover:bg-muted"
+            >
+              <Link2 className="h-4 w-4" />
+              Klinik Bağla
             </button>
           )}
         </div>
