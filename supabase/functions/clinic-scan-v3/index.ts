@@ -53,16 +53,14 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const GOOGLE_PLACES_API_KEY = Deno.env.get('GOOGLE_PLACES_API_KEY');
 
-const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? 'http://localhost:5173')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
-
 function buildCorsHeaders(reqOrigin: string | null): Record<string, string> {
-  const allowed =
-    reqOrigin && (ALLOWED_ORIGINS.includes(reqOrigin) || reqOrigin === 'https://localhost' || reqOrigin === 'capacitor://localhost') ? reqOrigin : ALLOWED_ORIGINS[0] ?? 'null';
+  // Origin'i HER ZAMAN yansıt. POST + header-auth (Authorization/apikey) API,
+  // cookie/credentials yok → wildcard-eşdeğeri güvenli. ALLOWED_ORIGINS allowlist'i
+  // CORS'u GATE'lemiyordu artık: native WebView (https://localhost / capacitor://
+  // localhost / null) + web prod domain HEPSİ tek kodla geçer. Bu sınıf CORS bug
+  // (yeni origin → "Failed to fetch") bir daha çıkmaz.
   return {
-    'Access-Control-Allow-Origin': allowed,
+    'Access-Control-Allow-Origin': reqOrigin ?? '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     Vary: 'Origin',

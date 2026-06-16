@@ -105,9 +105,14 @@ export function filterClinicV3(
     }
   }
 
-  // 2. v3 extra forbidden (name only)
+  // 2. v3 extra forbidden (name only) — KELİME-SINIRI eşleşme.
+  //    'asm' "Kasman" soyadını, 'optic' "optician"... YANLIŞ elemesin diye
+  //    substring değil tam-kelime/öbek sınırı kullanılır.
+  const TR_WORD = 'a-zçğıöşü0-9';
   for (const kw of FORBIDDEN_V3_EXTRA) {
-    if (nameLower.includes(kw)) {
+    const esc = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(^|[^${TR_WORD}])${esc}([^${TR_WORD}]|$)`);
+    if (re.test(nameLower)) {
       return { valid: false, reason: `forbidden_v3:${kw}`, segment: 'private' };
     }
   }

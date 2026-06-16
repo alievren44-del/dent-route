@@ -77,6 +77,20 @@ function containsAny(haystack: string, needles: string[]): string | null {
   return null;
 }
 
+// Kelime-sınırı eşleşme: needle yalnız tam kelime/öbek olarak geçerse hit verir.
+// Substring değil → 'göz' "Gözde"yi, 'berber' "Berberoğlu"yu, 'asm' "Kasman"ı
+// YANLIŞ elemez. Türkçe harf sınıfı bilinçli (haystack zaten tr-lowercase).
+const TR_WORD_CHARS = 'a-zçğıöşü0-9';
+function wordHit(haystack: string, needles: string[]): string | null {
+  for (const n of needles) {
+    if (!n) continue;
+    const esc = n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(^|[^${TR_WORD_CHARS}])${esc}([^${TR_WORD_CHARS}]|$)`);
+    if (re.test(haystack)) return n;
+  }
+  return null;
+}
+
 export function isValidDentalClinic(
   name: string,
   types: string[] = [],
@@ -90,35 +104,25 @@ export function isValidDentalClinic(
     return { valid: false, reason: 'empty_name' };
   }
 
-  // 1. Forbidden keyword check on name (highest precedence — kills obvious
-  //    non-dental matches like "Pediatri Polikliniği" even if "poliklinik"
-  //    might pass downstream).
-  const forbiddenHit = containsAny(nameLc, FORBIDDEN_KEYWORDS);
-  if (forbiddenHit) {
+  // Dental pozitif sinyaller (loose/substring — recall'ı MAKSİMİZE eder:
+  // 'dent' "dentart"ı, 'diş' "dişdeposu"nu yakalasın).
+  const haystack = `${nameLc} ${addrLc}`.trim();
+  const hasDentistType = typesLc.includes('dentist');
+  const dentalHit = containsAny(haystack, REQUIRED_DENTAL_KEYWORDS);
+  const hasTitlePrefix = DENTAL_TITLE_PREFIXES.some((p) => nameLc.startsWith(p));
+  const hasMedicalType = typesLc.some((t) => MEDICAL_GENERIC_TYPES.includes(t));
+  const dentalSignal = hasDentistType || Boolean(dentalHit) || (hasTitlePrefix && hasMedicalType);
+
+  // Forbidden (göz/berber/ortopedi/eczane…) — KELİME-SINIRI eşleşme + yalnızca
+  // dental sinyal YOKSA veto. Böylece soyadı/adı forbidden token içeren GERÇEK
+  // diş hekimi (Gözde, Berberoğlu, Baran Göz + "Ağız Diş Çene Cerrahisi") elenmez;
+  // ama dental sinyali olmayan gerçek göz/ortopedi kliniği ("Dünya Göz") elenir.
+  const forbiddenHit = wordHit(nameLc, FORBIDDEN_KEYWORDS);
+  if (forbiddenHit && !dentalSignal) {
     return { valid: false, reason: `forbidden_keyword:${forbiddenHit}` };
   }
 
-  // 2. If Google Places explicitly tagged the result as `dentist`, accept it
-  //    even without a dental keyword in the name. This covers clinics whose
-  //    business name doesn't contain "diş" / "dental".
-  if (typesLc.includes('dentist')) {
-    return { valid: true };
-  }
-
-  // 3. Require at least one dental keyword in the name OR the address.
-  const haystack = `${nameLc} ${addrLc}`.trim();
-  const dentalHit = containsAny(haystack, REQUIRED_DENTAL_KEYWORDS);
-  if (dentalHit) {
-    return { valid: true };
-  }
-
-  // 4. Dr./Dt. prefix + medical-generic type + forbidden yok → kabul.
-  //    Google Türkiye'de bir hekim klinik kaydını çoğunlukla type=doctor
-  //    veya type=health olarak işaretler (dentist yerine). Bu durumda
-  //    keyword arama ile geliyorsa muhtemelen diş hekimi.
-  const hasTitlePrefix = DENTAL_TITLE_PREFIXES.some((p) => nameLc.startsWith(p));
-  const hasMedicalType = typesLc.some((t) => MEDICAL_GENERIC_TYPES.includes(t));
-  if (hasTitlePrefix && hasMedicalType) {
+  if (dentalSignal) {
     return { valid: true };
   }
 
