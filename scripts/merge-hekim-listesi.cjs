@@ -66,6 +66,13 @@ function nameKey(s) {
     .replace(/-/g, '')
     .replace(/^(dt|dr|prof|doc|op|uzm|dishekimi|dishekim|ozel|muayenehane|muayene)/g, '');
 }
+// Telefon anahtarı: son 10 hane. Aynı telefon = aynı klinik (isim formatı
+// farklı olsa bile — "Özel X ADSP" vs Google adı mükerrerini yakalar).
+function phoneKey(s) {
+  if (s == null) return '';
+  const d = String(s).replace(/\D/g, '');
+  return d.length >= 10 ? d.slice(-10) : '';
+}
 
 // Province slug -> okunabilir TR ad (districtsData'dan)
 const PROV_READABLE = {};
@@ -162,7 +169,14 @@ function parseFile(file, province) {
   const rows = [];
   for (const sn of wb.SheetNames) {
     if (SKIP_SHEET.test(sn)) continue;
-    const json = xlsx.utils.sheet_to_json(wb.Sheets[sn], { defval: null });
+    const json0 = xlsx.utils.sheet_to_json(wb.Sheets[sn], { defval: null });
+    // CSV başlıklarında UTF-8 BOM (﻿) var → ilk sütun header'ı eşleşmez.
+    // Tüm satır anahtarlarından baştaki BOM'u temizle.
+    const json = json0.map((r0) => {
+      const r = {};
+      for (const k in r0) r[k.replace(/^﻿/, '')] = r0[k];
+      return r;
+    });
     const kamuSheet = isKamuSheet(sn);
     for (const r of json) {
       let name = pick(r, A.name);
@@ -293,10 +307,13 @@ async function mergeProvince(province, files) {
 
   const dbByPid = new Map();
   const dbByName = new Map();
+  const dbByPhone = new Map();
   for (const r of db) {
     if (r.google_place_id) dbByPid.set(r.google_place_id, r);
     const nk = nameKey(r.name);
     if (!dbByName.has(nk)) dbByName.set(nk, r);
+    const pk = phoneKey(r.phone);
+    if (pk && !dbByPhone.has(pk)) dbByPhone.set(pk, r);
   }
 
   const toInsert = [];
@@ -304,6 +321,8 @@ async function mergeProvince(province, files) {
   for (const fr of folder) {
     let m = null;
     if (fr.google_place_id && dbByPid.has(fr.google_place_id)) m = dbByPid.get(fr.google_place_id);
+    // telefon eşleşmesi (güçlü — isim formatı farkını aşar)
+    if (!m) { const pk = phoneKey(fr.phone); if (pk && dbByPhone.has(pk)) m = dbByPhone.get(pk); }
     if (!m) m = dbByName.get(nameKey(fr.name)) || null;
 
     if (m) {
@@ -403,7 +422,13 @@ const PROVINCE_FILES = {
   ordu: ['Ordu_Dis_Hekimi_v5_MASTER.xlsx'],
   samsun: ['SAMSUN_ILI_TUM_ILCELER_Dis_Hekimi_Tarama_BIRLESIK.xlsx'],
   yozgat: ['Yozgat_Dis_Hekimi_Saha_Listesi.xlsx'],
-  ankara: ['ankara_2026-05-27_dis_hekimi_rotasi.xlsx'],
+  // Büyük xlsx (1708 satır, place_id'li) ana kaynak + 909-satır CSV (Milimetrik
+  // gibi büyük dosyada OLMAYAN klinikleri içerir, koordinatsız→geocode) + KAMU.
+  ankara: [
+    'ankara_2026-05-27_dis_hekimi_rotasi.xlsx',
+    'ANKARA_GENELI_Birlesik_Dis_Hekimi_Rotasi.csv',
+    'ANKARA_GENELI_KAMU_Hastane_ADSM.csv',
+  ],
   malatya: ['malatya_2026-05-27_dis_hekimi_rotasi.xlsx'],
   tokat: ['tokat_2026-05-27_dis_hekimi_rotasi.xlsx'],
   kastamonu: ['kastamonu_2026-05-27_dis_hekimi_rotasi.xlsx'],
