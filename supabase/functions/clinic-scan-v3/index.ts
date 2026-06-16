@@ -991,6 +991,9 @@ Deno.serve(async (req) => {
             neighborhood?: string;
             phone?: string;
             specialty?: string;
+            rating?: number;
+            review_count?: number;
+            source_url?: string;
           }> = Array.isArray(dtJson?.doctors) ? dtJson.doctors : [];
 
           // Wall-clock budget: doktor başına bir TextSearch = ~1-3sn. Maks 15 doktor reverse.
@@ -1011,8 +1014,39 @@ Deno.serve(async (req) => {
               );
               collectedErrors.push(...revErrs);
               if (!g?.place_id) {
-                // Reverse lookup failed → DT-only synthetic entry. lat/lng yok → skip
-                // (haritada gösteremiyoruz).
+                // Google'da YOK → DT-only kayıt (Milimetrik gibi Google-görünmez
+                // klinikler). v5: koordinat yok → ilçe-merkez (scan center) + düşük
+                // güven, rep doğrular. Sentetik `dt:` key → google_place_id UNIQUE
+                // onConflict ile re-scan'de dedupe; gerçek Google verisini kirletmez.
+                const dtName = doc.clinic_name ?? doc.name;
+                const dtFres = filterClinicV3(dtName, ['dentist'], doc.address_hint, ilceReadable, {
+                  strictDistrict: filterOpts.strictDistrict,
+                  targetMahalleList: filterOpts.mahalleList,
+                });
+                if (!dtFres.valid) {
+                  filteredOutCount.v++;
+                  continue;
+                }
+                const dtKey = `dt:${doc.source_url || dtName}`;
+                if (!collector.has(dtKey)) {
+                  collector.set(dtKey, {
+                    placeId: dtKey,
+                    name: dtName,
+                    lat,
+                    lng,
+                    address: doc.address_hint,
+                    phone: doc.phone,
+                    rating: typeof doc.rating === 'number' ? doc.rating : undefined,
+                    userRatingCount:
+                      typeof doc.review_count === 'number' ? doc.review_count : undefined,
+                    types: ['dentist'],
+                    sources: ['doktor_takvimi'],
+                    raw: { doktor_takvimi: doc },
+                    segment: dtFres.segment,
+                    filterReason: 'dt_only_approx_location',
+                  });
+                  doktorTakvimiCount++;
+                }
                 continue;
               }
               const gLat = g?.geometry?.location?.lat;

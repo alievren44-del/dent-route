@@ -67,6 +67,8 @@ interface ScrapedDoctor {
   neighborhood?: string;
   phone?: string;
   specialty?: string;
+  rating?: number;
+  review_count?: number;
   source_url: string;
 }
 
@@ -194,6 +196,55 @@ function buildPageUrl(provinceSlug: string, districtSlug: string, page: number):
   return `https://www.doktortakvimi.com/dis-hekimi/${encodeURIComponent(provinceSlug)}/${encodeURIComponent(districtSlug)}?sayfa=${page}`;
 }
 
+// PRIMARY parser — DoktorTakvimi her sayfada `<script type="application/ld+json">`
+// içinde @type:ItemList → itemListElement[].item (@type:Physician) yayınlıyor.
+// CSS sınıflarından (kırılgan, upstream değişince bozulur) çok daha güvenilir:
+// name + medicalSpecialty + aggregateRating + address.streetAddress garantili.
+// geo (lat/lng) YOK → koordinat clinic-scan-v3'te reverse-lookup / merkez fallback.
+function parseJsonLdDoctors(html: string, sourceUrlFallback: string): ScrapedDoctor[] {
+  const out: ScrapedDoctor[] = [];
+  const re = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    let data: unknown;
+    try {
+      data = JSON.parse(m[1].trim());
+    } catch {
+      continue;
+    }
+    const nodes = Array.isArray(data) ? data : [data];
+    for (const node of nodes as Array<Record<string, unknown>>) {
+      if (!node || node['@type'] !== 'ItemList') continue;
+      const els = Array.isArray(node.itemListElement) ? node.itemListElement : [];
+      for (const el of els as Array<Record<string, unknown>>) {
+        const it = ((el?.item ?? el) ?? {}) as Record<string, unknown>;
+        if (it['@type'] !== 'Physician') continue;
+        const name = cleanText(it.name as string);
+        if (!name) continue;
+        const addr = (it.address ?? {}) as Record<string, unknown>;
+        const street = cleanText(addr.streetAddress as string);
+        const specRaw = it.medicalSpecialty;
+        const spec = Array.isArray(specRaw)
+          ? cleanText(specRaw[0] as string)
+          : cleanText(specRaw as string);
+        const agg = (it.aggregateRating ?? {}) as Record<string, unknown>;
+        const doc: ScrapedDoctor = {
+          name,
+          source_url: typeof it.url === 'string' ? (it.url as string) : sourceUrlFallback,
+        };
+        if (street) doc.address_hint = street;
+        const nb = extractNeighborhood(street);
+        if (nb) doc.neighborhood = nb;
+        if (spec) doc.specialty = spec;
+        if (typeof agg.ratingValue === 'number') doc.rating = agg.ratingValue as number;
+        if (typeof agg.reviewCount === 'number') doc.review_count = agg.reviewCount as number;
+        out.push(doc);
+      }
+    }
+  }
+  return out;
+}
+
 Deno.serve(async (req: Request): Promise<Response> => {
   const cors = buildCorsHeaders(req.headers.get('Origin'));
 
@@ -313,6 +364,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // ── Scrape loop ───────────────────────────────────────────────────────────
     const allDoctors: ScrapedDoctor[] = [];
+    const seenKeys = new Set<string>();
     let pagesFetched = 0;
     let parseFailed = false;
 
@@ -343,6 +395,27 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
       pagesFetched++;
 
+      let pageHadAny = false;
+
+      // 1) PRIMARY — JSON-LD ItemList (güvenilir, CSS-drift'e bağışık).
+      const jsonLdDoctors = parseJsonLdDoctors(html, url);
+      if (jsonLdDoctors.length > 0) {
+        for (const d of jsonLdDoctors) {
+          // Sayfalar arası dedup (source_url, yoksa name).
+          const key = (d.source_url || d.name).toLowerCase();
+          if (seenKeys.has(key)) continue;
+          seenKeys.add(key);
+          allDoctors.push(d);
+          pageHadAny = true;
+        }
+        if (!pageHadAny) {
+          // JSON-LD vardı ama hepsi mükerrer → son sayfa, dur.
+          break;
+        }
+        continue;
+      }
+
+      // 2) FALLBACK — CSS kart parse (JSON-LD bulunamazsa).
       let doc: ReturnType<DOMParser['parseFromString']>;
       try {
         doc = new DOMParser().parseFromString(html, 'text/html');
@@ -363,11 +436,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
         break;
       }
 
-      let pageHadAny = false;
       for (const card of cards) {
         try {
           const doctor = parseCard(card, url);
           if (doctor) {
+            const key = (doctor.source_url || doctor.name).toLowerCase();
+            if (seenKeys.has(key)) continue;
+            seenKeys.add(key);
             allDoctors.push(doctor);
             pageHadAny = true;
           }
@@ -380,6 +455,48 @@ Deno.serve(async (req: Request): Promise<Response> => {
       if (!pageHadAny) {
         errors.push(`no_parseable_cards_page${page}`);
         break;
+      }
+    }
+
+    // ── İl-geneli fallback ──────────────────────────────────────────────────
+    // İlçe sayfası 0 döndüyse /dis-hekimi/{il} dene. "merkez" slug bazı illerde
+    // tutmuyor (Sivas → /sivas/merkez boş ama /sivas 19 hekim). DT il sayfası
+    // tüm il hekimlerini listeler — merkez için yeterli kapsam.
+    if (allDoctors.length === 0 && districtSlug && SLUG_RE.test(provinceSlug)) {
+      for (let page = 1; page <= maxPages; page++) {
+        if (Date.now() - startedAt > TOTAL_WALL_CLOCK_MS) {
+          errors.push('timeout_province_fallback');
+          break;
+        }
+        if (page > 1) await sleep(PAGE_DELAY_MS);
+        const url = `https://www.doktortakvimi.com/dis-hekimi/${encodeURIComponent(provinceSlug)}?sayfa=${page}`;
+        let html: string;
+        try {
+          const resp = await fetch(url, { headers: FETCH_HEADERS, redirect: 'follow' });
+          if (!resp.ok) {
+            errors.push(`prov_http_${resp.status}_p${page}`);
+            break;
+          }
+          html = await resp.text();
+        } catch (e) {
+          errors.push(`prov_fetch_p${page}_${(e as Error).message?.slice(0, 40) ?? 'unknown'}`);
+          break;
+        }
+        pagesFetched++;
+        const docs = parseJsonLdDoctors(html, url);
+        if (docs.length === 0) {
+          errors.push(`prov_no_jsonld_p${page}`);
+          break;
+        }
+        let any = false;
+        for (const d of docs) {
+          const key = (d.source_url || d.name).toLowerCase();
+          if (seenKeys.has(key)) continue;
+          seenKeys.add(key);
+          allDoctors.push(d);
+          any = true;
+        }
+        if (!any) break;
       }
     }
 
