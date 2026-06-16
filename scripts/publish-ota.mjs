@@ -7,9 +7,11 @@
  * Friends'in app'i sonraki açılışta otomatik indirir (src/ota/checkUpdate.ts).
  */
 import { createClient } from '@supabase/supabase-js';
-import archiver from 'archiver';
 import { createWriteStream, readFileSync, rmSync } from 'node:fs';
 import { execSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+const _arch = createRequire(import.meta.url)('archiver');
+const archiver = typeof _arch === 'function' ? _arch : _arch.default;
 
 const app = process.argv[2];
 const noBuild = process.argv.includes('--no-build');
@@ -51,4 +53,4 @@ if (e2) { console.error('manifest upload hata:', e2.message); process.exit(1); }
 rmSync(zipPath, { force: true });
 console.log(`\n✓ OTA yayınlandı: ${app} v${version}`);
 console.log(`  manifest: ${SB_URL}/storage/v1/object/public/ota/${app}/latest.json`);
-console.log('  Friends app'i sonraki açılışta otomatik güncellenecek.');
+console.log('  Friends app sonraki acilista otomatik guncellenecek.');
