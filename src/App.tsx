@@ -5,6 +5,7 @@ import { AppRouter } from './router';
 import { useVertical } from '@core/verticals/useVertical';
 import '@/lib/debugLog';
 import { DebugOverlay } from '@/components/debug/DebugOverlay';
+import FeedbackMount from '@/components/FeedbackMount';
 import { setPushNavigate } from '@lib/push';
 
 /**
@@ -47,6 +48,7 @@ function App() {
       <AppRouter />
       <Toaster position="top-center" richColors />
       {import.meta.env.DEV && <DebugOverlay />}
+      <FeedbackMount />
     </div>
   );
 }
