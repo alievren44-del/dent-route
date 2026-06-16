@@ -1029,11 +1029,36 @@ Deno.serve(async (req) => {
                 }
                 const dtKey = `dt:${doc.source_url || dtName}`;
                 if (!collector.has(dtKey)) {
+                  // Gerçek koordinat: adres_hint varsa textSearch ile geocode et.
+                  // Başarısız → scan-center fallback (koordinatsız kayda tercih).
+                  let dtLat = lat, dtLng = lng;
+                  let dtReason = 'dt_only_approx_location';
+                  if (typeof doc.address_hint === 'string' && doc.address_hint.trim().length > 0) {
+                    try {
+                      const { results: geoRes, errors: geoErrs } = await textSearch(
+                        GOOGLE_PLACES_API_KEY!,
+                        `${doc.address_hint}, ${ilceReadable}`,
+                      );
+                      collectedErrors.push(...geoErrs);
+                      const gp = geoRes?.[0]?.geometry?.location;
+                      if (
+                        typeof gp?.lat === 'number' &&
+                        typeof gp?.lng === 'number' &&
+                        haversineM(lat, lng, gp.lat, gp.lng) <= radiusM * 1.5
+                      ) {
+                        dtLat = gp.lat;
+                        dtLng = gp.lng;
+                        dtReason = 'dt_only_geocoded';
+                      }
+                    } catch (_geoErr) {
+                      collectedErrors.push('dt_geocode_failed');
+                    }
+                  }
                   collector.set(dtKey, {
                     placeId: dtKey,
                     name: dtName,
-                    lat,
-                    lng,
+                    lat: dtLat,
+                    lng: dtLng,
                     address: doc.address_hint,
                     phone: doc.phone,
                     rating: typeof doc.rating === 'number' ? doc.rating : undefined,
@@ -1043,7 +1068,7 @@ Deno.serve(async (req) => {
                     sources: ['doktor_takvimi'],
                     raw: { doktor_takvimi: doc },
                     segment: dtFres.segment,
-                    filterReason: 'dt_only_approx_location',
+                    filterReason: dtReason,
                   });
                   doktorTakvimiCount++;
                 }
