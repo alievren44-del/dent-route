@@ -269,13 +269,9 @@ function DiscoveryPage(): JSX.Element {
     // seçildiğinde cache'den yanlış veri görünebiliyordu. Kesin güvence için
     // her durumda haversine ≤ radiusKm * 1000 kontrolü uygula.
     // İlçe modunda radius filtresi UYGULANMAZ — tüm ilçe gösterilir.
-    const radiusFiltered =
-      !isDistrictMode
-        ? data.filter(
-            (c) =>
-              haversineMeters(origin.lat, origin.lng, c.lat, c.lng) <= radiusKm * 1000,
-          )
-        : data;
+    const radiusFiltered = !isDistrictMode
+      ? data.filter((c) => haversineMeters(origin.lat, origin.lng, c.lat, c.lng) <= radiusKm * 1000)
+      : data;
 
     const q = foldTr(searchQuery.trim());
     if (!q) return radiusFiltered;

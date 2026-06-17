@@ -126,7 +126,10 @@ export class AuthClient {
       }
     };
     try {
-      const payload = JSON.parse(decodeURIComponent(atob(m[1] ?? ''))) as { a?: string; r?: string };
+      const payload = JSON.parse(decodeURIComponent(atob(m[1] ?? ''))) as {
+        a?: string;
+        r?: string;
+      };
       if (!payload.a || !payload.r) {
         clearHash();
         return false;
