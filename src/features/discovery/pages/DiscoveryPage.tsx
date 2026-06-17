@@ -233,16 +233,31 @@ function DiscoveryPage(): JSX.Element {
 
   // Akıllı aramaya göre filtrelenmiş liste (tek hesap — sayaç + render paylaşır)
   const filteredData = useMemo(() => {
-    if (!data) return [];
+    if (!data || !origin) return [];
+
+    // BUG #07 FIX: GPS modunda sonuçları client-side yarıçap filtresiyle kes.
+    // RPC radius'u sunucu tarafında uygular ancak adapter.searchNearby sonuçları
+    // (saha müşterileri) dedupCandidates sonrası birleştiğinden farklı radius
+    // seçildiğinde cache'den yanlış veri görünebiliyordu. Kesin güvence için
+    // her durumda haversine ≤ radiusKm * 1000 kontrolü uygula.
+    // İlçe modunda radius filtresi UYGULANMAZ — tüm ilçe gösterilir.
+    const radiusFiltered =
+      !isDistrictMode
+        ? data.filter(
+            (c) =>
+              haversineMeters(origin.lat, origin.lng, c.lat, c.lng) <= radiusKm * 1000,
+          )
+        : data;
+
     const q = foldTr(searchQuery.trim());
-    if (!q) return data;
+    if (!q) return radiusFiltered;
     const qDigits = searchQuery.replace(/\D+/g, '');
-    return data.filter((c) => {
+    return radiusFiltered.filter((c) => {
       const hay = foldTr(`${c.name} ${c.phone ?? ''} ${c.address ?? ''}`);
       const phoneHay = (c.phone ?? '').replace(/\D+/g, '');
       return hay.includes(q) || (qDigits.length >= 3 && phoneHay.includes(qDigits));
     });
-  }, [data, searchQuery]);
+  }, [data, searchQuery, origin, isDistrictMode, radiusKm]);
 
   return (
     <div className="p-4 space-y-4">
@@ -426,6 +441,15 @@ function DiscoveryPage(): JSX.Element {
             const isExisting = c.sources.includes('saha');
             const stopId = buildStopId(c);
             const inBasket = basketItems.some((s) => s.id === stopId);
+            // BUG #10 FIX (a): Kayıtlı klinikler için detay sayfası ve ziyaret
+            // check-in yolunu aç. Google Places-only kayıtların account_id'si
+            // yoktur — butonlar yalnızca saha müşterisi için aktif.
+            const openDetail = c.customerId
+              ? () => navigate(`/clinics/${c.customerId}`)
+              : undefined;
+            const openVisit = c.customerId
+              ? () => navigate(`/visits/check-in/${c.customerId}`)
+              : undefined;
             return (
               <ClinicCard
                 key={key}
@@ -438,6 +462,8 @@ function DiscoveryPage(): JSX.Element {
                 rating={c.rating}
                 isExistingCustomer={isExisting}
                 isInBasket={inBasket}
+                onOpenDetail={openDetail}
+                onStartVisit={openVisit}
                 onAdd={() => {
                   const source: BasketStopSource = c.sources.includes('saha')
                     ? 'saha'

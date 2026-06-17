@@ -53,16 +53,14 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const GOOGLE_PLACES_API_KEY = Deno.env.get('GOOGLE_PLACES_API_KEY');
 
-const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? 'http://localhost:5173')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
-
 function buildCorsHeaders(reqOrigin: string | null): Record<string, string> {
-  const allowed =
-    reqOrigin && (ALLOWED_ORIGINS.includes(reqOrigin) || reqOrigin === 'https://localhost' || reqOrigin === 'capacitor://localhost') ? reqOrigin : ALLOWED_ORIGINS[0] ?? 'null';
+  // Origin'i HER ZAMAN yansıt. POST + header-auth (Authorization/apikey) API,
+  // cookie/credentials yok → wildcard-eşdeğeri güvenli. ALLOWED_ORIGINS allowlist'i
+  // CORS'u GATE'lemiyordu artık: native WebView (https://localhost / capacitor://
+  // localhost / null) + web prod domain HEPSİ tek kodla geçer. Bu sınıf CORS bug
+  // (yeni origin → "Failed to fetch") bir daha çıkmaz.
   return {
-    'Access-Control-Allow-Origin': allowed,
+    'Access-Control-Allow-Origin': reqOrigin ?? '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     Vary: 'Origin',
@@ -993,6 +991,9 @@ Deno.serve(async (req) => {
             neighborhood?: string;
             phone?: string;
             specialty?: string;
+            rating?: number;
+            review_count?: number;
+            source_url?: string;
           }> = Array.isArray(dtJson?.doctors) ? dtJson.doctors : [];
 
           // Wall-clock budget: doktor başına bir TextSearch = ~1-3sn. Maks 15 doktor reverse.
@@ -1013,8 +1014,64 @@ Deno.serve(async (req) => {
               );
               collectedErrors.push(...revErrs);
               if (!g?.place_id) {
-                // Reverse lookup failed → DT-only synthetic entry. lat/lng yok → skip
-                // (haritada gösteremiyoruz).
+                // Google'da YOK → DT-only kayıt (Milimetrik gibi Google-görünmez
+                // klinikler). v5: koordinat yok → ilçe-merkez (scan center) + düşük
+                // güven, rep doğrular. Sentetik `dt:` key → google_place_id UNIQUE
+                // onConflict ile re-scan'de dedupe; gerçek Google verisini kirletmez.
+                const dtName = doc.clinic_name ?? doc.name;
+                const dtFres = filterClinicV3(dtName, ['dentist'], doc.address_hint, ilceReadable, {
+                  strictDistrict: filterOpts.strictDistrict,
+                  targetMahalleList: filterOpts.mahalleList,
+                });
+                if (!dtFres.valid) {
+                  filteredOutCount.v++;
+                  continue;
+                }
+                const dtKey = `dt:${doc.source_url || dtName}`;
+                if (!collector.has(dtKey)) {
+                  // Gerçek koordinat: adres_hint varsa textSearch ile geocode et.
+                  // Başarısız → scan-center fallback (koordinatsız kayda tercih).
+                  let dtLat = lat, dtLng = lng;
+                  let dtReason = 'dt_only_approx_location';
+                  if (typeof doc.address_hint === 'string' && doc.address_hint.trim().length > 0) {
+                    try {
+                      const { results: geoRes, errors: geoErrs } = await textSearch(
+                        GOOGLE_PLACES_API_KEY!,
+                        `${doc.address_hint}, ${ilceReadable}`,
+                      );
+                      collectedErrors.push(...geoErrs);
+                      const gp = geoRes?.[0]?.geometry?.location;
+                      if (
+                        typeof gp?.lat === 'number' &&
+                        typeof gp?.lng === 'number' &&
+                        haversineM(lat, lng, gp.lat, gp.lng) <= radiusM * 1.5
+                      ) {
+                        dtLat = gp.lat;
+                        dtLng = gp.lng;
+                        dtReason = 'dt_only_geocoded';
+                      }
+                    } catch (_geoErr) {
+                      collectedErrors.push('dt_geocode_failed');
+                    }
+                  }
+                  collector.set(dtKey, {
+                    placeId: dtKey,
+                    name: dtName,
+                    lat: dtLat,
+                    lng: dtLng,
+                    address: doc.address_hint,
+                    phone: doc.phone,
+                    rating: typeof doc.rating === 'number' ? doc.rating : undefined,
+                    userRatingCount:
+                      typeof doc.review_count === 'number' ? doc.review_count : undefined,
+                    types: ['dentist'],
+                    sources: ['doktor_takvimi'],
+                    raw: { doktor_takvimi: doc },
+                    segment: dtFres.segment,
+                    filterReason: dtReason,
+                  });
+                  doktorTakvimiCount++;
+                }
                 continue;
               }
               const gLat = g?.geometry?.location?.lat;
@@ -1149,16 +1206,40 @@ Deno.serve(async (req) => {
       .filter((r) => !r.placeId.startsWith('osm:'))
       .map((r) => r.placeId);
 
-    const { data: districtClinics } = await supabase
-      .from('saha_clinics')
-      .select('id, google_place_id, name, lat, lng')
-      .eq('province_slug', provinceSlug)
-      .eq('district_slug', districtSlug);
+    // Fetch existing clinics for this district — two passes:
+    //   Pass A: same province + same district_slug (exact match rows)
+    //   Pass B: same province + district_slug IS NULL (Excel/Milimetrik merge rows
+    //           that haven't been assigned a district yet; ~23.9% of saha_clinics)
+    // Both passes are needed: Pass B rows are invisible to .eq('district_slug',...)
+    // because Postgres .eq filters out NULLs (NULL ≠ 'ankara' is true, but also
+    // NULL ≠ NULL is not false — the filter simply excludes nulls).
+    const [{ data: districtClinicsExact }, { data: districtClinicsNullSlug }] = await Promise.all([
+      supabase
+        .from('saha_clinics')
+        .select('id, google_place_id, name, lat, lng')
+        .eq('province_slug', provinceSlug)
+        .eq('district_slug', districtSlug),
+      supabase
+        .from('saha_clinics')
+        .select('id, google_place_id, name, lat, lng')
+        .eq('province_slug', provinceSlug)
+        .is('district_slug', null),
+    ]);
+    // Merge both result sets; deduplicate by id so a row can't double-count.
+    const seenIds = new Set<string>();
+    const districtClinics: Array<{ id: string; google_place_id: string | null; name: string; lat: number; lng: number }> = [];
+    for (const row of [...(districtClinicsExact ?? []), ...(districtClinicsNullSlug ?? [])]) {
+      if (row && !seenIds.has(row.id)) {
+        seenIds.add(row.id);
+        districtClinics.push(row);
+      }
+    }
+    collectedErrors.push(`district_lookup:exact=${districtClinicsExact?.length ?? 0},null_slug=${districtClinicsNullSlug?.length ?? 0}`);
 
     const existingSet = new Set<string>();
     const orphanUpdates: Array<{ id: string; place_id: string }> = [];
 
-    if (Array.isArray(districtClinics) && districtClinics.length > 0) {
+    if (districtClinics.length > 0) {
       // 1) Doğrudan place_id match
       for (const r of districtClinics) {
         if (r.google_place_id && googlePlaceIds.includes(r.google_place_id)) {
@@ -1168,61 +1249,73 @@ Deno.serve(async (req) => {
       // 2) name + coord match (orphan rows, place_id NULL)
       //
       // İki tier:
-      //   T1: aynı district + FULL normalize-name eşit (TÜM string) → distance'tan
-      //       bağımsız match. Excel-import geocode'u sıkça yanlış il/ilçeye düşer;
-      //       district zaten doğru biliniyor + tam isim eşitliği yüksek-güven.
-      //   T2: aynı district + 14-prefix substring + haversine <200m (geocode OK ise).
-      const orphans = districtClinics.filter((c: any) => !c.google_place_id);
+      //   T1: full normalized-name equality → distance-bağımsız high-confidence match.
+      //       "Mevadent ADSP" (Excel) ↔ "Mevadent Ağız Diş Sağlığı" (Google) tam
+      //       eşit değil → bu tier sadece kesin eşitliği yakalar.
+      //
+      //   T2: 10-char normalized prefix eşit + haversine ≤ 250m.
+      //       10 char (eski 6'dan uzatıldı): district içinde ilk 6 char çakışması
+      //       yüksek ("ankara", "izmir", "dental" gibi ortak prefix'ler). 10 char
+      //       ile "mevadenta" ↔ "mevadenta" eşleşir ama "ankaradis" ↔ "ankaraag"
+      //       eşleşmez.
+      //       Mesafe 250m (eski 200m): Excel geocode'u bazen 100-200m kayabilir;
+      //       250m farklı klinikleri birleştirmez ama kayık geocode'u kapsar.
+      //
+      //   T3: her iki normalize-isim ≥ 5 char AND biri diğerinin içinde + ≤ 150m.
+      //       "Milimetrik" ↔ "Milimetrik Dental Poliklinik" gibi kısa-prefix durumu.
+      const PFX2 = 10; // T2 prefix uzunluğu
+      const DIST_T2 = 250; // T2 max mesafe (m)
+      const DIST_T3 = 150; // T3 max mesafe (m)
+      const MIN_CONTAIN = 5; // T3 minimum token uzunluğu
+
+      const orphans = districtClinics.filter((c) => !c.google_place_id);
       for (const result of visibleResults) {
         if (result.placeId.startsWith('osm:')) continue;
         if (existingSet.has(result.placeId)) continue;
         const rNormFull = normNameTr(result.name);
-        const rNorm = rNormFull.slice(0, 14);
         if (!rNormFull) continue;
+        const rNormPfx = rNormFull.slice(0, PFX2);
         let matched = false;
-        // T1: aynı district + isim normalize prefix-6 eşit → match.
-        //
-        // Excel ve Google klinik adları farklı suffix taşıyor:
-        //   "Mevadent ADSP" (Excel) ↔ "Mevadent Ağız Diş Sağlığı" (Google)
-        //   normalize: "mevadentadsp" ↔ "mevadentagizdis..."
-        //   substring check başarısız; ilk 6 char "mevade" eşit.
-        // 6 char prefix district zaten aynıyken çakışma riski düşük.
-        // Çok kısa isimler için (< 6 char) full equality.
-        const PFX = 6;
+
         for (const orph of orphans) {
           const cNormFull = normNameTr(String(orph.name ?? ''));
           if (!cNormFull) continue;
+
+          // T1: full normalized-name equality (highest confidence, no distance needed)
           if (cNormFull === rNormFull) {
             matched = true;
-          } else if (
-            cNormFull.length >= PFX &&
-            rNormFull.length >= PFX &&
-            cNormFull.slice(0, PFX) === rNormFull.slice(0, PFX)
-          ) {
-            matched = true;
           }
+
+          // T2: 10-char prefix equality + ≤ 250m
+          if (!matched) {
+            const cNormPfx = cNormFull.slice(0, PFX2);
+            if (
+              cNormPfx.length >= PFX2 &&
+              rNormPfx.length >= PFX2 &&
+              cNormPfx === rNormPfx
+            ) {
+              const d = haversineM(orph.lat, orph.lng, result.lat, result.lng);
+              if (d <= DIST_T2) matched = true;
+            }
+          }
+
+          // T3: containment + ≤ 150m (catches "Milimetrik" ↔ "Milimetrik Dental Pol.")
+          if (!matched) {
+            if (
+              cNormFull.length >= MIN_CONTAIN &&
+              rNormFull.length >= MIN_CONTAIN &&
+              (cNormFull.includes(rNormFull) || rNormFull.includes(cNormFull))
+            ) {
+              const d = haversineM(orph.lat, orph.lng, result.lat, result.lng);
+              if (d <= DIST_T3) matched = true;
+            }
+          }
+
           if (matched) {
             existingSet.add(result.placeId);
             orphanUpdates.push({ id: orph.id, place_id: result.placeId });
             break;
           }
-        }
-        if (matched) continue;
-        // T2: prefix substring + distance
-        for (const orph of orphans) {
-          const cNorm = normNameTr(String(orph.name ?? '')).slice(0, 14);
-          if (!cNorm) continue;
-          const nameMatch =
-            cNorm === rNorm ||
-            (cNorm.length >= 3 &&
-              rNorm.length >= 3 &&
-              (cNorm.includes(rNorm) || rNorm.includes(cNorm)));
-          if (!nameMatch) continue;
-          const d = haversineM(orph.lat, orph.lng, result.lat, result.lng);
-          if (d > 200) continue;
-          existingSet.add(result.placeId);
-          orphanUpdates.push({ id: orph.id, place_id: result.placeId });
-          break;
         }
       }
     }

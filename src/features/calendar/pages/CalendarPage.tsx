@@ -1671,11 +1671,13 @@ function LinkClinicModal({
     enabled: q.trim().length >= 2,
     queryFn: async (): Promise<{ id: string; name: string }[]> => {
       const sb = getTypedClient();
+      // status filtresi kaldırıldı: bazı üniversite/kamu kurumu kayıtları
+      // 'active' dışı durumda olabildiği için arama dışı kalmasın
+      // (kullanıcı doğru kaydı manuel seçer).
       const { data } = await sb
         .from('saha_clinics')
         .select('id, name')
         .ilike('name', `%${q.trim()}%`)
-        .eq('status', 'active')
         .limit(8);
       return ((data ?? []) as { id: string; name: string }[]).map((c) => ({
         id: c.id,
@@ -1683,6 +1685,10 @@ function LinkClinicModal({
       }));
     },
   });
+
+  const hasSearched = q.trim().length >= 2;
+  const noResults =
+    hasSearched && !searchQuery.isFetching && (searchQuery.data ?? []).length === 0;
 
   return (
     <div
@@ -1727,6 +1733,15 @@ function LinkClinicModal({
               </li>
             ))}
           </ul>
+        )}
+        {noResults && (
+          <div className="mt-3 rounded-xl border border-border bg-muted/40 px-3 py-3 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground">"{q}" bulunamadı.</p>
+            <p className="mt-1">
+              Klinik sisteme henüz eklenmemiş olabilir. Keşif ekranından arama yaparak kliniği
+              önce sisteme ekleyin, ardından burada bağlayın.
+            </p>
+          </div>
         )}
       </div>
     </div>

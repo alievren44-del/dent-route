@@ -45,6 +45,9 @@ const persister = createAsyncStoragePersister({
 // 4. Offline sync queue (online/offline event handler register)
 initSyncQueue();
 
+// OTA: web-bundle uzaktan güncelleme (best-effort, hata app'i etkilemez)
+import('./ota/checkUpdate').then(({ otaCheck }) => otaCheck('nav')).catch(() => {});
+
 // 3. Mount
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('Root element bulunamadı.');

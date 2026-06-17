@@ -134,28 +134,39 @@ export function adaptiveCorridorParams(routeKm: number): {
     };
   }
   if (routeKm < 300) {
+    // BUG #04 fix: limit 150→800 — Ankara (2000+ klinik) gibi şehirler
+    // düşük limit'te tüm slots'u doldurup rota sonundaki Çankırı/Kastamonu
+    // kliniklerini keser. SQL ORDER BY yok → front-end'de yüksek limit ile
+    // rastgele kesimi önlüyoruz.
+    // BUG #05 fix: detourKmMax 12→5 — buffer 6km'yi yeterli tutar ama
+    // 12km = 6km dik sapma çok geniş; yol kenarındaki değil civar klinikleri
+    // de dahil ediyor. Dik sapmayı 2.5km ile sınırlıyoruz (= 5km detour).
     return {
-      bufferM: 8000,
-      detourKmMax: 12,
-      detourMinMax: 18,
-      limit: 150,
+      bufferM: 6000,
+      detourKmMax: 5,
+      detourMinMax: 10,
+      limit: 800,
       excludeStartEndKm: 8,
     };
   }
   if (routeKm < 600) {
+    // BUG #04 fix: limit 250→1000
+    // BUG #05 fix: detourKmMax 25→8 (dik sapma ≤4km)
     return {
-      bufferM: 15000,
-      detourKmMax: 25,
-      detourMinMax: 30,
-      limit: 250,
+      bufferM: 10000,
+      detourKmMax: 8,
+      detourMinMax: 15,
+      limit: 1000,
       excludeStartEndKm: 15,
     };
   }
+  // BUG #04 fix: limit 300→1200
+  // BUG #05 fix: detourKmMax 35→10 (dik sapma ≤5km)
   return {
-    bufferM: 25000,
-    detourKmMax: 35,
-    detourMinMax: 45,
-    limit: 300,
+    bufferM: 12000,
+    detourKmMax: 10,
+    detourMinMax: 18,
+    limit: 1200,
     excludeStartEndKm: 20,
   };
 }

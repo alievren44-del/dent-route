@@ -45,6 +45,11 @@ const config: CapacitorConfig = {
     PushNotifications: {
       presentationOptions: ['badge', 'sound', 'alert'],
     },
+    // OTA: web-bundle uzaktan güncelleme (kontrol src/ota/checkUpdate.ts)
+    CapacitorUpdater: {
+      autoUpdate: false,
+      resetWhenUpdate: true,
+    },
   },
 };
 
