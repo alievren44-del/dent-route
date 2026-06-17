@@ -71,12 +71,13 @@ describe('isValidDentalClinic', () => {
     expect(r.reason).toBe('empty_name');
   });
 
-  it('forbidden keyword wins over dentist type tag', () => {
-    // edge case: bir kuyumcu Google tarafından yanlışlıkla "dentist" olarak
-    // etiketlenmişse bile reddedilmeli (forbidden öncelikli).
+  it('dentist type tag varsa forbidden tek başına reddetmez (recall-fix)', () => {
+    // Recall-fix (8393aa2): 'göz'/'berber' gibi alt-dize çakışmaları GERÇEK
+    // hekimleri elemesin diye forbidden YALNIZ dental sinyal YOKSA veto eder.
+    // dentist type tag güçlü dental sinyaldir → forbidden tek başına reddetmez
+    // (bilinçli recall>precision; saha taramada Ayrancı filtered_out 46→3).
     const r = isValidDentalClinic('Kuyumcu Diş Pırlanta', ['dentist'], '');
-    expect(r.valid).toBe(false);
-    expect(r.reason).toMatch(/forbidden_keyword:kuyumcu/);
+    expect(r.valid).toBe(true);
   });
 });
 

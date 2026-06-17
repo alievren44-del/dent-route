@@ -137,16 +137,16 @@ describe('adaptiveCorridorParams — rota uzunluğu eşikleri', () => {
     expect(adaptiveCorridorParams(50).bufferM).toBe(2500);
   });
 
-  it('uzun (300-600km) → 15000m buffer, limit 250', () => {
+  it('uzun (300-600km) → 10000m buffer, limit 1000 (#04/#05)', () => {
     const p = adaptiveCorridorParams(450);
-    expect(p.bufferM).toBe(15000);
-    expect(p.limit).toBe(250);
+    expect(p.bufferM).toBe(10000);
+    expect(p.limit).toBe(1000);
   });
 
-  it('çok uzun (>600km) → 25000m buffer, limit 300', () => {
+  it('çok uzun (>600km) → 12000m buffer, limit 1200 (#04/#05)', () => {
     const p = adaptiveCorridorParams(900);
-    expect(p.bufferM).toBe(25000);
-    expect(p.limit).toBe(300);
+    expect(p.bufferM).toBe(12000);
+    expect(p.limit).toBe(1200);
   });
 
   it('buffer ve limit rota uzunluğuyla monoton artar', () => {
