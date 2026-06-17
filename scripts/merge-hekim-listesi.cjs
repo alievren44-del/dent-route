@@ -169,7 +169,17 @@ function parseFile(file, province) {
   const rows = [];
   for (const sn of wb.SheetNames) {
     if (SKIP_SHEET.test(sn)) continue;
-    const json0 = xlsx.utils.sheet_to_json(wb.Sheets[sn], { defval: null });
+    const sheet = wb.Sheets[sn];
+    // Bazı dosyalar başlıkla başlar (merged title satırları); gerçek kolon
+    // header'ını bul (en az 2 bilinen başlık token'ı içeren ilk satır).
+    const aoa = xlsx.utils.sheet_to_json(sheet, { header: 1, defval: null });
+    const HDR_RE = /(İlçe|ilçe|Klinik|Kurum|Adres|Telefon)/i;
+    let hdrRow = 0;
+    for (let i = 0; i < Math.min(aoa.length, 8); i++) {
+      const hits = (aoa[i] || []).filter((c) => c != null && HDR_RE.test(String(c))).length;
+      if (hits >= 2) { hdrRow = i; break; }
+    }
+    const json0 = xlsx.utils.sheet_to_json(sheet, { defval: null, range: hdrRow });
     // CSV başlıklarında UTF-8 BOM (﻿) var → ilk sütun header'ı eşleşmez.
     // Tüm satır anahtarlarından baştaki BOM'u temizle.
     const json = json0.map((r0) => {
@@ -416,7 +426,13 @@ async function mergeProvince(province, files) {
 const PROVINCE_FILES = {
   amasya: ['Amasya_Dis_Hekimi_v5_MASTER.xlsx'],
   corum: ['Corum_Dis_Hekimi_v5_MASTER.xlsx'],
-  diyarbakir: ['diyarbakır Baglar_Dis_Hekimi_Tarama.xlsx', 'diyarbakır Kayapinar_Dis_Hekimi_Tarama.xlsx'],
+  diyarbakir: [
+    'Diyarbakir_17ilce_MASTER.xlsx',
+    'Diyarbakir_BIRLESIK_6ilce.xlsx',
+    'Diyarbakir_Kucuk_Ilceler_BIRLESIK.xlsx',
+    'diyarbakır Baglar_Dis_Hekimi_Tarama.xlsx',
+    'diyarbakır Kayapinar_Dis_Hekimi_Tarama.xlsx',
+  ],
   kirsehir: ['Kirsehir_Dis_Hekimi_Saha_Listesi.xlsx'],
   nevsehir: ['Nevsehir_Dis_Hekimi_Saha_Listesi.xlsx'],
   ordu: ['Ordu_Dis_Hekimi_v5_MASTER.xlsx'],

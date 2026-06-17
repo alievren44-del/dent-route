@@ -15,8 +15,12 @@ export default function FeedbackMount() {
   const loc = useLocation();
   const profile = useAuthStore((s) => s.profile);
 
-  useEffect(() => { if (ENABLED) installBreadcrumbs(); }, []);
-  useEffect(() => { if (ENABLED) recordRoute(loc.pathname); }, [loc.pathname]);
+  useEffect(() => {
+    if (ENABLED) installBreadcrumbs();
+  }, []);
+  useEffect(() => {
+    if (ENABLED) recordRoute(loc.pathname);
+  }, [loc.pathname]);
 
   if (!ENABLED) return null;
   return (
@@ -25,7 +29,10 @@ export default function FeedbackMount() {
       appVersion={import.meta.env.VITE_APP_VERSION || '1.0'}
       getUser={() => ({ id: profile?.id, role: profile?.role ?? undefined })}
       supabase={getTypedClient() as unknown as Parameters<typeof FeedbackButton>[0]['supabase']}
-      toast={(m, k) => { if (k === 'error') toast.error(m); else toast.success(m); }}
+      toast={(m, k) => {
+        if (k === 'error') toast.error(m);
+        else toast.success(m);
+      }}
     />
   );
 }

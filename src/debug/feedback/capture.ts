@@ -4,7 +4,11 @@
  */
 import { getBreadcrumbs } from './breadcrumbs';
 
-export interface FeedbackUser { id?: string; role?: string; name?: string }
+export interface FeedbackUser {
+  id?: string;
+  role?: string;
+  name?: string;
+}
 
 export interface FeedbackReport {
   id: string;
@@ -36,7 +40,11 @@ export async function captureReport(opts: {
     await new Promise((r) => requestAnimationFrame(() => r(null)));
     // modern-screenshot: oklch + modern CSS destekler (html2canvas 1.4.1 oklch'te patlıyordu).
     const { domToJpeg } = await import('modern-screenshot');
-    const dataUrl = await domToJpeg(document.body, { quality: 0.6, scale: 0.5, backgroundColor: '#ffffff' });
+    const dataUrl = await domToJpeg(document.body, {
+      quality: 0.6,
+      scale: 0.5,
+      backgroundColor: '#ffffff',
+    });
     screenshotBase64 = dataUrl.split(',')[1] || null;
   } catch {
     // ekran fotosu best-effort — başarısızsa rapor yine kaydedilir

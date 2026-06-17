@@ -1687,8 +1687,7 @@ function LinkClinicModal({
   });
 
   const hasSearched = q.trim().length >= 2;
-  const noResults =
-    hasSearched && !searchQuery.isFetching && (searchQuery.data ?? []).length === 0;
+  const noResults = hasSearched && !searchQuery.isFetching && (searchQuery.data ?? []).length === 0;
 
   return (
     <div
@@ -1738,8 +1737,8 @@ function LinkClinicModal({
           <div className="mt-3 rounded-xl border border-border bg-muted/40 px-3 py-3 text-sm text-muted-foreground">
             <p className="font-medium text-foreground">"{q}" bulunamadı.</p>
             <p className="mt-1">
-              Klinik sisteme henüz eklenmemiş olabilir. Keşif ekranından arama yaparak kliniği
-              önce sisteme ekleyin, ardından burada bağlayın.
+              Klinik sisteme henüz eklenmemiş olabilir. Keşif ekranından arama yaparak kliniği önce
+              sisteme ekleyin, ardından burada bağlayın.
             </p>
           </div>
         )}
