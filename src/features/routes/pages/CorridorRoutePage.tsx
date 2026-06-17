@@ -26,6 +26,7 @@ import {
   computeDetourFromPolyline,
   adaptiveCorridorParams,
   haversineKm,
+  pointToPolylineKm,
 } from '@features/routes/lib/detour-calc';
 import {
   computeRouteAlternatives,
@@ -198,22 +199,33 @@ export default function CorridorRoutePage() {
 
         const enriched: Candidate[] = [];
         for (const c of rawList) {
-          // Başlangıç + bitiş zone'larındaki klinikleri ele — rota başında
-          // değil yol üstünde olanlar lazım.
+          const cLatLng = { lat: c.lat, lng: c.lng };
+
+          // BUG #H fix (endpoint exclusion):
+          // Sadece A (başlangıç) noktasına çok yakın klinikleri ele — rep zaten
+          // orada, yol üstünde değil. B (varış) noktası bu filtreden MUAF çünkü
+          // varış şehrindeki klinikler rotanın ana amacı; dB < excludeStartEndKm
+          // olsa da çıkartılmamalı.
+          //
+          // Eski kod B-zone'u da eliyordu → Kastamonu gibi varış şehri merkez
+          // klinikleri (dB ≈ 2-8km) görünmüyordu.
           if (aCoord && params.excludeStartEndKm > 0) {
-            const dA = haversineKm({ lat: c.lat, lng: c.lng }, aCoord);
+            const dA = haversineKm(cLatLng, aCoord);
             if (dA < params.excludeStartEndKm) continue;
           }
-          if (bCoord && params.excludeStartEndKm > 0) {
-            const dB = haversineKm({ lat: c.lat, lng: c.lng }, bCoord);
-            if (dB < params.excludeStartEndKm) continue;
-          }
 
-          const { distanceKm, durationMin } = computeDetourFromPolyline(
-            { lat: c.lat, lng: c.lng },
-            decoded,
-            profile,
-          );
+          // Cross-track distance (dik mesafe polyline'a) — "gerçekten yol üstünde mi?"
+          // computeDetourFromPolyline zaten 2×crossKm hesaplıyor; burada crossKm
+          // ayrıca çıkarılıp detourKmMax/2 eşiğiyle karşılaştırılır. Bu,
+          // endpoint'e yakın ama rota üstünde OLMAYAN klinikleri (enine sokak
+          // üzerindekiler) filtreler; yalnız polyline boyunca uzanan klinikler geçer.
+          const crossKm = pointToPolylineKm(cLatLng, decoded);
+          // crossKm eşiği: detourKmMax / 2 (sapma = 2×cross, yani detourKmMax sağlanırsa
+          // cross = detourKmMax/2; burada ek bir kontrol olarak kullanıyoruz).
+          // Bu, geniş buffer'dan gelen ama yoldan sapmış klinikleri eler.
+          if (crossKm > params.detourKmMax / 2) continue;
+
+          const { distanceKm, durationMin } = computeDetourFromPolyline(cLatLng, decoded, profile);
           if (distanceKm > params.detourKmMax) continue;
           if (durationMin > params.detourMinMax) continue;
           enriched.push({

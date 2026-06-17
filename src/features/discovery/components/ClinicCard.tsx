@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Navigation,
   ClipboardList,
+  Loader2,
 } from 'lucide-react';
 import { useVertical } from '@core/verticals/useVertical';
 
@@ -32,6 +33,8 @@ export interface ClinicCardProps {
   isExistingCustomer?: boolean;
   /** Bu durak rota sepetinde mi? */
   isInBasket?: boolean;
+  /** Bug E: saha_clinics kaydı için cari otomatik oluşturuluyor mu? */
+  isCreatingAccount?: boolean;
   onAdd?: () => void;
   onOpenDetail?: () => void;
   /** BUG #10 FIX (b): Ziyaret/not butonu — check-in sayfasına yönlendirir. */
@@ -68,6 +71,7 @@ function ClinicCard({
   lng,
   isExistingCustomer = false,
   isInBasket = false,
+  isCreatingAccount = false,
   onAdd,
   onOpenDetail,
   onStartVisit,
@@ -202,15 +206,22 @@ function ClinicCard({
           </a>
         )}
 
-        {/* BUG #10 FIX (b): Ziyaret butonu — rota eklemeden not/check-in açar */}
+        {/* BUG #10 FIX (b) + Bug E: Ziyaret butonu — rota eklemeden not/check-in açar.
+            saha_clinics kaydı için cari oluşturulurken spinner gösterilir. */}
         {typeof onStartVisit === 'function' && (
           <button
             type="button"
-            onClick={onStartVisit}
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-background px-3 min-h-tap-min h-11 text-sm font-medium hover:bg-muted"
-            aria-label="Ziyaret / Not"
+            onClick={isCreatingAccount ? undefined : onStartVisit}
+            disabled={isCreatingAccount}
+            aria-disabled={isCreatingAccount}
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-background px-3 min-h-tap-min h-11 text-sm font-medium hover:bg-muted disabled:opacity-60 disabled:cursor-wait"
+            aria-label={isCreatingAccount ? 'Hesap oluşturuluyor…' : 'Ziyaret / Not'}
           >
-            <ClipboardList className="h-4 w-4" aria-hidden="true" />
+            {isCreatingAccount ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <ClipboardList className="h-4 w-4" aria-hidden="true" />
+            )}
             Ziyaret
           </button>
         )}

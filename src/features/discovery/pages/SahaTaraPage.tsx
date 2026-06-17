@@ -290,8 +290,19 @@ export default function SahaTaraPage() {
     if (selectedNeighborhood) return 1500;
     return districtInfo ? radiusForNufus(districtInfo.nufus) : 3000;
   }, [districtInfo, selectedNeighborhood]);
-  const [radiusOverride, setRadiusOverride] = useState<number | null>(null);
-  const radius = radiusOverride ?? dynamicRadius;
+  // radiusOverride tracks the slider value. Initialized to dynamicRadius so the
+  // slider always shows an explicit value that matches what the scan actually uses.
+  // When dynamicRadius changes (new district / neighborhood selected), reset the
+  // override so the auto-computed default takes effect again — unless the user has
+  // already moved the slider away from the previous dynamic value.
+  const [radiusOverride, setRadiusOverride] = useState<number>(() =>
+    selectedNeighborhood ? 1500 : 3000,
+  );
+  // Keep slider in sync with dynamicRadius whenever location context changes.
+  useEffect(() => {
+    setRadiusOverride(dynamicRadius);
+  }, [dynamicRadius]);
+  const radius = radiusOverride;
 
   const loadDb = useCallback(async () => {
     if (!searchOrigin) return;

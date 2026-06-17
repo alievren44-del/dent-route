@@ -1236,6 +1236,33 @@ Deno.serve(async (req) => {
     }
     collectedErrors.push(`district_lookup:exact=${districtClinicsExact?.length ?? 0},null_slug=${districtClinicsNullSlug?.length ?? 0}`);
 
+    // Spatial fallback: when province='unknown' or district lookup returns 0 rows,
+    // fall back to a bounding-box query (lat/lng ± ~radiusM + 20% buffer) so the
+    // existingSet is still populated and we don't mark everything "new".
+    if (districtClinics.length === 0) {
+      const DEG_PER_M = 1 / 111_320; // ~1m in degrees at equator (good enough for bbox)
+      const bufferDeg = radiusM * DEG_PER_M * 1.2; // 20% overshoot to catch edge clinics
+      const { data: spatialRows } = await supabase
+        .from('saha_clinics')
+        .select('id, google_place_id, name, lat, lng')
+        .gte('lat', lat - bufferDeg)
+        .lte('lat', lat + bufferDeg)
+        .gte('lng', lng - bufferDeg * 1.5) // lng degrees are wider at higher latitudes
+        .lte('lng', lng + bufferDeg * 1.5)
+        .limit(500);
+      if (spatialRows) {
+        for (const row of spatialRows) {
+          if (!row || seenIds.has(row.id)) continue;
+          // JS-side radius check to avoid bbox false positives
+          if (haversineM(lat, lng, row.lat, row.lng) <= radiusM * 1.2) {
+            seenIds.add(row.id);
+            districtClinics.push(row);
+          }
+        }
+        collectedErrors.push(`spatial_fallback:${districtClinics.length}`);
+      }
+    }
+
     const existingSet = new Set<string>();
     const orphanUpdates: Array<{ id: string; place_id: string }> = [];
 

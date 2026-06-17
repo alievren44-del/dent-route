@@ -739,6 +739,37 @@ export default function RoutePlannerPage() {
           {optimizing ? 'Optimize ediliyor…' : 'Rotayı optimize et'}
         </button>
 
+        {/* #D: Başlangıç konumu eksikse kullanıcıya görünür yardım mesajı.
+            Sepette en az 1 klinik var ama startCoord null → buton disabled ve kullanıcı neden
+            bilmiyor. Basket boşken veya optimize edilirken bu blok görünmez. */}
+        {basket.length >= 1 && startCoord === null && !optimizing && (
+          <div className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <p className="text-sm font-medium text-amber-800">Rota için başlangıç konumu gerekli</p>
+            {startPoint === 'gps' && geolocation.status !== 'denied' && (
+              <button
+                type="button"
+                onClick={() => {
+                  geolocation.request();
+                }}
+                className="flex h-10 items-center justify-center gap-2 rounded-lg border border-amber-400 bg-white px-3 text-sm font-medium text-amber-900 hover:bg-amber-100"
+              >
+                <MapPin size={15} />
+                Konumumu kullan (GPS)
+              </button>
+            )}
+            {startPoint === 'gps' && geolocation.status === 'denied' && (
+              <p className="text-xs text-amber-700">
+                GPS izni reddedildi — "Adres gir (manuel)" seçeneğini kullanabilirsin.
+              </p>
+            )}
+            {startPoint === 'manual' && (
+              <p className="text-xs text-amber-700">
+                Başlangıç adresi seç veya yukarıdaki arama kutusuna adres yaz.
+              </p>
+            )}
+          </div>
+        )}
+
         {/* 4. Sonuç özeti */}
         {routeResult && (
           <section className="rounded-xl bg-white p-3 shadow-sm">

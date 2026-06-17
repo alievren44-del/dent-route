@@ -1,6 +1,8 @@
 export interface DiscoveryCandidate {
   source: 'saha' | 'google_places';
   externalId?: string;
+  /** saha_clinics.id — set when the row comes from saha_clinics scan (not yet an account). */
+  sahaClinicId?: string;
   name: string;
   lat: number;
   lng: number;
@@ -119,6 +121,11 @@ function mergeCluster(cluster: Cluster): DedupedCandidate {
 
   const sahaMember = members.find((m) => m.source === 'saha');
   const customerId = sahaMember?.customerId ?? primary.customerId;
+  // Preserve the saha_clinics.id so callers can invoke get_or_create_cari.
+  const sahaClinicId =
+    sahaMember?.sahaClinicId ??
+    primary.sahaClinicId ??
+    members.find((m) => m.sahaClinicId)?.sahaClinicId;
 
   let bestRating: number | undefined;
   for (const m of members) {
@@ -144,6 +151,7 @@ function mergeCluster(cluster: Cluster): DedupedCandidate {
   return {
     source: primary.source,
     externalId,
+    sahaClinicId,
     name: primary.name,
     lat: primary.lat,
     lng: primary.lng,

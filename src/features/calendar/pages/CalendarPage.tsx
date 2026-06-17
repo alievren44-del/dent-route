@@ -216,6 +216,7 @@ function CalendarPage(): JSX.Element {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [selectedItem, setSelectedItem] = useState<AgendaItem | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   // R1 — kliniksiz randevuya klinik bağla (LinkClinicModal için reminder id).
   const [linkClinicFor, setLinkClinicFor] = useState<string | null>(null);
   // "Tekrar Randevu" → AddReminderModal'ı klinik/tür/başlık dolu açar (kullanıcı
@@ -447,9 +448,22 @@ function CalendarPage(): JSX.Element {
     };
   }, [focusReminderId, dataQuery.isLoading, allItems]);
 
+  // Arama filtresi — klinik adı veya nota göre (boşsa tüm öğeler)
+  const filteredItems = useMemo<AgendaItem[]>(() => {
+    const term = searchTerm.trim().toLocaleLowerCase('tr');
+    if (!term) return allItems;
+    return allItems.filter((it) => {
+      const clinicName = it.accountId ? (nameMap[it.accountId]?.name ?? '') : '';
+      return (
+        clinicName.toLocaleLowerCase('tr').includes(term) ||
+        (it.note ?? '').toLocaleLowerCase('tr').includes(term)
+      );
+    });
+  }, [allItems, searchTerm, nameMap]);
+
   // Ajanda görünümü: güne göre grupla
   const grouped = useMemo(() => {
-    const items = [...allItems].sort((a, b) =>
+    const items = [...filteredItems].sort((a, b) =>
       filter === 'upcoming'
         ? new Date(a.at).getTime() - new Date(b.at).getTime()
         : new Date(b.at).getTime() - new Date(a.at).getTime(),
@@ -461,7 +475,7 @@ function CalendarPage(): JSX.Element {
       map.get(k)!.push(it);
     }
     return [...map.entries()];
-  }, [allItems, filter]);
+  }, [filteredItems, filter]);
 
   // Ay görünümü: gün → öğeler
   const byDay = useMemo(() => {
@@ -623,7 +637,19 @@ function CalendarPage(): JSX.Element {
   const loading = dataQuery.isLoading || !selfId;
   const todayKey = dayKeyOf(new Date());
 
-  const selectedDayItems = selectedDay ? (byDay.get(selectedDay) ?? []) : [];
+  const selectedDayItems = useMemo(() => {
+    if (!selectedDay) return [];
+    if (!searchTerm.trim()) return byDay.get(selectedDay) ?? [];
+    // When searching, filter the selected day's items by search term too
+    return (byDay.get(selectedDay) ?? []).filter((it) => {
+      const term = searchTerm.trim().toLocaleLowerCase('tr');
+      const clinicName = it.accountId ? (nameMap[it.accountId]?.name ?? '') : '';
+      return (
+        clinicName.toLocaleLowerCase('tr').includes(term) ||
+        (it.note ?? '').toLocaleLowerCase('tr').includes(term)
+      );
+    });
+  }, [selectedDay, byDay, searchTerm, nameMap]);
 
   return (
     <div className="space-y-4 p-4 pb-24">
@@ -697,6 +723,27 @@ function CalendarPage(): JSX.Element {
       {/* ----- AJANDA GÖRÜNÜMÜ ----- */}
       {view === 'agenda' && (
         <>
+          {/* Klinik adı / not arama */}
+          <div className="relative">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Klinik adı veya notta ara…"
+              className="h-10 w-full rounded-xl border border-border bg-background px-3 pr-9 text-sm placeholder:text-muted-foreground"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute inset-y-0 right-2 flex items-center text-muted-foreground hover:text-foreground"
+                aria-label="Aramayı temizle"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
           <div className="grid grid-cols-4 gap-1.5">
             {(
               [
@@ -727,8 +774,9 @@ function CalendarPage(): JSX.Element {
 
           {!loading && grouped.length === 0 && (
             <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
-              Bu filtrede takvim kaydı yok. "+ Ekle" ile manuel randevu/tahsilat/tanıtım ekleyebilir
-              veya ziyaret formundan otomatik oluşturabilirsin.
+              {searchTerm.trim()
+                ? `"${searchTerm.trim()}" için sonuç bulunamadı.`
+                : 'Bu filtrede takvim kaydı yok. "+ Ekle" ile manuel randevu/tahsilat/tanıtım ekleyebilir veya ziyaret formundan otomatik oluşturabilirsin.'}
             </div>
           )}
 
