@@ -107,6 +107,43 @@ export class AuthClient {
   }
 
   /**
+   * Tek-giriş hand-off: Parla e-ticaret (parladisdeposu.com) rep login sonrası
+   * saha portalına yönlendirirken oturumu URL hash'inde taşır
+   * (#sso=base64(JSON{a:access,r:refresh})). Aynı Supabase project olduğu için
+   * token geçerli — setSession ile oturumu kur, hash'i HEMEN temizle (token
+   * URL'de/history'de kalmasın). Çift-login'i kaldırır.
+   * Supabase OAuth implicit-flow ile aynı güvenli patern (hash sunucuya gitmez).
+   */
+  async consumeSsoHandoff(): Promise<boolean> {
+    if (typeof window === 'undefined') return false;
+    const m = window.location.hash.match(/[#&]sso=([^&]+)/);
+    if (!m) return false;
+    const clearHash = () => {
+      try {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      } catch {
+        /* yutulur */
+      }
+    };
+    try {
+      const payload = JSON.parse(decodeURIComponent(atob(m[1] ?? ''))) as { a?: string; r?: string };
+      if (!payload.a || !payload.r) {
+        clearHash();
+        return false;
+      }
+      const { error } = await this.supabase.auth.setSession({
+        access_token: payload.a,
+        refresh_token: payload.r,
+      });
+      clearHash();
+      return !error;
+    } catch {
+      clearHash();
+      return false;
+    }
+  }
+
+  /**
    * Server-side validate: localStorage session geçerli mi backend'de?
    * Supabase yeni ES256 JWT'lerinde session_id claim DB lookup ister.
    * Session DB'den silinmişse getUser() error döner → çağıran signOut etmeli.

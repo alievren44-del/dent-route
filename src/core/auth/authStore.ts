@@ -80,6 +80,8 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
     const authClient = getClient(client);
     set({ loading: true, error: null });
     try {
+      // Parla e-ticaret'ten tek-giriş hand-off (URL hash'inde token varsa kur).
+      await authClient.consumeSsoHandoff();
       const session = await authClient.getCurrentSession();
       if (!session) {
         set({ session: null, profile: null, loading: false });
