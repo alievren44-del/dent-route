@@ -222,11 +222,20 @@ async function createBatchJob(input: CreateBatchJobInput): Promise<{ id: string 
   if (error) throw error;
   const jobId = (data as { id: string }).id;
 
-  // Fire-and-forget: batch-scan'i tetikle.
-  try {
-    void supabase.functions.invoke('batch-scan', { body: { jobId } });
-  } catch {
-    /* Yutulur — job kaydı durur, sonra elle tekrar çağrılabilir */
+  // Trigger batch-scan EF. Awaited so we can surface EF invocation errors.
+  // Note: batch-scan itself is long-running — it returns quickly (job started)
+  // and processes items in the background. A non-ok response here means the
+  // EF failed to start (not deployed, auth error, etc.).
+  const { error: efError } = await supabase.functions.invoke('batch-scan', {
+    body: { jobId },
+  });
+  if (efError) {
+    // Job row was created but EF failed to start — surface a descriptive error
+    // so useMutation.onError fires and the toast is shown. Job stays in DB and
+    // can be retried from the Jobs tab.
+    throw new Error(
+      `Job oluşturuldu (${jobId.slice(0, 8)}…) ancak batch-scan başlatılamadı: ${efError.message ?? String(efError)}`,
+    );
   }
 
   return { id: jobId };
@@ -736,10 +745,13 @@ function WholeProvinceTab(props: SharedScanOpts & { onJobCreated: () => void }) 
     mutationFn: createBatchJob,
     onSuccess: () => {
       setMessage('Job başlatıldı. "Aktif Job\'lar" sekmesinden takip edebilirsiniz.');
+      toast.success('Batch tarama başlatıldı');
       props.onJobCreated();
     },
     onError: (err: unknown) => {
-      setMessage(`Hata: ${err instanceof Error ? err.message : String(err)}`);
+      const msg = err instanceof Error ? err.message : String(err);
+      setMessage(`Hata: ${msg}`);
+      toast.error(`Batch tarama hatası: ${msg}`);
     },
   });
 
@@ -835,10 +847,13 @@ function RegionTab(props: SharedScanOpts & { onJobCreated: () => void }) {
     mutationFn: createBatchJob,
     onSuccess: () => {
       setMessage('Job başlatıldı. "Aktif Job\'lar" sekmesinden takip edebilirsiniz.');
+      toast.success('Batch tarama başlatıldı');
       props.onJobCreated();
     },
     onError: (err: unknown) => {
-      setMessage(`Hata: ${err instanceof Error ? err.message : String(err)}`);
+      const msg = err instanceof Error ? err.message : String(err);
+      setMessage(`Hata: ${msg}`);
+      toast.error(`Batch tarama hatası: ${msg}`);
     },
   });
 
@@ -914,11 +929,14 @@ function WholeCountryTab(props: SharedScanOpts & { onJobCreated: () => void }) {
     mutationFn: createBatchJob,
     onSuccess: () => {
       setMessage('Türkiye taraması başlatıldı. Bu işlem 1-2 gün sürebilir.');
+      toast.success('Türkiye taraması başlatıldı');
       props.onJobCreated();
       setConfirmed(false);
     },
     onError: (err: unknown) => {
-      setMessage(`Hata: ${err instanceof Error ? err.message : String(err)}`);
+      const msg = err instanceof Error ? err.message : String(err);
+      setMessage(`Hata: ${msg}`);
+      toast.error(`Batch tarama hatası: ${msg}`);
     },
   });
 

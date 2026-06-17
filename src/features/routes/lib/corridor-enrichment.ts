@@ -140,20 +140,65 @@ export async function enrichWithScanStatus(
   // Son tarama tarihleri (best-effort — tablo yoksa null)
   const scanMap = new Map<string, string>();
   try {
-    const { data: logs } = await supabase
+    // BUG #G fix: district_slug DB'de nullable. PostgREST .in() NULL satırları
+    // eşleştirmez — province+district eşleşen loglar döner ama district_slug=NULL
+    // olan (province-level / eski) taramalar filtreden düşer → lastScanAt=null → kırmızı.
+    // Çözüm: iki sorgu:
+    //   (a) district_slug eşleşen kayıtlar (yeni ilçe-bazlı taramalar)
+    //   (b) district_slug IS NULL olan kayıtlar (province-level taramalar)
+    // Her iki set birleştirilir; aynı key için en yeni performed_at tutulur.
+
+    // (a) District-level taramalar
+    const { data: logsDistrict } = await supabase
       .from('saha_clinic_scan_logs')
       .select('province_slug, district_slug, performed_at')
       .in('province_slug', provinceSlugs)
       .in('district_slug', districtSlugs)
       .order('performed_at', { ascending: false })
       .limit(1000);
-    for (const l of (logs ?? []) as Array<{
+
+    // (b) Province-level taramalar (district_slug IS NULL) — province eşleşiyorsa
+    // tüm ilçeleri kapsar sayılır.
+    const { data: logsProvince } = await supabase
+      .from('saha_clinic_scan_logs')
+      .select('province_slug, district_slug, performed_at')
+      .in('province_slug', provinceSlugs)
+      .is('district_slug', null)
+      .order('performed_at', { ascending: false })
+      .limit(500);
+
+    // Province-level log: her eşleşen ilçe için provSlug:distSlug key'ine yaz
+    // (district_slug=null → province cover → tüm ilçeler bu taramadan yararlanır)
+    for (const l of (logsProvince ?? []) as Array<{
+      province_slug: string;
+      district_slug: string | null;
+      performed_at: string;
+    }>) {
+      const provSlug = slugify(l.province_slug);
+      // Bu province'a ait tüm districts'i bul ve map'e yaz
+      for (const d of districts) {
+        if (slugify(d.provinceSlug) !== provSlug) continue;
+        const k = normKey(d.provinceSlug, d.districtSlug);
+        // TODO(verify): Eğer bir ilçenin kendi district-level taraması varsa, onu
+        // province-level tarama ile ezme — aşağıda district logları da işleniyor,
+        // sadece henüz işlenmemiş key'leri doldur. Sonradan gelen district kaydı
+        // override eder (döngü sırası district sonra → daha yeni olursa override).
+        if (!scanMap.has(k)) scanMap.set(k, l.performed_at);
+      }
+    }
+
+    // District-level loglar (district_slug NOT NULL) — sonradan işle: daha yeni
+    // tarih varsa province-level kaydın üstüne yazar.
+    for (const l of (logsDistrict ?? []) as Array<{
       province_slug: string;
       district_slug: string;
       performed_at: string;
     }>) {
       const k = normKey(l.province_slug, l.district_slug);
-      if (!scanMap.has(k)) scanMap.set(k, l.performed_at);
+      const existing = scanMap.get(k);
+      if (!existing || l.performed_at > existing) {
+        scanMap.set(k, l.performed_at);
+      }
     }
   } catch {
     // Tablo yok veya RLS engelliyor — boş geç

@@ -118,6 +118,8 @@ function DiscoveryPage(): JSX.Element {
   const [districtSlug, setDistrictSlug] = useState<string>('');
   const basketAdd = useRouteBasket((s) => s.add);
   const basketItems = useRouteBasket((s) => s.items);
+  // Bug E: loading state while auto-creating a cari for a saha_clinics entry.
+  const [creatingCariId, setCreatingCariId] = useState<string | null>(null);
 
   // Manuel origin: seçili ilçe centroid'i (GPS yoksa / planlama için)
   const manualOrigin = useMemo<Origin | null>(() => {
@@ -207,6 +209,8 @@ function DiscoveryPage(): JSX.Element {
           candidates.push({
             source: 'google_places',
             externalId: r.google_place_id,
+            // Carry the saha_clinics UUID so we can auto-create a cari on tap.
+            sahaClinicId: r.id,
             name: r.name,
             lat: r.lat,
             lng: r.lng,
@@ -287,6 +291,8 @@ function DiscoveryPage(): JSX.Element {
     const globalCandidates: DiscoveryCandidate[] = (globalSearchData ?? []).map((r) => ({
       source: 'google_places',
       externalId: r.google_place_id,
+      // Carry saha_clinics.id so auto-create works for globally-searched clinics too.
+      sahaClinicId: r.id,
       name: r.name,
       lat: r.lat,
       lng: r.lng,
@@ -303,6 +309,28 @@ function DiscoveryPage(): JSX.Element {
     );
     return merged;
   }, [data, searchQuery, origin, isDistrictMode, radiusKm, globalSearchData]);
+
+  /**
+   * Bug E fix: for a saha_clinics row that has no account yet, call
+   * saha_get_or_create_cari_for_clinic (param: p_clinic_id) to resolve/create
+   * the cari id, then navigate to the given path.
+   */
+  async function navigateWithCari(sahaClinicId: string, pathTemplate: (id: string) => string) {
+    setCreatingCariId(sahaClinicId);
+    try {
+      const supabase = getTypedClient();
+      const { data: cariId, error } = await supabase.rpc('saha_get_or_create_cari_for_clinic', {
+        p_clinic_id: sahaClinicId,
+      });
+      if (error || !cariId) {
+        toast.error('Hesap oluşturulamadı: ' + (error?.message ?? 'bilinmeyen hata'));
+        return;
+      }
+      navigate(pathTemplate(cariId));
+    } finally {
+      setCreatingCariId(null);
+    }
+  }
 
   return (
     <div className="p-4 space-y-4">
@@ -486,15 +514,25 @@ function DiscoveryPage(): JSX.Element {
             const isExisting = c.sources.includes('saha');
             const stopId = buildStopId(c);
             const inBasket = basketItems.some((s) => s.id === stopId);
-            // BUG #10 FIX (a): Kayıtlı klinikler için detay sayfası ve ziyaret
-            // check-in yolunu aç. Google Places-only kayıtların account_id'si
-            // yoktur — butonlar yalnızca saha müşterisi için aktif.
+            // Bug E fix: clinics that exist in saha_clinics but have no account
+            // yet also get action buttons — tapping calls the RPC to auto-create
+            // the cari, then navigates. Pure Google-Places candidates (no
+            // sahaClinicId, no customerId) remain inert as before.
+            const isCreating = creatingCariId === (c.sahaClinicId ?? null);
             const openDetail = c.customerId
               ? () => navigate(`/clinics/${c.customerId}`)
-              : undefined;
+              : c.sahaClinicId
+                ? () => {
+                    void navigateWithCari(c.sahaClinicId!, (id) => `/clinics/${id}`);
+                  }
+                : undefined;
             const openVisit = c.customerId
               ? () => navigate(`/visits/check-in/${c.customerId}`)
-              : undefined;
+              : c.sahaClinicId
+                ? () => {
+                    void navigateWithCari(c.sahaClinicId!, (id) => `/visits/check-in/${id}`);
+                  }
+                : undefined;
             return (
               <ClinicCard
                 key={key}
@@ -507,6 +545,7 @@ function DiscoveryPage(): JSX.Element {
                 rating={c.rating}
                 isExistingCustomer={isExisting}
                 isInBasket={inBasket}
+                isCreatingAccount={isCreating}
                 onOpenDetail={openDetail}
                 onStartVisit={openVisit}
                 onAdd={() => {
