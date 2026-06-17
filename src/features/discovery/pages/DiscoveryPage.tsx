@@ -231,6 +231,34 @@ function DiscoveryPage(): JSX.Element {
 
   const showSpinner = isLoading || isFetching;
 
+  // GENİŞ ARAMA: arama yazıldığında seçili ilçe/yarıçapla SINIRLI kalmasın.
+  // Kayıtlı/ziyaret edilmiş klinik başka ilçede olabilir (ör. ZDK=mamak,
+  // kullanıcı Çankaya'da arıyor) → ad ile TÜM aktif klinikleri ara (limit 40).
+  const searchTrim = searchQuery.trim();
+  const globalSearchEnabled = searchTrim.length >= 2;
+  // PostgREST filtre-injection önle: özel karakterleri boşlukla değiştir.
+  const safeTerm = searchTrim.replace(/[,()%_*]/g, ' ').trim();
+  const { data: globalSearchData } = useQuery({
+    queryKey: ['discovery-search', safeTerm, vertical.id],
+    enabled: globalSearchEnabled && safeTerm.length >= 2,
+    staleTime: 60 * 1000,
+    retry: false,
+    queryFn: async (): Promise<Omit<SahaClinicRow, 'distance_m'>[]> => {
+      const supabase = getTypedClient();
+      const { data: rows, error } = await supabase
+        .from('saha_clinics')
+        .select(
+          'id, google_place_id, name, lat, lng, address, phone, rating, user_ratings_total, types, province_slug, district_slug',
+        )
+        .ilike('name', `%${safeTerm}%`)
+        .eq('status', 'active')
+        .eq('vertical_key', vertical.id)
+        .limit(40);
+      if (error) throw error;
+      return (rows ?? []) as Omit<SahaClinicRow, 'distance_m'>[];
+    },
+  });
+
   // Akıllı aramaya göre filtrelenmiş liste (tek hesap — sayaç + render paylaşır)
   const filteredData = useMemo(() => {
     if (!data || !origin) return [];
@@ -252,12 +280,33 @@ function DiscoveryPage(): JSX.Element {
     const q = foldTr(searchQuery.trim());
     if (!q) return radiusFiltered;
     const qDigits = searchQuery.replace(/\D+/g, '');
-    return radiusFiltered.filter((c) => {
+    const matchFn = (c: DiscoveryCandidate) => {
       const hay = foldTr(`${c.name} ${c.phone ?? ''} ${c.address ?? ''}`);
       const phoneHay = (c.phone ?? '').replace(/\D+/g, '');
       return hay.includes(q) || (qDigits.length >= 3 && phoneHay.includes(qDigits));
-    });
-  }, [data, searchQuery, origin, isDistrictMode, radiusKm]);
+    };
+    const scopedMatches = radiusFiltered.filter(matchFn);
+    // Geniş arama (il/ilçe-bağımsız ad araması) sonuçlarını ekle → kayıtlı ama
+    // başka ilçedeki klinikler (ZDK=mamak vb.) de bulunur. dedup + mesafe sırala.
+    const globalCandidates: DiscoveryCandidate[] = (globalSearchData ?? []).map((r) => ({
+      source: 'google_places',
+      externalId: r.google_place_id,
+      name: r.name,
+      lat: r.lat,
+      lng: r.lng,
+      address: r.address ?? undefined,
+      phone: r.phone ?? undefined,
+      rating: r.rating ?? undefined,
+      types: r.types,
+    }));
+    const merged = dedupCandidates([...scopedMatches, ...globalCandidates]);
+    merged.sort(
+      (a, b) =>
+        haversineMeters(origin.lat, origin.lng, a.lat, a.lng) -
+        haversineMeters(origin.lat, origin.lng, b.lat, b.lng),
+    );
+    return merged;
+  }, [data, searchQuery, origin, isDistrictMode, radiusKm, globalSearchData]);
 
   return (
     <div className="p-4 space-y-4">
