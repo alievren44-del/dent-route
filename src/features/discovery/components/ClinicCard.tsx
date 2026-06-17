@@ -15,6 +15,7 @@ import {
   Check,
   ChevronRight,
   Navigation,
+  ClipboardList,
 } from 'lucide-react';
 import { useVertical } from '@core/verticals/useVertical';
 
@@ -33,6 +34,8 @@ export interface ClinicCardProps {
   isInBasket?: boolean;
   onAdd?: () => void;
   onOpenDetail?: () => void;
+  /** BUG #10 FIX (b): Ziyaret/not butonu — check-in sayfasına yönlendirir. */
+  onStartVisit?: () => void;
 }
 
 /** Google Maps yol tarifi deep-link (API değil, ücretsiz URL) */
@@ -67,6 +70,7 @@ function ClinicCard({
   isInBasket = false,
   onAdd,
   onOpenDetail,
+  onStartVisit,
 }: ClinicCardProps): JSX.Element {
   const vertical = useVertical();
   const customerLabel = vertical.labels.customer.singular;
@@ -196,6 +200,19 @@ function ClinicCard({
             <Navigation className="h-4 w-4" aria-hidden="true" />
             Yol tarifi
           </a>
+        )}
+
+        {/* BUG #10 FIX (b): Ziyaret butonu — rota eklemeden not/check-in açar */}
+        {typeof onStartVisit === 'function' && (
+          <button
+            type="button"
+            onClick={onStartVisit}
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-background px-3 min-h-tap-min h-11 text-sm font-medium hover:bg-muted"
+            aria-label="Ziyaret / Not"
+          >
+            <ClipboardList className="h-4 w-4" aria-hidden="true" />
+            Ziyaret
+          </button>
         )}
 
         {showAdd &&

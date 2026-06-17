@@ -192,7 +192,7 @@ export default function RoutePlannerPage() {
     return null;
   }, [startPoint, geolocation.position, manualStart]);
 
-  const canOptimize = basket.length >= 2 && startCoord !== null && !optimizing;
+  const canOptimize = basket.length >= 1 && startCoord !== null && !optimizing;
 
   const handleOptimize = useCallback(async () => {
     if (!canOptimize || !startCoord) return;

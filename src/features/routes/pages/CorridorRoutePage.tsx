@@ -603,7 +603,10 @@ export default function CorridorRoutePage() {
           <div className="mt-2 flex flex-wrap gap-1 max-h-44 overflow-y-auto">
             {corridorDistricts.map((d) => {
               let cls = 'bg-rose-100 text-rose-800 border-rose-300';
-              let label = 'yeni';
+              // BUG #06 fix: 'yeni' → 'taranmamış' — hiç taranan olmayan ilçeler
+              // saha_clinic_scan_logs tablosu boş/erişilemez olduğunda lastScanAt=null
+              // gelir; 'yeni' etiketi kullanıcıyı yanıltıyor (yeni demek değil).
+              let label = 'taranmamış';
               if (d.lastScanAt) {
                 const days = (Date.now() - new Date(d.lastScanAt).getTime()) / 86400_000;
                 if (days <= 14) {

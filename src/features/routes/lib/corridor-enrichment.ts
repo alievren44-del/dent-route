@@ -13,7 +13,21 @@
 import { getTypedClient } from '@lib/supabase';
 import provinces from '@/data/tr-locations/provinces.json';
 import districtsRaw from '@/data/tr-locations/districts.json';
+import { slugify } from '@/data/tr-locations/geo-helpers';
 import { pointToPolylineKm } from './detour-calc';
+
+/**
+ * normKey — province_slug:district_slug çiftini kararlı ASCII slug formatına
+ * getirir. DB'den gelen değerlerde Türkçe karakter kalığı veya büyük harf
+ * drift'i olabilir; bu fonksiyon her iki tarafı aynı normalize ederek
+ * Map lookup'ın tutarlı çalışmasını garantiler.
+ *
+ * Örnek: 'Çankırı' + 'İlgaz' → 'cankiri:ilgaz'
+ *         'cankiri'  + 'ilgaz' → 'cankiri:ilgaz'  (idempotent)
+ */
+function normKey(provinceSlug: string, districtSlug: string): string {
+  return `${slugify(provinceSlug)}:${slugify(districtSlug)}`;
+}
 
 interface ProvinceJson {
   plaka: number;
@@ -119,7 +133,7 @@ export async function enrichWithScanStatus(
     province_slug: string;
     district_slug: string;
   }>) {
-    const k = `${c.province_slug}:${c.district_slug}`;
+    const k = normKey(c.province_slug, c.district_slug);
     countMap.set(k, (countMap.get(k) ?? 0) + 1);
   }
 
@@ -138,7 +152,7 @@ export async function enrichWithScanStatus(
       district_slug: string;
       performed_at: string;
     }>) {
-      const k = `${l.province_slug}:${l.district_slug}`;
+      const k = normKey(l.province_slug, l.district_slug);
       if (!scanMap.has(k)) scanMap.set(k, l.performed_at);
     }
   } catch {
@@ -147,8 +161,8 @@ export async function enrichWithScanStatus(
 
   return districts.map((d) => ({
     ...d,
-    lastScanAt: scanMap.get(`${d.provinceSlug}:${d.districtSlug}`) ?? null,
-    existingCount: countMap.get(`${d.provinceSlug}:${d.districtSlug}`) ?? 0,
+    lastScanAt: scanMap.get(normKey(d.provinceSlug, d.districtSlug)) ?? null,
+    existingCount: countMap.get(normKey(d.provinceSlug, d.districtSlug)) ?? 0,
   }));
 }
 

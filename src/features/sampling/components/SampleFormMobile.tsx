@@ -429,7 +429,9 @@ function SampleFormMobile({
     lines.every((l) => l.productName.trim().length > 0 && l.qty > 0) &&
     kvkkChecked &&
     !hasBlockingIssue &&
-    Boolean(repId);
+    Boolean(repId) &&
+    photoFile != null &&
+    !signatureEmpty;
 
   // "Numune Ver" neden pasif — kullanıcıya eksikleri göster.
   const submitBlockers = useMemo<string[]>(() => {
@@ -447,6 +449,8 @@ function SampleFormMobile({
       }
     }
     if (!repId) out.push('Oturum bulunamadı (tekrar giriş yapın)');
+    if (photoFile == null) out.push('Teslim fotoğrafı zorunludur');
+    if (signatureEmpty) out.push('Alıcı imzası zorunludur');
     return [...new Set(out)];
   }, [
     selectedAccount,
@@ -456,6 +460,8 @@ function SampleFormMobile({
     hasBlockingIssue,
     validationResults,
     repId,
+    photoFile,
+    signatureEmpty,
   ]);
 
   async function handleSubmit(): Promise<void> {
@@ -956,7 +962,9 @@ function SampleFormMobile({
 
       {/* 7. Foto */}
       <section className="flex flex-col gap-2">
-        <label className="text-sm font-medium">Teslim Fotoğrafı</label>
+        <label className="text-sm font-medium">
+          Teslim Fotoğrafı <span className="text-destructive">*</span>
+        </label>
         <label className="inline-flex items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-background h-12 min-h-tap-min cursor-pointer">
           <Camera className="h-5 w-5" aria-hidden="true" />
           <span className="text-sm">
@@ -991,7 +999,9 @@ function SampleFormMobile({
       {/* 8. İmza */}
       <section className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <label className="text-sm font-medium">İmza</label>
+          <label className="text-sm font-medium">
+            İmza <span className="text-destructive">*</span>
+          </label>
           <button
             type="button"
             onClick={clearSignature}
@@ -1015,8 +1025,8 @@ function SampleFormMobile({
           />
         </div>
         {signatureEmpty && (
-          <p className="text-xs text-muted-foreground">
-            İmza opsiyonel; alıyorsanız parmak/kalem ile çizebilirsiniz.
+          <p className="text-xs text-destructive">
+            Alıcı imzası zorunludur; parmak veya kalem ile çiziniz.
           </p>
         )}
       </section>

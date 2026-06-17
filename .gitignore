@@ -71,3 +71,4 @@ android/captures/
 android/app/google-services.json
 google-services*.json
 *firebase-adminsdk*.json
+_bugshots/
