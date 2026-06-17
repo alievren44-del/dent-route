@@ -1,3 +1,5 @@
+// EN ÖNCE: SSO hand-off hash'ini React/router mount etmeden yakala (redirect silmesin).
+import '@core/auth/ssoCapture';
 import '@/lib/debugLog';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';

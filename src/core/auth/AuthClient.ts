@@ -20,6 +20,7 @@ import {
   type SahaProfile,
   mapParlaToSahaRole,
 } from './types';
+import { capturedSsoHash } from './ssoCapture';
 
 /**
  * Parla profiles tablosu Türkçe canonical kolonlar kullanır:
@@ -115,33 +116,22 @@ export class AuthClient {
    * Supabase OAuth implicit-flow ile aynı güvenli patern (hash sunucuya gitmez).
    */
   async consumeSsoHandoff(): Promise<boolean> {
-    if (typeof window === 'undefined') return false;
-    const m = window.location.hash.match(/[#&]sso=([^&]+)/);
+    // Hash, ssoCapture modülünde (createRoot'tan önce) yakalanıp URL'den
+    // temizlendi — router redirect'i silmeden. Burada o yakalanan değeri okuruz.
+    const m = capturedSsoHash.match(/[#&]sso=([^&]+)/);
     if (!m) return false;
-    const clearHash = () => {
-      try {
-        window.history.replaceState(null, '', window.location.pathname + window.location.search);
-      } catch {
-        /* yutulur */
-      }
-    };
     try {
       const payload = JSON.parse(decodeURIComponent(atob(m[1] ?? ''))) as {
         a?: string;
         r?: string;
       };
-      if (!payload.a || !payload.r) {
-        clearHash();
-        return false;
-      }
+      if (!payload.a || !payload.r) return false;
       const { error } = await this.supabase.auth.setSession({
         access_token: payload.a,
         refresh_token: payload.r,
       });
-      clearHash();
       return !error;
     } catch {
-      clearHash();
       return false;
     }
   }
