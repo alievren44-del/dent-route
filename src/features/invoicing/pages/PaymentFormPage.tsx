@@ -75,6 +75,9 @@ function PaymentFormPage(): JSX.Element {
   const [dekontNo, setDekontNo] = useState('');
   const [aciklama, setAciklama] = useState('');
   const [selectedFaturaIds, setSelectedFaturaIds] = useState<string[]>([]);
+  // Çoklu-fatura dağıtımı: varsayılan FIFO-oto, "Manuel dağıt" ile düzenlenebilir.
+  const [manualAlloc, setManualAlloc] = useState(false);
+  const [allocMap, setAllocMap] = useState<Record<string, number>>({});
 
   // Çek/Senet alt formu
   const [csNo, setCsNo] = useState('');
@@ -155,6 +158,43 @@ function PaymentFormPage(): JSX.Element {
     if (!tutarOverridden) setTutar(seciliTutar);
   }, [seciliTutar, tutarOverridden]);
 
+  // Seçili faturalar görüntü sırasıyla (vade asc) — FIFO bu sıraya göre kapatır.
+  const selectedFaturalarOrdered = useMemo(
+    () => (bakiyeliFaturalar ?? []).filter((f) => selectedFaturaIds.includes(f.id)),
+    [bakiyeliFaturalar, selectedFaturaIds],
+  );
+
+  // FIFO-oto dağıtım: en eski faturadan başla, tutarı sırayla kapat; artan son faturaya.
+  const fifoAlloc = useMemo(() => {
+    const m: Record<string, number> = {};
+    let remaining = tutar;
+    for (const f of selectedFaturalarOrdered) {
+      const a = Math.max(0, Math.min(remaining, Number(f.kalan)));
+      m[f.id] = Math.round(a * 100) / 100;
+      remaining = Math.round((remaining - a) * 100) / 100;
+    }
+    if (remaining > 0.009 && selectedFaturalarOrdered.length > 0) {
+      const last = selectedFaturalarOrdered[selectedFaturalarOrdered.length - 1];
+      if (last) m[last.id] = Math.round(((m[last.id] ?? 0) + remaining) * 100) / 100;
+    }
+    return m;
+  }, [selectedFaturalarOrdered, tutar]);
+
+  const effectiveAlloc = manualAlloc ? allocMap : fifoAlloc;
+  const allocSum = useMemo(
+    () =>
+      Math.round(
+        selectedFaturalarOrdered.reduce((s, f) => s + (Number(effectiveAlloc[f.id]) || 0), 0) * 100,
+      ) / 100,
+    [selectedFaturalarOrdered, effectiveAlloc],
+  );
+  const allocMismatch = selectedFaturalarOrdered.length >= 2 && Math.abs(allocSum - tutar) > 0.01;
+
+  function enableManual(): void {
+    setAllocMap({ ...fifoAlloc });
+    setManualAlloc(true);
+  }
+
   function pickCari(c: CariOption): void {
     setCariId(c.id);
     setCariLabel(`${c.fatura_unvani} (${c.cari_kodu})`);
@@ -197,27 +237,62 @@ function PaymentFormPage(): JSX.Element {
         cekSenetId = (cs as { id: string }).id;
       }
 
-      // Tek fatura seçilmişse fatura_id set et; çoklu → her biri için ayrı kayıt değil,
-      // tek ödeme + ilk seçili faturaya bağlanır (basit MVP). Çoklu dağıtım ileride.
-      const faturaId = selectedFaturaIds[0] ?? null;
+      // created_by RLS WITH CHECK için zorunlu (DB default yok).
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+      if (userErr || !userData.user) throw new Error('Oturum bulunamadı. Tekrar giriş yapın.');
+      const uid = userData.user.id;
 
-      const { data, error: err } = await supabase
-        .from('saha_odemeler')
-        .insert({
+      const selected = selectedFaturalarOrdered.map((f) => f.id);
+
+      // 0–1 fatura → tek kayıt (fatura yoksa serbest tahsilat).
+      if (selected.length <= 1) {
+        const { data, error: err } = await supabase
+          .from('saha_odemeler')
+          .insert({
+            cari_id: cariId,
+            fatura_id: selected[0] ?? null,
+            tarih,
+            tutar,
+            yontem,
+            dekont_no: dekontNo.trim() || null,
+            cek_senet_id: cekSenetId,
+            aciklama: aciklama.trim() || null,
+            created_by: uid,
+          })
+          .select('id')
+          .single();
+        if (err) throw err;
+        return data as { id: string };
+      }
+
+      // Çoklu fatura → fatura başına 1 ödeme satırı (her satır kendi faturasını
+      // trigger ile kapatır). Dağıtım FIFO-oto veya manuel; toplam = tutar olmalı.
+      const sum =
+        Math.round(selected.reduce((s, fid) => s + (Number(effectiveAlloc[fid]) || 0), 0) * 100) /
+        100;
+      if (Math.abs(sum - tutar) > 0.01) {
+        throw new Error(
+          `Dağıtılan tutar (${formatTRY(sum)}) toplam tutara (${formatTRY(tutar)}) eşit olmalı.`,
+        );
+      }
+      const rows = selected
+        .map((fid) => ({
           cari_id: cariId,
-          fatura_id: faturaId,
+          fatura_id: fid,
           tarih,
-          tutar,
+          tutar: Math.round((Number(effectiveAlloc[fid]) || 0) * 100) / 100,
           yontem,
           dekont_no: dekontNo.trim() || null,
           cek_senet_id: cekSenetId,
           aciklama: aciklama.trim() || null,
-        })
-        .select('id')
-        .single();
-      if (err) throw err;
+          created_by: uid,
+        }))
+        .filter((r) => r.tutar > 0);
+      if (rows.length === 0) throw new Error('Dağıtılacak tutar yok.');
 
-      return data as { id: string };
+      const { error: err } = await supabase.from('saha_odemeler').insert(rows);
+      if (err) throw err;
+      return { id: 'multi' };
     },
     onSuccess: () => {
       if (cariId) navigate(`/invoicing/cari/${cariId}`);
@@ -352,6 +427,56 @@ function PaymentFormPage(): JSX.Element {
                 })}
               </div>
             )}
+          </section>
+        )}
+
+        {/* Çoklu-fatura dağıtımı */}
+        {selectedFaturalarOrdered.length >= 2 && (
+          <section>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Fatura dağıtımı</label>
+              <button
+                type="button"
+                onClick={() => (manualAlloc ? setManualAlloc(false) : enableManual())}
+                className="text-xs text-primary px-2 py-1 min-h-tap-min"
+              >
+                {manualAlloc ? 'FIFO otomatik' : 'Manuel dağıt'}
+              </button>
+            </div>
+            <div className="space-y-1.5">
+              {selectedFaturalarOrdered.map((f) => (
+                <div
+                  key={f.id}
+                  className="flex items-center justify-between gap-2 p-2 rounded-lg border border-border bg-card"
+                >
+                  <span className="text-xs truncate">
+                    {f.fatura_no ?? 'Taslak'}{' '}
+                    <span className="text-muted-foreground">
+                      (kalan {formatTRY(Number(f.kalan))})
+                    </span>
+                  </span>
+                  {manualAlloc ? (
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      value={allocMap[f.id] ?? 0}
+                      onChange={(e) =>
+                        setAllocMap((prev) => ({ ...prev, [f.id]: Number(e.target.value) || 0 }))
+                      }
+                      className="w-24 px-2 py-1 rounded-md border border-border bg-background text-xs text-right"
+                    />
+                  ) : (
+                    <span className="text-xs font-semibold">{formatTRY(fifoAlloc[f.id] ?? 0)}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+            <p
+              className={`text-[11px] mt-1 ${allocMismatch ? 'text-red-600' : 'text-muted-foreground'}`}
+            >
+              Dağıtılan: {formatTRY(allocSum)} / Toplam: {formatTRY(tutar)}
+            </p>
           </section>
         )}
 
@@ -501,7 +626,7 @@ function PaymentFormPage(): JSX.Element {
             setError(null);
             submitMutation.mutate();
           }}
-          disabled={submitMutation.isPending || !cariId || tutar <= 0}
+          disabled={submitMutation.isPending || !cariId || tutar <= 0 || allocMismatch}
           className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-primary text-primary-foreground font-semibold shadow-lg min-h-tap-min disabled:opacity-50"
         >
           <Check className="h-5 w-5" />
