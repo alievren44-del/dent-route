@@ -9,7 +9,8 @@
 import { useMemo } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Download, FileCode, Edit2, XCircle } from 'lucide-react';
+import { ArrowLeft, Download, FileCode, Edit2, XCircle, Share2 } from 'lucide-react';
+import { Share } from '@capacitor/share';
 
 import { toast } from 'sonner';
 
@@ -236,6 +237,43 @@ function InvoiceDetailPage(): JSX.Element {
     }
   }
 
+  async function handleShare(): Promise<void> {
+    if (!invoice || !cari) return;
+    const satirlar = pdfKalemler
+      .map((k) => `• ${k.urun_adi} x${k.miktar} = ${formatTRY(Number(k.satir_toplam))}`)
+      .join('\n');
+    const text = [
+      `Fatura: ${invoice.fatura_no ?? 'Taslak'}`,
+      `Cari: ${cari.fatura_unvani}`,
+      `Tarih: ${invoice.tarih}${invoice.vade_tarihi ? `  Vade: ${invoice.vade_tarihi}` : ''}`,
+      '',
+      satirlar,
+      '',
+      `Genel Toplam: ${formatTRY(Number(invoice.toplam))}`,
+    ]
+      .filter((l) => l !== undefined)
+      .join('\n');
+    try {
+      await Share.share({
+        title: `Fatura ${invoice.fatura_no ?? ''}`.trim(),
+        text,
+        dialogTitle: 'Faturayı Paylaş',
+      });
+    } catch (err) {
+      // Native paylaşım yoksa/iptal → web share veya panoya kopyala fallback.
+      try {
+        if (typeof navigator !== 'undefined' && navigator.share) {
+          await navigator.share({ title: 'Fatura', text });
+        } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+          await navigator.clipboard.writeText(text);
+          alert('Fatura özeti panoya kopyalandı.');
+        }
+      } catch {
+        /* kullanıcı iptal etti — sessiz */
+      }
+    }
+  }
+
   function handleUbl(): void {
     if (!invoice || !cari) return;
     ublMutation.mutate();
@@ -374,6 +412,14 @@ function InvoiceDetailPage(): JSX.Element {
           >
             <Download className="h-4 w-4" />
             PDF İndir
+          </button>
+          <button
+            type="button"
+            onClick={handleShare}
+            className="px-3 py-2.5 rounded-lg border border-border text-sm font-medium flex items-center justify-center gap-1.5 min-h-tap-min"
+          >
+            <Share2 className="h-4 w-4" />
+            Paylaş
           </button>
           <button
             type="button"
