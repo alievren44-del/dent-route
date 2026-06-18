@@ -40,6 +40,7 @@ interface ProductOption {
   name: string;
   sku?: string | null;
   base_price?: number | null;
+  tax_rate?: number | null;
 }
 
 interface KalemDraft extends LineItem {
@@ -69,7 +70,7 @@ function newDraft(sira: number): KalemDraft {
     miktar: 1,
     birim_fiyat: 0,
     iskonto_orani: 0,
-    kdv_orani: 0.2,
+    kdv_orani: 0.1, // varsayılan %10 (ClearOne dışı tüm markalar); ürün seçilince override
   };
 }
 
@@ -463,7 +464,7 @@ function KalemRow({
       // birim_fiyat 0 kalıyordu ("fiyatlar sıfır" bug). OrderForm da v_saha_products kullanır.
       const { data, error } = await supabase
         .from('v_saha_products')
-        .select('id, name, sku, base_price')
+        .select('id, name, sku, base_price, tax_rate')
         .or(`name.ilike.${term},sku.ilike.${term}`)
         .limit(10);
       if (error) return [];
@@ -474,10 +475,13 @@ function KalemRow({
   const line = calcLineTotal(kalem.miktar, kalem.birim_fiyat, kalem.iskonto_orani, kalem.kdv_orani);
 
   function pickProduct(p: ProductOption): void {
+    // KDV ürünün tax_rate'inden (WEB ile aynı: ClearOne %20, gerisi %10).
+    const kdv = p.tax_rate != null ? Number(p.tax_rate) / 100 : 0.1;
     onChange({
       urun_id: p.id,
       urun_adi: p.name,
       birim_fiyat: Number(p.base_price ?? 0),
+      kdv_orani: kdv,
     });
     setProductOpen(false);
     setProductSearch('');
