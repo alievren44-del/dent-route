@@ -556,7 +556,7 @@ function KalemRow({
                   onMouseDown={() => pickProduct(p)}
                   className="w-full text-left px-2 py-1.5 hover:bg-muted/60 border-b border-border last:border-b-0"
                 >
-                  <p className="text-xs font-medium truncate">{p.name}</p>
+                  <p className="text-xs font-medium text-foreground truncate">{p.name}</p>
                   {p.sku && <p className="text-[10px] text-muted-foreground">{p.sku}</p>}
                 </button>
               ))}

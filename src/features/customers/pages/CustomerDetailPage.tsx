@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import { Phone, MessageCircle, ShoppingCart, ArrowLeft, CalendarPlus, Receipt } from 'lucide-react';
 import { getSupabaseClient, getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
-import { mapParlaToSahaRole } from '@core/auth/types';
+import { usePermissionCached } from '@core/auth/usePermissions';
 
 import CariBalanceCard from '@features/invoicing/components/CariBalanceCard';
 import CustomerVisitTimeline from '@features/visits/components/CustomerVisitTimeline';
@@ -93,8 +93,9 @@ function CustomerDetailPage(): JSX.Element {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const currentUserId = useAuthStore((s) => s.session?.userId ?? null);
-  const currentUserRole = useAuthStore((s) => s.profile?.role ?? null);
-  const canInvoice = mapParlaToSahaRole(currentUserRole) === 'admin';
+  // Admin + faturalama izni olan plasiyerler (usePermissionCached admin için true döner;
+  // yüklenirken null → false varsay).
+  const canInvoice = usePermissionCached('saha:invoicing:access') === true;
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
 
   const { data: customerData, isLoading: custLoading } = useQuery({
