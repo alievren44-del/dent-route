@@ -187,9 +187,12 @@ export default function ScanRoutePlanner(): JSX.Element {
         const { data: userData } = await supabase.auth.getUser();
         const userId = userData.user?.id;
         if (!userId) return;
+        // home_lat/home_lng kolonları profiles'ta YOK (Phase 4 migration eklenmemiş) →
+        // bunları select etmek PostgREST 400 veriyordu. Sadece var olan kolonu çek;
+        // home_* aşağıda null kalır (radio disabled = amaçlanan davranış).
         const { data } = await supabase
           .from('profiles')
-          .select('home_lat, home_lng, ad_soyad')
+          .select('ad_soyad')
           .eq('id', userId)
           .maybeSingle();
         if (cancelled) return;

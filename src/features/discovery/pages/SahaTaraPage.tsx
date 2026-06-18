@@ -113,7 +113,7 @@ async function fetchRepRegion(repId: string): Promise<RepRegion> {
     .select('region_provinces, region_districts')
     .eq('profile_id', repId)
     .eq('account_id', '__region_meta__')
-    .single();
+    .maybeSingle();
   if (error || !data) return { provinces: [], districts: [] };
   return {
     provinces: (data.region_provinces ?? []).map(normalizeRegionSlug),
