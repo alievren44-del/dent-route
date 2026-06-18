@@ -520,8 +520,11 @@ function KalemRow({
   function pickProduct(p: ProductOption): void {
     // KDV ürünün tax_rate'inden (WEB ile aynı: ClearOne %20, gerisi %10).
     const kdv = p.tax_rate != null ? Number(p.tax_rate) / 100 : 0.1;
+    // urun_id UUID kolonu — fanta/olident ürün id'leri text ("fanta-12") → uuid değil →
+    // null'a düşür (insert patlamasın); ürün adı zaten urun_adi'de tutulur.
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p.id);
     onChange({
-      urun_id: p.id,
+      urun_id: isUuid ? p.id : null,
       urun_adi: p.name,
       birim_fiyat: Number(p.base_price ?? 0),
       kdv_orani: kdv,
