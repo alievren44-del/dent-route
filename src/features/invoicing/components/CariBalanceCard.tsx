@@ -38,10 +38,15 @@ interface BalanceData {
 
 async function fetchBalance(customerId: string): Promise<BalanceData> {
   const supabase = getTypedClient();
+  // customerId, CustomerDetailPage'de ya saha_clinics.id ya profiles.id olabilir.
+  // saha_cariler klinik'e `clinic_id`, kayıtlı hekime `profile_id` ile bağlanır →
+  // ikisini de dene (eski sürüm yalnız profile_id arıyordu → klinik carileri hiç
+  // bulunamıyor, "cari yok" yanlış gösteriliyordu).
   const { data: cari, error } = await supabase
     .from('saha_cariler')
     .select('id, cari_kodu, fatura_unvani, kredi_limiti, acilis_bakiyesi')
-    .eq('profile_id', customerId)
+    .or(`clinic_id.eq.${customerId},profile_id.eq.${customerId}`)
+    .limit(1)
     .maybeSingle();
   if (error) throw error;
   if (!cari) return { cari: null, bakiye: 0 };
