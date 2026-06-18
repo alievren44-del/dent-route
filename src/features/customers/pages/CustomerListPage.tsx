@@ -81,6 +81,8 @@ interface CustomerListRow {
 }
 
 const PAGE_SIZE = 50;
+/** No-GPS tam-liste için sunucudan tek seferde çekilen sayfa boyutu (range-tabanlı load-more). */
+const DATA_PAGE_SIZE = 500;
 
 /**
  * Türkçe accent-fold + lowercase. Aramada "çağdaş" ↔ "cagdas" eşitlemek için.
@@ -209,6 +211,8 @@ async function fetchAccounts(
   geo: { lat: number; lng: number } | null,
   repId: string | null,
   search: string,
+  /** No-GPS tam-liste sayfa indeksi (0-based). 0..dataPage aralığı kümülatif çekilir. */
+  dataPage = 0,
 ): Promise<CustomerListRow[]> {
   const supabase = getTypedClient();
 
@@ -231,48 +235,58 @@ async function fetchAccounts(
       _lng: geo.lng,
       _radius_m: 50_000,
       _vertical_key: 'dental',
-      _limit: 1000,
+      _limit: 5000,
     });
     if (!rpcErr && rpcData) {
       merge((rpcData as RpcRow[]).map(clinicRowToCustomerListRow));
     } else if (rpcErr) {
       console.warn('saha_search_nearby_clinics başarısız, fallback:', rpcErr.message);
     }
-  } else {
-    const { items: customers } = await adapter.listCustomers({ limit: 1000 });
-    merge(
-      customers.map<CustomerListRow>((c) => {
-        const primary = c.addresses?.[0];
-        const cf = c.customFields ?? {};
-        const ratingRaw = cf['rating'];
-        const ratingNum =
-          typeof ratingRaw === 'number'
-            ? ratingRaw
-            : typeof ratingRaw === 'string'
-              ? Number.parseFloat(ratingRaw)
-              : null;
-        const reviews =
-          typeof cf['user_ratings_total'] === 'number' ? cf['user_ratings_total'] : null;
-        return {
-          id: c.id,
-          name: c.name,
-          type: c.type ?? null,
-          phone: c.phone ?? null,
-          whatsapp: null,
-          address: primary?.addressLine ?? null,
-          city: c.region ?? primary?.city ?? null,
-          district: primary?.district ?? null,
-          neighborhood: null,
-          lat: primary?.location?.lat ?? null,
-          lng: primary?.location?.lng ?? null,
-          rating: ratingNum != null && Number.isFinite(ratingNum) ? ratingNum : null,
-          reviews,
-          balance: null,
-          lastVisitAt: null,
-          lastVisitOutcome: null,
-        };
-      }),
-    );
+  } else if (search.trim().length < 2) {
+    // No-GPS tam-liste: PostgREST 1000-satır cap'ini aşmak için 0..dataPage sayfalarını
+    // range-tabanlı kümülatif çek (her sayfa DATA_PAGE_SIZE). 5641 aktif kliniğin tamamına ulaşılır.
+    // Aktif arama varken (>=2 hane) bu ağır liste atlanır; sonuçlar #3 sunucu-ad-araması'ndan gelir.
+    for (let p = 0; p <= dataPage; p++) {
+      const { items: customers } = await adapter.listCustomers({
+        limit: DATA_PAGE_SIZE,
+        offset: p * DATA_PAGE_SIZE,
+      });
+      merge(
+        customers.map<CustomerListRow>((c) => {
+          const primary = c.addresses?.[0];
+          const cf = c.customFields ?? {};
+          const ratingRaw = cf['rating'];
+          const ratingNum =
+            typeof ratingRaw === 'number'
+              ? ratingRaw
+              : typeof ratingRaw === 'string'
+                ? Number.parseFloat(ratingRaw)
+                : null;
+          const reviews =
+            typeof cf['user_ratings_total'] === 'number' ? cf['user_ratings_total'] : null;
+          return {
+            id: c.id,
+            name: c.name,
+            type: c.type ?? null,
+            phone: c.phone ?? null,
+            whatsapp: null,
+            address: primary?.addressLine ?? null,
+            city: c.region ?? primary?.city ?? null,
+            district: primary?.district ?? null,
+            neighborhood: null,
+            lat: primary?.location?.lat ?? null,
+            lng: primary?.location?.lng ?? null,
+            rating: ratingNum != null && Number.isFinite(ratingNum) ? ratingNum : null,
+            reviews,
+            balance: null,
+            lastVisitAt: null,
+            lastVisitOutcome: null,
+          };
+        }),
+      );
+      // Son sayfa dolu gelmediyse daha fazla veri yok → erken çık.
+      if (customers.length < DATA_PAGE_SIZE) break;
+    }
   }
 
   // 2. Benim kliniklerim (her zaman, GPS'ten bağımsız)
@@ -373,6 +387,20 @@ async function fetchReps(): Promise<RepOption[]> {
     .sort((a, b) => a.label.localeCompare(b.label, 'tr'));
 }
 
+/** Toplam aktif klinik sayısı (head-only exact count). Hata olursa null. */
+async function fetchActiveClinicCount(): Promise<number | null> {
+  const supabase = getTypedClient();
+  const { count, error } = await supabase
+    .from('saha_clinics')
+    .select('id', { head: true, count: 'exact' })
+    .eq('status', 'active');
+  if (error) {
+    console.warn('aktif klinik sayımı başarısız:', error.message);
+    return null;
+  }
+  return count ?? null;
+}
+
 function CustomerListPage(): JSX.Element {
   const vertical = useVertical();
   const navigate = useNavigate();
@@ -400,6 +428,8 @@ function CustomerListPage(): JSX.Element {
 
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [page, setPage] = useState(1);
+  /** No-GPS tam-liste: sunucudan kaç sayfa (DATA_PAGE_SIZE) çekildiği (range load-more). */
+  const [dataPage, setDataPage] = useState(0);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -433,13 +463,16 @@ function CustomerListPage(): JSX.Element {
   // Veri — GPS varsa lat/lng dahil zenginleştirilmiş veri çekilir
   const geoKey = position ? `${position.lat.toFixed(3)}|${position.lng.toFixed(3)}` : 'no-geo';
   const accountsQuery = useQuery({
-    queryKey: ['customers', 'list', geoKey, selfId ?? 'anon', debouncedSearch],
+    queryKey: ['customers', 'list', geoKey, selfId ?? 'anon', debouncedSearch, dataPage],
     queryFn: () =>
       fetchAccounts(
         position ? { lat: position.lat, lng: position.lng } : null,
         selfId,
         debouncedSearch,
+        dataPage,
       ),
+    // Range load-more: yeni dataPage çekilirken eski liste görünmeye devam etsin (boş ekran flicker'ı yok).
+    placeholderData: (prev) => prev,
     // Yeni ziyaret edilen/notlanan klinik anında listede görünsün (persisted-rq bayatlık fix).
     staleTime: 0,
     refetchOnMount: 'always',
@@ -449,6 +482,13 @@ function CustomerListPage(): JSX.Element {
     queryKey: ['customers', 'reps'],
     queryFn: fetchReps,
     enabled: canSeeRepFilter,
+    staleTime: 5 * 60_000,
+  });
+
+  // Toplam aktif klinik sayısı (head-only count) — "X / 5641" göstergesi için.
+  const totalCountQuery = useQuery({
+    queryKey: ['customers', 'active-count'],
+    queryFn: fetchActiveClinicCount,
     staleTime: 5 * 60_000,
   });
 
@@ -581,6 +621,11 @@ function CustomerListPage(): JSX.Element {
     setPage(1);
   }, [debouncedSearch, filters, sortKey]);
 
+  // Arama değişince sunucu-veri sayfasını da sıfırla (aktif aramada tam-liste çekilmez).
+  useEffect(() => {
+    setDataPage(0);
+  }, [debouncedSearch]);
+
   const visible = useMemo(() => filtered.slice(0, page * PAGE_SIZE), [filtered, page]);
 
   function toggleSelected(id: string): void {
@@ -678,7 +723,34 @@ function CustomerListPage(): JSX.Element {
   const isLoading = accountsQuery.isLoading;
   const isError = accountsQuery.isError;
   const totalFiltered = filtered.length;
-  const hasMore = visible.length < totalFiltered;
+  const loadedCount = accountsQuery.data?.length ?? 0;
+  const isFetchingMore = accountsQuery.isFetching && !accountsQuery.isLoading;
+
+  // Aktif arama: sonuçlar sunucu-ad-araması'ndan gelir, range load-more uygulanmaz.
+  const isSearching = debouncedSearch.trim().length >= 2;
+  // No-GPS tam-listede sunucudan daha fazla veri çekilebilir mi?
+  //  - GPS yok (range yolu) + arama yok
+  //  - son dataPage tam doldu (loadedCount, çekilen tavana ulaştı) → sunucuda daha var olabilir
+  const serverHasMore =
+    !position &&
+    !isSearching &&
+    loadedCount >= (dataPage + 1) * DATA_PAGE_SIZE &&
+    (totalCountQuery.data == null || loadedCount < totalCountQuery.data);
+  // Render'da gösterilmeyen yüklü kayıt var mı?
+  const renderHasMore = visible.length < totalFiltered;
+  const hasMore = renderHasMore || serverHasMore;
+
+  function loadMore(): void {
+    if (renderHasMore) {
+      // Önce yüklü kayıtların kalanını göster (50'şer).
+      setPage((p) => p + 1);
+    } else if (serverHasMore) {
+      // Yüklü kayıtların hepsi gösterildi → sunucudan bir sonraki sayfayı çek
+      // ve gelen yeni kayıtların görünür olması için render sayfasını da büyüt.
+      setDataPage((d) => d + 1);
+      setPage((p) => p + Math.ceil(DATA_PAGE_SIZE / PAGE_SIZE));
+    }
+  }
 
   return (
     <div className="flex min-h-full flex-col">
@@ -764,7 +836,13 @@ function CustomerListPage(): JSX.Element {
         />
 
         <p className="text-xs text-muted-foreground">
-          {isLoading ? 'Yükleniyor…' : `${totalFiltered} kayıt — ${visible.length} gösteriliyor`}
+          {isLoading
+            ? 'Yükleniyor…'
+            : `${visible.length} / ${
+                totalCountQuery.data != null && !isSearching
+                  ? totalCountQuery.data
+                  : totalFiltered
+              } gösteriliyor`}
         </p>
       </div>
 
@@ -864,10 +942,15 @@ function CustomerListPage(): JSX.Element {
         {hasMore && (
           <button
             type="button"
-            onClick={() => setPage((p) => p + 1)}
-            className="mx-auto block rounded-xl border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted"
+            onClick={loadMore}
+            disabled={isFetchingMore}
+            className="mx-auto block rounded-xl border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Daha Fazla ({totalFiltered - visible.length})
+            {isFetchingMore
+              ? 'Yükleniyor…'
+              : renderHasMore
+                ? `Daha Fazla (${totalFiltered - visible.length})`
+                : 'Daha Fazla Yükle'}
           </button>
         )}
       </div>

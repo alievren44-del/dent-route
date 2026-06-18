@@ -185,6 +185,8 @@ export interface Campaign {
 export interface ListOptions {
   cursor?: string;
   limit?: number;
+  /** Range-tabanlı sayfalama: verilirse .range(offset, offset+limit-1) uygulanır. */
+  offset?: number;
   updatedAfter?: string;
 }
 

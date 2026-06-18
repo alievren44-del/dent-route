@@ -126,7 +126,15 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
     }
     if (opts?.region) q = q.eq('province_slug', opts.region);
     if (opts?.search) q = q.ilike('name', `%${opts.search}%`);
-    q = q.order('name').limit(opts?.limit ?? 50);
+    const limit = opts?.limit ?? 50;
+    q = q.order('name');
+    // offset verildiğinde range-tabanlı sayfalama (PostgREST 1000-satır default cap'ini aşmak için);
+    // verilmezse geriye-uyumlu .limit() davranışı korunur.
+    if (opts?.offset != null) {
+      q = q.range(opts.offset, opts.offset + limit - 1);
+    } else {
+      q = q.limit(limit);
+    }
 
     const { data, error, count } = await q;
     if (error) {

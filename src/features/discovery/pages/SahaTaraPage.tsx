@@ -12,7 +12,7 @@
  *   - Bittikten sonra DB refetch
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useNavigate } from 'react-router-dom';
 import {
@@ -298,10 +298,17 @@ export default function SahaTaraPage() {
   const [radiusOverride, setRadiusOverride] = useState<number>(() =>
     selectedNeighborhood ? 1500 : 3000,
   );
-  // Keep slider in sync with dynamicRadius whenever location context changes.
+  // Auto-suggest a radius only when the LOCATION CONTEXT (district/neighborhood)
+  // actually changes — never on a plain dynamicRadius recompute / re-render, so a
+  // manual slider drag is preserved instead of being clobbered back to default.
+  const prevCtxKey = useRef<string | null>(null);
   useEffect(() => {
-    setRadiusOverride(dynamicRadius);
-  }, [dynamicRadius]);
+    const ctxKey = `${districtInfo?.slug ?? ''}|${selectedNeighborhood ?? ''}`;
+    if (ctxKey !== prevCtxKey.current) {
+      prevCtxKey.current = ctxKey;
+      setRadiusOverride(dynamicRadius);
+    }
+  }, [districtInfo?.slug, selectedNeighborhood, dynamicRadius]);
   const radius = radiusOverride;
 
   const loadDb = useCallback(async () => {

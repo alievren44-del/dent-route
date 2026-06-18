@@ -15,5 +15,5 @@ export function radiusForNufus(nufus: number): number {
 export function describeRadius(radiusM: number): string {
   if (radiusM <= 1000) return 'Yoğun bölge — 1 km tarama';
   if (radiusM <= 2000) return 'Büyük ilçe — 2 km tarama';
-  return 'Geniş ilçe — 3 km tarama';
+  return `Geniş bölge — ${(radiusM / 1000).toFixed(radiusM % 1000 === 0 ? 0 : 1)} km tarama`;
 }
