@@ -291,7 +291,24 @@ function CustomerDetailPage(): JSX.Element {
         {canInvoice && (
           <button
             type="button"
-            onClick={() => navigate(`/invoicing/fatura/yeni?profile_id=${id}`)}
+            onClick={async () => {
+              // Klinik id'sinden cari'yi çöz (yoksa oluştur) → fatura formuna cari_id ile git.
+              // Eski hâli ?profile_id=<klinik_id> gönderiyordu; InvoiceFormPage ?cari_id okuyor
+              // → cari boş açılıyordu. RPC clinic_id ile cariyi get-or-create eder.
+              try {
+                const sb = getTypedClient();
+                const { data: cariId, error } = await sb.rpc('saha_get_or_create_cari_for_clinic', {
+                  p_clinic_id: id!,
+                });
+                if (error || !cariId) {
+                  toast.error('Cari çözülemedi: ' + (error?.message ?? 'bilinmeyen hata'));
+                  return;
+                }
+                navigate(`/invoicing/fatura/yeni?cari_id=${cariId as string}`);
+              } catch (e) {
+                toast.error('Cari çözülemedi.');
+              }
+            }}
             className="flex flex-col items-center justify-center gap-1 px-2 py-3 rounded-xl border border-border bg-card hover:bg-muted/40 min-h-tap-min"
           >
             <Receipt className="h-5 w-5 text-primary" />
