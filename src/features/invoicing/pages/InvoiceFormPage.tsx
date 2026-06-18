@@ -153,7 +153,20 @@ function InvoiceFormPage(): JSX.Element {
     setVadeOverridden(true);
   }
 
-  const totals = useMemo(() => calcInvoiceTotals(kalemler), [kalemler]);
+  // Genel (tutar üzerinden) iskonto — kalem-bazlı İsk%'in ÜZERİNE çarpımsal uygulanır;
+  // her kaleme dağıtılır ki DB trigger'ı (kalemler'den fatura toplamı) doğru hesaplasın.
+  const [genelIskOrani, setGenelIskOrani] = useState(0); // 0..1
+  const adjustedKalemler = useMemo(
+    () =>
+      kalemler.map((k) => ({
+        ...k,
+        iskonto_orani: 1 - (1 - k.iskonto_orani) * (1 - genelIskOrani),
+      })),
+    [kalemler, genelIskOrani],
+  );
+  const totals = useMemo(() => calcInvoiceTotals(adjustedKalemler), [adjustedKalemler]);
+  const baseTotals = useMemo(() => calcInvoiceTotals(kalemler), [kalemler]);
+  const genelIskTutar = Math.round((baseTotals.ara_toplam - totals.ara_toplam) * 100) / 100;
 
   function updateKalem(key: string, patch: Partial<KalemDraft>): void {
     setKalemler((prev) => prev.map((k) => (k.key === key ? { ...k, ...patch } : k)));
@@ -197,7 +210,9 @@ function InvoiceFormPage(): JSX.Element {
         birim: k.birim,
         miktar: k.miktar,
         birim_fiyat: k.birim_fiyat,
-        iskonto_orani: k.iskonto_orani,
+        // Genel iskonto kalem-iskonto'sunun üzerine çarpımsal eklenir (DB'ye yazılan
+        // efektif oran) → trigger fatura toplamını doğru hesaplar.
+        iskonto_orani: 1 - (1 - k.iskonto_orani) * (1 - genelIskOrani),
         kdv_orani: k.kdv_orani,
       }));
 
@@ -373,12 +388,34 @@ function InvoiceFormPage(): JSX.Element {
         <section className="rounded-xl border border-border bg-card p-4 space-y-1.5">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Ara Toplam</span>
-            <span className="font-medium">{formatTRY(totals.ara_toplam)}</span>
+            <span className="font-medium">{formatTRY(baseTotals.ara_toplam)}</span>
           </div>
-          {totals.iskonto_toplam > 0 && (
+          {baseTotals.iskonto_toplam > 0 && (
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">İskonto</span>
-              <span className="font-medium">-{formatTRY(totals.iskonto_toplam)}</span>
+              <span className="text-muted-foreground">Kalem İskontosu</span>
+              <span className="font-medium">-{formatTRY(baseTotals.iskonto_toplam)}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Genel İskonto (%)</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.1"
+              min={0}
+              max={100}
+              value={Math.round(genelIskOrani * 1000) / 10}
+              onChange={(e) => {
+                const v = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                setGenelIskOrani(v / 100);
+              }}
+              className="w-20 px-2 py-1 rounded-md border border-border bg-background text-sm text-right"
+            />
+          </div>
+          {genelIskTutar > 0 && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Genel İskonto Tutarı</span>
+              <span className="font-medium text-red-600">-{formatTRY(genelIskTutar)}</span>
             </div>
           )}
           <div className="flex items-center justify-between text-sm">
