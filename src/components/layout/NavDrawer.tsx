@@ -44,6 +44,9 @@ import {
   Megaphone,
 } from 'lucide-react';
 import { useRouteBasket } from '@features/routes/store/routeBasketStore';
+import { usePermissionCached } from '@core/auth/usePermissions';
+
+const INVOICING_PERM = 'saha:invoicing:access';
 
 interface NavDrawerProps {
   open: boolean;
@@ -56,6 +59,8 @@ interface NavItem {
   label: string;
   Icon: typeof Map;
   badgeKey?: 'basket';
+  /** Görünürlük için gerekli izin kodu (admin her zaman görür). */
+  permission?: string;
 }
 
 interface NavSection {
@@ -92,11 +97,11 @@ const SECTIONS: NavSection[] = [
       { to: '/orders/new', label: 'Yeni Sipariş', Icon: ShoppingCart },
       { to: '/orders/history', label: 'Sipariş Geçmişi', Icon: ListChecks },
       { to: '/orders/approval', label: 'Onay Bekleyenler', Icon: ClipboardCheck },
-      { to: '/invoicing/cari', label: 'Cariler', Icon: Wallet },
-      { to: '/invoicing/fatura/yeni', label: 'Yeni Fatura', Icon: Receipt },
-      { to: '/invoicing/cek-senet', label: 'Çek / Senet', Icon: CreditCard },
-      { to: '/invoicing/odeme/yeni', label: 'Yeni Ödeme', Icon: FileText },
-      { to: '/invoicing/aging', label: 'Alacak Yaşlandırma', Icon: TrendingDown },
+      { to: '/invoicing/cari', label: 'Cariler', Icon: Wallet, permission: INVOICING_PERM },
+      { to: '/invoicing/fatura/yeni', label: 'Yeni Fatura', Icon: Receipt, permission: INVOICING_PERM },
+      { to: '/invoicing/cek-senet', label: 'Çek / Senet', Icon: CreditCard, permission: INVOICING_PERM },
+      { to: '/invoicing/odeme/yeni', label: 'Yeni Ödeme', Icon: FileText, permission: INVOICING_PERM },
+      { to: '/invoicing/aging', label: 'Alacak Yaşlandırma', Icon: TrendingDown, permission: INVOICING_PERM },
     ],
   },
   {
@@ -121,6 +126,15 @@ const SECTIONS: NavSection[] = [
 
 export function NavDrawer({ open, onClose, isAdmin }: NavDrawerProps) {
   const basketCount = useRouteBasket((s) => s.items.length);
+  // İzin (invoicing) — admin her zaman; rep ise admin grant verdiyse görür.
+  const canInvoicing = usePermissionCached(INVOICING_PERM);
+
+  const hasItemPermission = (item: NavItem): boolean => {
+    if (!item.permission) return true;
+    if (isAdmin) return true;
+    if (item.permission === INVOICING_PERM) return canInvoicing === true;
+    return false;
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -151,13 +165,16 @@ export function NavDrawer({ open, onClose, isAdmin }: NavDrawerProps) {
           </button>
         </div>
         <nav className="flex-1 px-2 py-3">
-          {visibleSections.map((section) => (
+          {visibleSections.map((section) => {
+            const items = section.items.filter(hasItemPermission);
+            if (items.length === 0) return null;
+            return (
             <div key={section.title} className="mb-4">
               <h3 className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 {section.title}
               </h3>
               <ul className="space-y-0.5">
-                {section.items.map(({ to, label, Icon, badgeKey }) => (
+                {items.map(({ to, label, Icon, badgeKey }) => (
                   <li key={to}>
                     <NavLink
                       to={to}
@@ -186,7 +203,8 @@ export function NavDrawer({ open, onClose, isAdmin }: NavDrawerProps) {
                 ))}
               </ul>
             </div>
-          ))}
+            );
+          })}
         </nav>
       </aside>
     </div>
