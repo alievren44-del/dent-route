@@ -402,7 +402,10 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
   const [salesRepId, setSalesRepId] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
-  // Plasiyer dropdown — REP / ADMIN rolleri
+  // Plasiyer dropdown — REP / ADMIN rolleri.
+  // profiles.role CANLI'da lowercase (web canonical-lowercase migration) → eski
+  // uppercase-only .in() filtresi 0 eşleşme veriyordu (plasiyer dropdown boş, "Eda
+  // gözükmüyor" bug'ı). Hem lowercase hem uppercase varyantları kabul et.
   const { data: salesReps } = useQuery({
     queryKey: ['cari-new-sales-reps'],
     queryFn: async (): Promise<Array<{ id: string; label: string; role: string }>> => {
@@ -410,7 +413,7 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
       const { data, error: err } = await supabase
         .from('profiles')
         .select('id, ad_soyad, email, role')
-        .in('role', ['REP', 'SALES_REP', 'ADMIN', 'MANAGER'])
+        .in('role', ['rep', 'REP', 'sales_rep', 'SALES_REP', 'manager', 'MANAGER', 'admin', 'ADMIN'])
         .order('ad_soyad', { ascending: true });
       if (err) throw err;
       return (
