@@ -195,6 +195,14 @@ function InvoiceDetailPage(): JSX.Element {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['invoice', id] });
+      const cariId = invoice?.cari_id;
+      if (cariId) {
+        void queryClient.invalidateQueries({ queryKey: ['cari-faturalar', cariId] });
+        void queryClient.invalidateQueries({ queryKey: ['cari-odemeler', cariId] });
+        void queryClient.invalidateQueries({ queryKey: ['cari-detail', cariId] });
+      }
+      void queryClient.invalidateQueries({ queryKey: ['cariler-fatura-sums'] });
+      void queryClient.invalidateQueries({ queryKey: ['cariler'] });
     },
   });
 

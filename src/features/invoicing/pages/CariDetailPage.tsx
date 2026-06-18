@@ -147,6 +147,7 @@ function CariDetailPage(): JSX.Element {
         .from('saha_faturalar')
         .select('id, fatura_no, tarih, vade_tarihi, tip, toplam, odenen, kalan, durum')
         .eq('cari_id', id!)
+        .neq('durum', 'iptal')
         .order('tarih', { ascending: false });
       if (error) throw error;
       return (data ?? []) as FaturaRow[];

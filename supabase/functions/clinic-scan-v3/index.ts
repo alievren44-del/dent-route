@@ -1236,10 +1236,31 @@ Deno.serve(async (req) => {
     }
     collectedErrors.push(`district_lookup:exact=${districtClinicsExact?.length ?? 0},null_slug=${districtClinicsNullSlug?.length ?? 0}`);
 
+    // GLOBAL place_id existence — province/district'ten BAĞIMSIZ. google_place_id
+    // globally-unique olduğu için, taranan place_id DB'de varsa kesinlikle mevcut.
+    // province='unknown' (geo-çözüm patladı) → district-scoped candidate set 12'ye
+    // düşse bile burada yakalanır → sahte-yeni (232) önlenir.
+    const globalExistingPids = new Set<string>();
+    if (googlePlaceIds.length > 0) {
+      const CHUNK = 200;
+      for (let i = 0; i < googlePlaceIds.length; i += CHUNK) {
+        const slice = googlePlaceIds.slice(i, i + CHUNK);
+        const { data: pidRows } = await supabase
+          .from('saha_clinics')
+          .select('google_place_id')
+          .in('google_place_id', slice);
+        for (const row of pidRows ?? []) {
+          if (row?.google_place_id) globalExistingPids.add(row.google_place_id);
+        }
+      }
+    }
+    collectedErrors.push(`global_pid_existing:${globalExistingPids.size}`);
+
     // Spatial fallback: when province='unknown' or district lookup returns 0 rows,
     // fall back to a bounding-box query (lat/lng ± ~radiusM + 20% buffer) so the
-    // existingSet is still populated and we don't mark everything "new".
-    if (districtClinics.length === 0) {
+    // orphan name+coord matching has the real geographic neighbours (manual null-pid
+    // klinikleri) regardless of province slug → manuel-klinik duplikasyonu önlenir.
+    if (districtClinics.length === 0 || provinceSlug === 'unknown') {
       const DEG_PER_M = 1 / 111_320; // ~1m in degrees at equator (good enough for bbox)
       const bufferDeg = radiusM * DEG_PER_M * 1.2; // 20% overshoot to catch edge clinics
       const { data: spatialRows } = await supabase
@@ -1263,7 +1284,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    const existingSet = new Set<string>();
+    // Seed existingSet with globally-matched place_ids (province-agnostic).
+    const existingSet = new Set<string>(globalExistingPids);
     const orphanUpdates: Array<{ id: string; place_id: string }> = [];
 
     if (districtClinics.length > 0) {

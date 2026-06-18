@@ -216,7 +216,10 @@ function DiscoveryPage(): JSX.Element {
             phone: r.phone ?? undefined,
             rating: r.rating ?? undefined,
             types: r.types,
-          });
+            // Carry review count through for ClinicCard display (not part of the
+            // DiscoveryCandidate type, but survives dedup spread).
+            user_ratings_total: r.user_ratings_total,
+          } as DiscoveryCandidate);
         }
       }
 
@@ -298,7 +301,8 @@ function DiscoveryPage(): JSX.Element {
       phone: r.phone ?? undefined,
       rating: r.rating ?? undefined,
       types: r.types,
-    }));
+      user_ratings_total: r.user_ratings_total,
+    } as DiscoveryCandidate));
     const merged = dedupCandidates([...scopedMatches, ...globalCandidates]);
     merged.sort(
       (a, b) =>
@@ -496,6 +500,9 @@ function DiscoveryPage(): JSX.Element {
             // with that id — same as the customerId path. Pure Google-Places
             // candidates (no sahaClinicId, no customerId) remain inert as before.
             const clinicNavId = c.customerId ?? c.sahaClinicId;
+            // user_ratings_total is carried on the source saha_clinics rows but is
+            // not part of the DedupedCandidate type; read it tolerantly for display.
+            const reviewsTotal = (c as { user_ratings_total?: number | null }).user_ratings_total;
             const openDetail = clinicNavId ? () => navigate(`/clinics/${clinicNavId}`) : undefined;
             const openVisit = clinicNavId
               ? () => navigate(`/visits/check-in/${clinicNavId}`)
@@ -510,6 +517,7 @@ function DiscoveryPage(): JSX.Element {
                 lng={c.lng}
                 distanceM={haversineMeters(origin.lat, origin.lng, c.lat, c.lng)}
                 rating={c.rating}
+                userRatingsTotal={reviewsTotal}
                 isExistingCustomer={isExisting}
                 isInBasket={inBasket}
                 onOpenDetail={openDetail}

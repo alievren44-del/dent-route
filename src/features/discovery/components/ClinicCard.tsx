@@ -27,6 +27,7 @@ export interface ClinicCardProps {
   whatsapp?: string;
   distanceM?: number;
   rating?: number;
+  userRatingsTotal?: number | null;
   /** Verilirse "Yol tarifi" butonu Google Maps deep-link açar (map-light, $0). */
   lat?: number;
   lng?: number;
@@ -67,6 +68,7 @@ function ClinicCard({
   whatsapp,
   distanceM,
   rating,
+  userRatingsTotal,
   lat,
   lng,
   isExistingCustomer = false,
@@ -141,6 +143,9 @@ function ClinicCard({
               <span className="inline-flex items-center gap-1">
                 <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" aria-hidden="true" />
                 {rating.toFixed(1)}
+                {typeof userRatingsTotal === 'number' && userRatingsTotal > 0 && (
+                  <span className="ml-1">({userRatingsTotal})</span>
+                )}
               </span>
             )}
           </div>

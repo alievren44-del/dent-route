@@ -822,6 +822,7 @@ function CustomerListPage(): JSX.Element {
                   whatsapp={r.whatsapp ?? undefined}
                   {...(distanceM !== undefined ? { distanceM } : {})}
                   {...(r.rating !== null ? { rating: r.rating } : {})}
+                  userRatingsTotal={r.reviews}
                   isExistingCustomer={!!r.isMine}
                   isInBasket={inBasket}
                   onAdd={() => {

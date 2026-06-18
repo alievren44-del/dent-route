@@ -15,7 +15,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Search, AlertTriangle, Check } from 'lucide-react';
 
 import { getTypedClient } from '@lib/supabase';
@@ -59,6 +59,7 @@ function fmtDate(iso: string | null): string {
 function PaymentFormPage(): JSX.Element {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const initialCariId = searchParams.get('cari_id');
 
   const [cariId, setCariId] = useState<string | null>(initialCariId);
@@ -295,6 +296,12 @@ function PaymentFormPage(): JSX.Element {
       return { id: 'multi' };
     },
     onSuccess: () => {
+      if (cariId) {
+        void queryClient.invalidateQueries({ queryKey: ['cari-odemeler', cariId] });
+        void queryClient.invalidateQueries({ queryKey: ['cari-faturalar', cariId] });
+        void queryClient.invalidateQueries({ queryKey: ['cari-detail', cariId] });
+      }
+      void queryClient.invalidateQueries({ queryKey: ['cariler-fatura-sums'] });
       if (cariId) navigate(`/invoicing/cari/${cariId}`);
     },
     onError: (err: unknown) => {

@@ -15,7 +15,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Plus, Trash2, Search, Save, Send, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -77,6 +77,7 @@ function newDraft(sira: number): KalemDraft {
 function InvoiceFormPage(): JSX.Element {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const initialCariId = searchParams.get('cari_id');
 
   const [cariId, setCariId] = useState<string | null>(initialCariId);
@@ -222,6 +223,11 @@ function InvoiceFormPage(): JSX.Element {
       return faturaId;
     },
     onSuccess: (faturaId) => {
+      if (cariId) {
+        void queryClient.invalidateQueries({ queryKey: ['cari-faturalar', cariId] });
+        void queryClient.invalidateQueries({ queryKey: ['cari-detail', cariId] });
+      }
+      void queryClient.invalidateQueries({ queryKey: ['cariler-fatura-sums'] });
       navigate(`/invoicing/fatura/${faturaId}`);
     },
     onError: (err: unknown) => {
