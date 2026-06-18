@@ -372,7 +372,11 @@ function OrderFormPage(): JSX.Element {
           // Alıcılar: onaycı rolüne sahip kullanıcılar. approverRole bir üst
           // onaycıyı verir (REP→MANAGER, MANAGER→ADMIN). ADMIN her zaman dahil
           // (limitsiz onay yetkisi) ki MANAGER yoksa da bildirim ulaşsın.
-          const recipientRoles = Array.from(new Set([approverRole ?? 'ADMIN', 'ADMIN']));
+          // profiles.role CANLI'da lowercase → approverRole uppercase ('MANAGER'/'ADMIN')
+          // ile .in() 0 eşleşir, onay-bildirimi gitmezdi. Hem upper hem lower varyant.
+          const recipientRoles = Array.from(
+            new Set([approverRole ?? 'ADMIN', 'ADMIN'].flatMap((r) => [r, r.toLowerCase()])),
+          );
           const { data: recipients, error: recErr } = await supabase
             .from('profiles')
             .select('id')

@@ -677,7 +677,7 @@ export default function ActiveRoutePage(): JSX.Element {
     );
   }
 
-  if (!isOwner && profile?.role !== 'ADMIN') {
+  if (!isOwner && (profile?.role ?? '').toLowerCase() !== 'admin') {
     return (
       <div className="m-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
         Bu rotayı görüntüleme yetkin yok.
