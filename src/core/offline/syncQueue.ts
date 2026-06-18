@@ -130,9 +130,12 @@ async function executeOp(op: OfflineOp): Promise<void> {
       return;
     }
     case 'visit.create': {
-      // saha_visits tablosunda idempotency_key kolonu yoktur (DB types doğrulandı).
-      // Idempotency check kaldırıldı — visit.create'de sunucu taraflı duplicate koruması yok.
-      const { error } = await supabase.from('saha_visits').insert(op.payload as never);
+      // saha_visits.idempotency_key + unique index (saha_visits_idempotency_key_uq) MEVCUT.
+      // Offline replay'de aynı op tekrar yürütülürse (kısmi başarı sonrası retry) upsert
+      // onConflict ignore ile çift-insert sessizce atlanır → idempotent, yanlış-"failed" yok.
+      const { error } = await supabase
+        .from('saha_visits')
+        .upsert(op.payload as never, { onConflict: 'idempotency_key', ignoreDuplicates: true });
       if (error) throw error;
       return;
     }

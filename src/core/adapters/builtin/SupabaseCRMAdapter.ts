@@ -610,7 +610,12 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
 
     // order_number DB şemasında NOT NULL required. Trigger yoksa timestamp tabanlı
     // benzersiz kod üret; DB trigger varsa override eder.
-    const orderNumber = `SAH-${Date.now()}`;
+    // Date.now() tek başına eşzamanlı iki sipariş aynı ms'de çakışabilir (UNIQUE ihlali)
+    // → rastgele sonek ile çakışma olasılığı ihmal edilebilir seviyeye iner.
+    const rand = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+      ? crypto.randomUUID().slice(0, 8)
+      : Math.random().toString(36).slice(2, 10);
+    const orderNumber = `SAH-${Date.now()}-${rand}`;
     const { data: newOrder, error: insErr } = await this.supabase
       .from('orders')
       .insert({
