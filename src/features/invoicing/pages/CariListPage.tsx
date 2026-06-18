@@ -47,6 +47,10 @@ interface ProfileOption {
   ad_soyad: string | null;
   klinik_adi: string | null;
   email: string | null;
+  // Klinik kaynağı (saha_clinics) için ek alanlar — cari prefill + linkage.
+  address?: string | null;
+  il?: string | null;
+  ilce?: string | null;
 }
 
 function useDebounced<T>(value: T, ms: number): T {
@@ -430,29 +434,28 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
     enabled: !!initialProfileId,
     queryFn: async () => {
       const supabase = getTypedClient();
+      // createFor = saha_clinics.id (CariBalanceCard "Cari Oluştur" klinik detayından).
       const { data, error: err } = await supabase
-        .from('profiles')
-        .select('id, ad_soyad, klinik_adi, email, tax_number, tax_office, city')
+        .from('saha_clinics')
+        .select('id, name, address, province_slug, district_slug')
         .eq('id', initialProfileId!)
         .maybeSingle();
       if (err) throw err;
-      const p = data as {
+      const c = data as {
         id: string;
-        ad_soyad: string | null;
-        klinik_adi: string | null;
-        email: string | null;
-        tax_number: string | null;
-        tax_office: string | null;
-        city: string | null;
+        name: string | null;
+        address: string | null;
+        province_slug: string | null;
+        district_slug: string | null;
       } | null;
-      if (p) {
-        setProfileLabel(p.klinik_adi ?? p.ad_soyad ?? p.email ?? p.id);
-        setFaturaUnvani(p.klinik_adi ?? p.ad_soyad ?? '');
-        setVergiNo(p.tax_number ?? '');
-        setVergiDairesi(p.tax_office ?? '');
-        setIl(p.city ?? '');
+      if (c) {
+        setProfileLabel(c.name ?? c.id);
+        setFaturaUnvani(c.name ?? '');
+        setFaturaAdresi(c.address ?? '');
+        setIl(c.province_slug ?? '');
+        setIlce(c.district_slug ?? '');
       }
-      return p;
+      return c;
     },
   });
 
@@ -462,13 +465,32 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
     queryFn: async (): Promise<ProfileOption[]> => {
       const supabase = getTypedClient();
       const term = `%${debouncedSearch}%`;
+      // Klinikler saha_clinics tablosunda (binlerce kayıt); profiles'ta yalnızca
+      // app kullanıcıları (çok az) var. Eski sürüm profiles'ı arıyordu → klinik
+      // adıyla aramada hiç sonuç çıkmıyordu. Artık saha_clinics aranır.
       const { data, error: err } = await supabase
-        .from('profiles')
-        .select('id, ad_soyad, klinik_adi, email')
-        .or(`klinik_adi.ilike.${term},ad_soyad.ilike.${term},email.ilike.${term}`)
-        .limit(15);
+        .from('saha_clinics')
+        .select('id, name, address, province_slug, district_slug')
+        .ilike('name', term)
+        .limit(20);
       if (err) throw err;
-      return (data ?? []) as ProfileOption[];
+      return (
+        (data ?? []) as Array<{
+          id: string;
+          name: string;
+          address: string | null;
+          province_slug: string | null;
+          district_slug: string | null;
+        }>
+      ).map((c) => ({
+        id: c.id,
+        klinik_adi: c.name,
+        ad_soyad: null,
+        email: null,
+        address: c.address,
+        il: c.province_slug,
+        ilce: c.district_slug,
+      }));
     },
   });
 
@@ -479,7 +501,7 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
         .from('saha_cariler')
         .insert({
           cari_kodu: '',
-          profile_id: profileId,
+          clinic_id: profileId,
           fatura_unvani: faturaUnvani.trim(),
           vergi_no: vergiNo.trim() || null,
           vergi_dairesi: vergiDairesi.trim() || null,
@@ -521,6 +543,9 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
     setProfileLabel(p.klinik_adi ?? p.ad_soyad ?? p.email ?? p.id);
     setProfilePickerOpen(false);
     if (!faturaUnvani) setFaturaUnvani(p.klinik_adi ?? p.ad_soyad ?? '');
+    if (!faturaAdresi && p.address) setFaturaAdresi(p.address);
+    if (!il && p.il) setIl(p.il);
+    if (!ilce && p.ilce) setIlce(p.ilce);
   }
 
   return (
@@ -546,7 +571,7 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
           {/* Profile autocomplete */}
           <section>
             <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-              Müşteri (opsiyonel) — mevcut Parla profili
+              Klinik (opsiyonel) — saha klinik kaydından bağla
             </label>
             {profileId && !profilePickerOpen ? (
               <div className="flex items-center justify-between gap-2 p-2 rounded-lg border border-border bg-card">
