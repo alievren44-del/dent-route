@@ -497,6 +497,20 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
   const mutation = useMutation({
     mutationFn: async () => {
       const supabase = getTypedClient();
+      // Duplicate-guard: aynı klinik için cari zaten varsa 2. cari oluşturma
+      // (RPC get-or-create dedup ediyor; manuel modal etmiyordu → çift cari riski).
+      if (profileId) {
+        const { data: existing } = await supabase
+          .from('saha_cariler')
+          .select('id, fatura_unvani')
+          .eq('clinic_id', profileId)
+          .limit(1)
+          .maybeSingle();
+        if (existing) {
+          const e = existing as { id: string; fatura_unvani: string };
+          throw new Error(`Bu klinik için zaten cari var: ${e.fatura_unvani}. Mevcut cariyi kullanın.`);
+        }
+      }
       const { data, error: err } = await supabase
         .from('saha_cariler')
         .insert({
