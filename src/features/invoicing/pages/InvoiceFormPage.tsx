@@ -458,8 +458,11 @@ function KalemRow({
     queryFn: async (): Promise<ProductOption[]> => {
       const supabase = getTypedClient();
       const term = `%${debounced}%`;
+      // v_saha_products = fiyatı hesaplanmış katalog (base_price FX-dönüşümlü).
+      // Eski raw `products` tablosu base_price'ı çoğunlukla null → ürün eklenince
+      // birim_fiyat 0 kalıyordu ("fiyatlar sıfır" bug). OrderForm da v_saha_products kullanır.
       const { data, error } = await supabase
-        .from('products')
+        .from('v_saha_products')
         .select('id, name, sku, base_price')
         .or(`name.ilike.${term},sku.ilike.${term}`)
         .limit(10);
