@@ -196,7 +196,12 @@ function typeMeta(type: AgendaItem['type']): {
     case 'malzeme_teslim':
       return { label: 'Malzeme Teslimi', Icon: Truck, color: 'text-cyan-600', dot: 'bg-cyan-500' };
     case 'no_order_alert':
-      return { label: 'Pasif Klinik', Icon: AlertTriangle, color: 'text-red-600', dot: 'bg-red-500' };
+      return {
+        label: 'Pasif Klinik',
+        Icon: AlertTriangle,
+        color: 'text-red-600',
+        dot: 'bg-red-500',
+      };
     case 'tanitim':
       return { label: 'Tanıtım', Icon: Megaphone, color: 'text-pink-600', dot: 'bg-pink-500' };
     case 'revisit':

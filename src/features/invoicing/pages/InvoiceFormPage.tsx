@@ -438,7 +438,9 @@ function InvoiceFormPage(): JSX.Element {
                   }}
                   className="w-20 px-2 py-1 rounded-md border border-border bg-background text-sm text-right"
                 />
-                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                  %
+                </span>
               </div>
               <div className="relative">
                 <input
@@ -460,7 +462,9 @@ function InvoiceFormPage(): JSX.Element {
                   }}
                   className="w-24 px-2 py-1 rounded-md border border-border bg-background text-sm text-right"
                 />
-                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">₺</span>
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                  ₺
+                </span>
               </div>
             </div>
           </div>
