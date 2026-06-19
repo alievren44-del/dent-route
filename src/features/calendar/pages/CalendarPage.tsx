@@ -135,6 +135,24 @@ const OUTCOME_LABEL: Record<string, string> = {
   odenmedi: 'Ödenmedi',
 };
 
+// Günlük Plan tipi grupları — filtre çipleri + özet satırı için.
+const TYPE_GROUPS: Record<string, { label: string; types: (ReminderType | 'visit')[] }> = {
+  randevu: { label: 'Randevu', types: ['appointment'] },
+  teslim: { label: 'Teslim', types: ['malzeme_teslim'] },
+  tahsilat: { label: 'Tahsilat', types: ['tahsilat'] },
+  gorev: {
+    label: 'Görev',
+    types: ['task', 'revisit', 'note', 'tanitim', 'visit', 'no_order_alert'],
+  },
+};
+
+function groupOf(type: AgendaItem['type']): string {
+  for (const [key, g] of Object.entries(TYPE_GROUPS)) {
+    if ((g.types as string[]).includes(type)) return key;
+  }
+  return 'gorev';
+}
+
 // Manuel ekleme tip seçenekleri.
 const ADD_TYPES: { value: ReminderType; label: string }[] = [
   { value: 'appointment', label: 'Randevu' },
@@ -237,6 +255,8 @@ function CalendarPage(): JSX.Element {
   const [showAdd, setShowAdd] = useState(false);
   const [selectedItem, setSelectedItem] = useState<AgendaItem | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  // Ajanda tip-filtresi: boş set = Tümü/all.
+  const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set());
   // R1 — kliniksiz randevuya klinik bağla (LinkClinicModal için reminder id).
   const [linkClinicFor, setLinkClinicFor] = useState<string | null>(null);
   // "Tekrar Randevu" → AddReminderModal'ı klinik/tür/başlık dolu açar (kullanıcı
@@ -471,15 +491,21 @@ function CalendarPage(): JSX.Element {
   // Arama filtresi — klinik adı veya nota göre (boşsa tüm öğeler)
   const filteredItems = useMemo<AgendaItem[]>(() => {
     const term = searchTerm.trim().toLocaleLowerCase('tr');
-    if (!term) return allItems;
-    return allItems.filter((it) => {
-      const clinicName = it.accountId ? (nameMap[it.accountId]?.name ?? '') : '';
-      return (
-        clinicName.toLocaleLowerCase('tr').includes(term) ||
-        (it.note ?? '').toLocaleLowerCase('tr').includes(term)
-      );
-    });
-  }, [allItems, searchTerm, nameMap]);
+    let items = allItems;
+    if (term) {
+      items = items.filter((it) => {
+        const clinicName = it.accountId ? (nameMap[it.accountId]?.name ?? '') : '';
+        return (
+          clinicName.toLocaleLowerCase('tr').includes(term) ||
+          (it.note ?? '').toLocaleLowerCase('tr').includes(term)
+        );
+      });
+    }
+    if (typeFilter.size > 0) {
+      items = items.filter((it) => typeFilter.has(groupOf(it.type)));
+    }
+    return items;
+  }, [allItems, searchTerm, nameMap, typeFilter]);
 
   // Ajanda görünümü: güne göre grupla
   const grouped = useMemo(() => {
@@ -792,6 +818,48 @@ function CalendarPage(): JSX.Element {
             ))}
           </div>
 
+          {/* Tip filtre çipleri — Günlük Plan */}
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setTypeFilter(new Set())}
+              className={`h-7 rounded-full border px-3 text-xs font-medium transition-colors ${
+                typeFilter.size === 0
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border bg-background text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              Tümü
+            </button>
+            {Object.entries(TYPE_GROUPS).map(([key, g]) => {
+              const repType = g.types[0]!;
+              const meta = typeMeta(repType);
+              const active = typeFilter.has(key);
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => {
+                    setTypeFilter((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(key)) next.delete(key);
+                      else next.add(key);
+                      return next;
+                    });
+                  }}
+                  className={`inline-flex h-7 items-center gap-1 rounded-full border px-3 text-xs font-medium transition-colors ${
+                    active
+                      ? `border-transparent bg-primary text-primary-foreground`
+                      : 'border-border bg-background text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  <span className={`h-2 w-2 rounded-full ${meta.dot}`} />
+                  {g.label}
+                </button>
+              );
+            })}
+          </div>
+
           {!loading && grouped.length === 0 && (
             <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
               {searchTerm.trim()
@@ -801,27 +869,61 @@ function CalendarPage(): JSX.Element {
           )}
 
           <div className="space-y-5">
-            {grouped.map(([k, items]) => (
-              <div key={k} className="space-y-2">
-                <h2 className="sticky top-0 bg-background/95 py-1 text-sm font-semibold text-foreground">
-                  {dayLabel(items[0]?.at ?? `${k}T00:00:00`)}
-                </h2>
-                <ul className="space-y-2">
-                  {items.map((it) => (
-                    <AgendaCard
-                      key={`${it.kind}-${it.id}`}
-                      it={it}
-                      clinic={it.accountId ? (nameMap[it.accountId] ?? null) : null}
-                      assignerName={it.assignedBy ? (assignerMap[it.assignedBy] ?? null) : null}
-                      highlighted={it.id === focusId}
-                      onAddPhone={addClinicPhone}
-                      attachments={attachmentsMap[it.id]}
-                      onOpen={setSelectedItem}
-                    />
-                  ))}
-                </ul>
-              </div>
-            ))}
+            {grouped.map(([k, items]) => {
+              // Günlük özet: grup bazında sayı
+              const daySummary = Object.entries(TYPE_GROUPS)
+                .map(([gKey, g]) => {
+                  const count = items.filter((it) =>
+                    (g.types as string[]).includes(it.type),
+                  ).length;
+                  if (count === 0) return null;
+                  const meta = typeMeta(g.types[0]!);
+                  return { gKey, count, meta, label: g.label };
+                })
+                .filter(Boolean) as {
+                gKey: string;
+                count: number;
+                meta: ReturnType<typeof typeMeta>;
+                label: string;
+              }[];
+
+              return (
+                <div key={k} className="space-y-2">
+                  <div className="sticky top-0 bg-background/95 py-1 space-y-1">
+                    <h2 className="text-sm font-semibold text-foreground">
+                      {dayLabel(items[0]?.at ?? `${k}T00:00:00`)}
+                    </h2>
+                    {daySummary.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {daySummary.map(({ gKey, count, meta }) => (
+                          <span
+                            key={gKey}
+                            className={`inline-flex items-center gap-1 text-[11px] font-medium ${meta.color}`}
+                          >
+                            <meta.Icon className="h-3 w-3" aria-hidden="true" />
+                            {count}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <ul className="space-y-2">
+                    {items.map((it) => (
+                      <AgendaCard
+                        key={`${it.kind}-${it.id}`}
+                        it={it}
+                        clinic={it.accountId ? (nameMap[it.accountId] ?? null) : null}
+                        assignerName={it.assignedBy ? (assignerMap[it.assignedBy] ?? null) : null}
+                        highlighted={it.id === focusId}
+                        onAddPhone={addClinicPhone}
+                        attachments={attachmentsMap[it.id]}
+                        onOpen={setSelectedItem}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
           </div>
         </>
       )}
@@ -1079,16 +1181,25 @@ function AgendaCard({
         role={it.kind === 'reminder' ? 'button' : undefined}
         onClick={it.kind === 'reminder' ? () => onOpen?.(it) : undefined}
       >
-        <div className="flex flex-col items-center pt-0.5">
-          <meta.Icon className={`h-5 w-5 ${meta.color}`} aria-hidden="true" />
-          <span className="mt-1 text-[10px] font-medium text-muted-foreground">
+        {/* Sol kolon: saat (belirgin) + ikon */}
+        <div className="flex flex-col items-center gap-0.5 pt-0.5 min-w-[38px]">
+          <span className="text-sm font-semibold tabular-nums leading-none text-foreground">
             {timeLabel(it.at)}
           </span>
+          <meta.Icon className={`h-4 w-4 ${meta.color}`} aria-hidden="true" />
         </div>
         <div className="min-w-0 flex-1">
+          {/* Üst satır: tip chip + başlık + gecikti rozeti */}
           <p
             className={`flex flex-wrap items-center gap-1.5 text-sm font-medium text-foreground ${done ? 'line-through' : ''}`}
           >
+            <span
+              className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${meta.color} border-current/20 bg-current/5`}
+              style={{ borderColor: 'currentColor', backgroundColor: 'transparent' }}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+              {meta.label}
+            </span>
             <span className="min-w-0 truncate">{it.title}</span>
             {it.kind === 'reminder' && it.status === 'open' && new Date(it.at) < new Date() && (
               <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-red-100 text-red-700">
@@ -1114,7 +1225,6 @@ function AgendaCard({
             </p>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className={`text-[11px] font-medium ${meta.color}`}>{meta.label}</span>
             {it.visitId && (
               <Link
                 to={`/visits/${it.visitId}`}
