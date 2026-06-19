@@ -19,10 +19,11 @@ describe('needsApproval', () => {
     expect(needsApproval(0, 'USER')).toBe(false);
   });
 
-  it('REP → 5000 limit', () => {
+  it('REP/SALES_REP → limitsiz oto-onay (hiç onay istemez)', () => {
     expect(needsApproval(4999, 'REP')).toBe(false);
-    expect(needsApproval(5000, 'REP')).toBe(false);
-    expect(needsApproval(5001, 'REP')).toBe(true);
+    expect(needsApproval(5001, 'REP')).toBe(false);
+    expect(needsApproval(1_000_000, 'REP')).toBe(false);
+    expect(needsApproval(1_000_000, 'SALES_REP')).toBe(false);
   });
 
   it('MANAGER → 50000 limit', () => {
@@ -41,8 +42,9 @@ describe('needsApproval', () => {
   });
 
   it('Case-insensitive', () => {
-    expect(needsApproval(10000, 'rep')).toBe(true);
-    expect(needsApproval(10000, 'Rep')).toBe(true);
+    expect(needsApproval(10000, 'rep')).toBe(false);
+    expect(needsApproval(10000, 'Rep')).toBe(false);
+    expect(needsApproval(60000, 'manager')).toBe(true);
     expect(needsApproval(10000, 'manager')).toBe(false);
   });
 });
@@ -71,7 +73,7 @@ describe('nextApproverRole', () => {
 describe('thresholdFor', () => {
   it('Doğru eşikleri döner', () => {
     expect(thresholdFor('USER')).toBe(0);
-    expect(thresholdFor('REP')).toBe(5000);
+    expect(thresholdFor('REP')).toBe(Number.POSITIVE_INFINITY);
     expect(thresholdFor('MANAGER')).toBe(50000);
     expect(thresholdFor('ADMIN')).toBe(Number.POSITIVE_INFINITY);
   });
@@ -84,7 +86,8 @@ describe('thresholdFor', () => {
 describe('APPROVAL_THRESHOLDS sabitleri', () => {
   it('Tüm beklenen roller tanımlı', () => {
     expect(APPROVAL_THRESHOLDS.USER).toBe(0);
-    expect(APPROVAL_THRESHOLDS.REP).toBe(5000);
+    expect(APPROVAL_THRESHOLDS.REP).toBe(Number.POSITIVE_INFINITY);
+    expect(APPROVAL_THRESHOLDS.SALES_REP).toBe(Number.POSITIVE_INFINITY);
     expect(APPROVAL_THRESHOLDS.MANAGER).toBe(50000);
     expect(APPROVAL_THRESHOLDS.ADMIN).toBe(Number.POSITIVE_INFINITY);
   });
@@ -94,18 +97,17 @@ describe('APPROVAL_THRESHOLDS sabitleri', () => {
 // GENİŞLETME — #70 client-mantık eşik sınır-değer + zincir + savunmacı girdi
 // ────────────────────────────────────────────────────────────────────────
 
-describe('needsApproval — REP eşik sınır-değer (#70)', () => {
-  it('REP tam 5000 → onay GEREKMEZ (limit dahil, > kullanılıyor)', () => {
-    // Kaynak: totalAmount > limit  →  5000 > 5000 = false
+describe('needsApproval — REP limitsiz oto-onay (#70 / 2026-06-19)', () => {
+  it('REP 5000 → onay GEREKMEZ', () => {
     expect(needsApproval(5000, 'REP')).toBe(false);
   });
 
-  it('REP 5000.01 → onay GEREKİR (kuruş üstü)', () => {
-    expect(needsApproval(5000.01, 'REP')).toBe(true);
+  it('REP 5000.01 → yine onay GEREKMEZ (limit kalktı)', () => {
+    expect(needsApproval(5000.01, 'REP')).toBe(false);
   });
 
-  it('REP 4999.99 → onay GEREKMEZ', () => {
-    expect(needsApproval(4999.99, 'REP')).toBe(false);
+  it('REP çok büyük tutar → yine onay GEREKMEZ', () => {
+    expect(needsApproval(10_000_000, 'REP')).toBe(false);
   });
 });
 
@@ -134,8 +136,9 @@ describe('needsApproval — ADMIN sınırsız (#70)', () => {
 
 describe('needsApproval — savunmacı girdi (boşluk/null/undefined)', () => {
   it('Baştaki/sondaki boşluk trim edilir', () => {
-    expect(needsApproval(6000, '  REP  ')).toBe(true);
-    expect(needsApproval(4000, '  REP  ')).toBe(false);
+    expect(needsApproval(60000, '  MANAGER  ')).toBe(true);
+    expect(needsApproval(40000, '  MANAGER  ')).toBe(false);
+    expect(needsApproval(999999, '  REP  ')).toBe(false);
   });
 
   it('null/undefined rol → 0 limit (her pozitif tutar onay ister)', () => {
@@ -178,7 +181,7 @@ describe('thresholdFor — Infinity ve case-insensitive', () => {
     expect(thresholdFor('  ADMIN  ')).toBe(Number.POSITIVE_INFINITY);
   });
   it('Lowercase roller doğru eşik döner', () => {
-    expect(thresholdFor('rep')).toBe(5000);
+    expect(thresholdFor('rep')).toBe(Number.POSITIVE_INFINITY);
     expect(thresholdFor('manager')).toBe(50000);
   });
 });

@@ -4,17 +4,20 @@
  * Sprint 2 / PROMPT-15
  *
  * Roller UPPERCASE (Parla user_role enum ile uyumlu):
- *   USER     → otomatik onay yok (her sipariş onay ister)
- *   REP      → 5.000 TL'ye kadar self-approve
- *   MANAGER  → 50.000 TL'ye kadar self-approve
- *   ADMIN    → limitsiz
+ *   USER          → otomatik onay yok (her sipariş onay ister)
+ *   REP/SALES_REP → limitsiz self-approve (oto-onay; saha kararı 2026-06-19,
+ *                   debug_reports "sipariş onayını kaldır"). Sipariş 'pending'
+ *                   olarak anında aktif; admin OrderHistoryPage'de görür/geri alır.
+ *   MANAGER       → 50.000 TL'ye kadar self-approve
+ *   ADMIN         → limitsiz
  *
  * Test edilebilirlik için DI yok — pure functions.
  */
 
 export const APPROVAL_THRESHOLDS: Record<string, number> = {
   USER: 0,
-  REP: 5000,
+  REP: Number.POSITIVE_INFINITY,
+  SALES_REP: Number.POSITIVE_INFINITY,
   MANAGER: 50000,
   ADMIN: Number.POSITIVE_INFINITY,
 };
@@ -27,8 +30,8 @@ export const APPROVAL_THRESHOLDS: Record<string, number> = {
  * @returns true → onay gerek, false → otomatik onay
  *
  * @example
- *   needsApproval(10000, 'REP')    // true (5000 limitini aşıyor)
- *   needsApproval(3000, 'REP')     // false
+ *   needsApproval(999999, 'REP')   // false (rep oto-onay, limitsiz)
+ *   needsApproval(1, 'USER')       // true (kullanıcı her sipariş onay ister)
  *   needsApproval(999999, 'ADMIN') // false (limit yok)
  */
 export function needsApproval(totalAmount: number, userRole: string): boolean {
