@@ -413,7 +413,16 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
       const { data, error: err } = await supabase
         .from('profiles')
         .select('id, ad_soyad, email, role')
-        .in('role', ['rep', 'REP', 'sales_rep', 'SALES_REP', 'manager', 'MANAGER', 'admin', 'ADMIN'])
+        .in('role', [
+          'rep',
+          'REP',
+          'sales_rep',
+          'SALES_REP',
+          'manager',
+          'MANAGER',
+          'admin',
+          'ADMIN',
+        ])
         .order('ad_soyad', { ascending: true });
       if (err) throw err;
       return (
@@ -511,7 +520,9 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
           .maybeSingle();
         if (existing) {
           const e = existing as { id: string; fatura_unvani: string };
-          throw new Error(`Bu klinik için zaten cari var: ${e.fatura_unvani}. Mevcut cariyi kullanın.`);
+          throw new Error(
+            `Bu klinik için zaten cari var: ${e.fatura_unvani}. Mevcut cariyi kullanın.`,
+          );
         }
       }
       const { data, error: err } = await supabase

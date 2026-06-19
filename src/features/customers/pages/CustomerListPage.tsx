@@ -839,9 +839,7 @@ function CustomerListPage(): JSX.Element {
           {isLoading
             ? 'Yükleniyor…'
             : `${visible.length} / ${
-                totalCountQuery.data != null && !isSearching
-                  ? totalCountQuery.data
-                  : totalFiltered
+                totalCountQuery.data != null && !isSearching ? totalCountQuery.data : totalFiltered
               } gösteriliyor`}
         </p>
       </div>
