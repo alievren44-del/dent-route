@@ -126,6 +126,10 @@ function CariDetailPage(): JSX.Element {
   const { data: cari, isLoading } = useQuery({
     queryKey: ['cari-detail', id],
     enabled: !!id,
+    // Finansal veriler: düzenleme/iptal sonrası daima taze (persisted cache + 60s
+    // staleTime → silinen fatura logout'a kadar görünüyordu).
+    staleTime: 0,
+    refetchOnMount: 'always',
     queryFn: async (): Promise<CariFull | null> => {
       const supabase = getTypedClient();
       const { data, error } = await supabase
@@ -141,6 +145,8 @@ function CariDetailPage(): JSX.Element {
   const { data: faturalar } = useQuery({
     queryKey: ['cari-faturalar', id],
     enabled: !!id,
+    staleTime: 0,
+    refetchOnMount: 'always',
     queryFn: async (): Promise<FaturaRow[]> => {
       const supabase = getTypedClient();
       const { data, error } = await supabase
@@ -157,6 +163,8 @@ function CariDetailPage(): JSX.Element {
   const { data: odemeler } = useQuery({
     queryKey: ['cari-odemeler', id],
     enabled: !!id,
+    staleTime: 0,
+    refetchOnMount: 'always',
     queryFn: async (): Promise<OdemeRow[]> => {
       const supabase = getTypedClient();
       const { data, error } = await supabase
@@ -172,6 +180,8 @@ function CariDetailPage(): JSX.Element {
   const { data: cekSenetler } = useQuery({
     queryKey: ['cari-cek-senet', id],
     enabled: !!id,
+    staleTime: 0,
+    refetchOnMount: 'always',
     queryFn: async (): Promise<CekSenetRow[]> => {
       const supabase = getTypedClient();
       const { data, error } = await supabase

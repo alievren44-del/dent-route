@@ -177,6 +177,8 @@ function InvoiceDetailPage(): JSX.Element {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['invoice', id] });
+      const cariId = invoice?.cari_id;
+      if (cariId) void queryClient.invalidateQueries({ queryKey: ['cari-faturalar', cariId] });
       toast.success('E-Fatura XML üretildi ve indirildi.');
     },
     onError: (err) => {
