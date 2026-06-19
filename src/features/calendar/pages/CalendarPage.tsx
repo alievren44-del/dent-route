@@ -628,6 +628,30 @@ function CalendarPage(): JSX.Element {
         created_by: sourceReminder.rep_id,
       });
       if (recurErr) toast.warning('Tamamlandı, fakat sonraki tekrar oluşturulamadı.');
+    } else if (
+      sourceReminder &&
+      (sourceReminder.type === 'tanitim' || sourceReminder.type === 'malzeme_teslim')
+    ) {
+      // Otomatik takip (2026-06-19 karar): tanıtım/teslimat tamamlanınca recurrence
+      // seçilmese bile 1 ay sonrasına aynı tipte takip hatırlatması oluştur. Tarih
+      // TAMAMLANMA anına göre (geç tamamlanırsa kaymasın). dispatch cron push'lar.
+      const followDue = new Date();
+      followDue.setMonth(followDue.getMonth() + 1);
+      followDue.setHours(9, 0, 0, 0);
+      const isTeslim = sourceReminder.type === 'malzeme_teslim';
+      const { error: followErr } = await sb.from('saha_reminders').insert({
+        rep_id: sourceReminder.rep_id,
+        account_id: sourceReminder.account_id,
+        type: sourceReminder.type,
+        title: sourceReminder.title,
+        note: isTeslim
+          ? 'Otomatik takip — 1 ay önce malzeme teslimi yapıldı, tekrar teslim/kontrol.'
+          : 'Otomatik takip — 1 ay önce tanıtım yapıldı, tekrar ziyaret/tanıtım.',
+        due_at: followDue.toISOString(),
+        status: 'open',
+        created_by: sourceReminder.rep_id,
+      });
+      if (followErr) toast.warning('Tamamlandı, fakat otomatik takip oluşturulamadı.');
     }
     void queryClient.invalidateQueries({ queryKey: ['calendar'] });
   }
