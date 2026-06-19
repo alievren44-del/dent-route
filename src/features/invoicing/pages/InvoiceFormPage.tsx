@@ -40,6 +40,7 @@ interface ProductOption {
   name: string;
   sku?: string | null;
   base_price?: number | null;
+  sale_price?: number | null;
   tax_rate?: number | null;
 }
 
@@ -93,6 +94,7 @@ function InvoiceFormPage(): JSX.Element {
   const [vadeTarihi, setVadeTarihi] = useState<string>(calcVadeTarihi(today, 30));
   const [vadeOverridden, setVadeOverridden] = useState<boolean>(false);
   const [aciklama, setAciklama] = useState<string>('');
+  const [faturasiz, setFaturasiz] = useState<boolean>(false);
   const [kalemler, setKalemler] = useState<KalemDraft[]>([newDraft(1)]);
   const [error, setError] = useState<string | null>(null);
 
@@ -157,6 +159,8 @@ function InvoiceFormPage(): JSX.Element {
   // Genel (tutar üzerinden) iskonto — kalem-bazlı İsk%'in ÜZERİNE çarpımsal uygulanır;
   // her kaleme dağıtılır ki DB trigger'ı (kalemler'den fatura toplamı) doğru hesaplasın.
   const [genelIskOrani, setGenelIskOrani] = useState(0); // 0..1
+  // TL-tutar girişi — genelIskOrani'ye dönüştürülür; tek kaynak of truth = genelIskOrani.
+  const [genelIskTlInput, setGenelIskTlInput] = useState<string>('');
   const adjustedKalemler = useMemo(
     () =>
       kalemler.map((k) => ({
@@ -197,6 +201,7 @@ function InvoiceFormPage(): JSX.Element {
           vade_tarihi: vadeTarihi || null,
           durum: action,
           aciklama: aciklama.trim() || null,
+          faturasiz,
         })
         .select('id')
         .single();
@@ -338,6 +343,17 @@ function InvoiceFormPage(): JSX.Element {
               </button>
             ))}
           </div>
+          {/* Faturasız seçeneği */}
+          <label className="flex items-center gap-2.5 mt-2 p-2.5 rounded-lg border border-border bg-card cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={faturasiz}
+              onChange={(e) => setFaturasiz(e.target.checked)}
+              className="h-4 w-4 rounded accent-primary"
+            />
+            <span className="text-sm">Faturasız</span>
+            <span className="text-xs text-muted-foreground">(resmi fatura no üretilmez)</span>
+          </label>
         </section>
 
         {/* Tarihler */}
@@ -402,21 +418,51 @@ function InvoiceFormPage(): JSX.Element {
               <span className="font-medium">-{formatTRY(baseTotals.iskonto_toplam)}</span>
             </div>
           )}
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Genel İskonto (%)</span>
-            <input
-              type="number"
-              inputMode="decimal"
-              step="0.1"
-              min={0}
-              max={100}
-              value={Math.round(genelIskOrani * 1000) / 10}
-              onChange={(e) => {
-                const v = Math.max(0, Math.min(100, Number(e.target.value) || 0));
-                setGenelIskOrani(v / 100);
-              }}
-              className="w-20 px-2 py-1 rounded-md border border-border bg-background text-sm text-right"
-            />
+          <div className="flex items-center justify-between text-sm gap-2">
+            <span className="text-muted-foreground shrink-0">Genel İskonto</span>
+            <div className="flex items-center gap-1.5">
+              <div className="relative">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.1"
+                  min={0}
+                  max={100}
+                  value={Math.round(genelIskOrani * 1000) / 10}
+                  onChange={(e) => {
+                    const v = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                    setGenelIskOrani(v / 100);
+                    // Sync TL input to reflect the new rate against current ara_toplam
+                    const tlEquiv = baseTotals.ara_toplam * (v / 100);
+                    setGenelIskTlInput(tlEquiv > 0 ? String(Math.round(tlEquiv * 100) / 100) : '');
+                  }}
+                  className="w-20 px-2 py-1 rounded-md border border-border bg-background text-sm text-right"
+                />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
+              </div>
+              <div className="relative">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="1"
+                  min={0}
+                  placeholder="0"
+                  value={genelIskTlInput}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    setGenelIskTlInput(raw);
+                    const tlAmt = Number(raw) || 0;
+                    const base = baseTotals.ara_toplam;
+                    if (base > 0) {
+                      const rate = Math.min(1, Math.max(0, tlAmt / base));
+                      setGenelIskOrani(rate);
+                    }
+                  }}
+                  className="w-24 px-2 py-1 rounded-md border border-border bg-background text-sm text-right"
+                />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">₺</span>
+              </div>
+            </div>
           </div>
           {genelIskTutar > 0 && (
             <div className="flex items-center justify-between text-sm">
@@ -507,7 +553,7 @@ function KalemRow({
       // birim_fiyat 0 kalıyordu ("fiyatlar sıfır" bug). OrderForm da v_saha_products kullanır.
       const { data, error } = await supabase
         .from('v_saha_products')
-        .select('id, name, sku, base_price, tax_rate')
+        .select('id, name, sku, base_price, sale_price, tax_rate')
         .or(`name.ilike.${term},sku.ilike.${term}`)
         .limit(10);
       if (error) return [];
@@ -526,7 +572,7 @@ function KalemRow({
     onChange({
       urun_id: isUuid ? p.id : null,
       urun_adi: p.name,
-      birim_fiyat: Number(p.base_price ?? 0),
+      birim_fiyat: Number(p.sale_price ?? p.base_price ?? 0),
       kdv_orani: kdv,
     });
     setProductOpen(false);

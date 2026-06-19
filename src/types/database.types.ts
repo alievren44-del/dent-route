@@ -3735,6 +3735,7 @@ export type Database = {
           efatura_durum: string | null;
           efatura_uuid: string | null;
           fatura_no: string | null;
+          faturasiz: boolean;
           id: string;
           iskonto_toplam: number;
           kalan: number | null;
@@ -3758,6 +3759,7 @@ export type Database = {
           efatura_durum?: string | null;
           efatura_uuid?: string | null;
           fatura_no?: string | null;
+          faturasiz?: boolean;
           id?: string;
           iskonto_toplam?: number;
           kalan?: number | null;
@@ -3781,6 +3783,7 @@ export type Database = {
           efatura_durum?: string | null;
           efatura_uuid?: string | null;
           fatura_no?: string | null;
+          faturasiz?: boolean;
           id?: string;
           iskonto_toplam?: number;
           kalan?: number | null;
