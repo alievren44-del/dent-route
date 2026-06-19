@@ -23,6 +23,10 @@ const config: CapacitorConfig = {
     backgroundColor: '#1F4E78',
     allowMixedContent: false,
     captureInput: true,
+    // Security: never allow remote WebView debugging in production builds.
+    // Capacitor defaults to FLAG_DEBUGGABLE, but explicit false guarantees
+    // no USB/ADB attacker can read localStorage tokens regardless of build variant.
+    webContentsDebuggingEnabled: false,
   },
   plugins: {
     SplashScreen: {
