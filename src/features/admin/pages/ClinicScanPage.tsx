@@ -554,7 +554,9 @@ function SingleDistrictTab(
       lng: target.lng,
       radiusM: props.radiusKm * 1000,
       provinceSlug: selectedProvince.slug,
-      ...(selectedDistrict ? { districtSlug: selectedDistrict.slug } : {}),
+      // clinic-scan-v3 districtSlug ZORUNLU (yoksa 400 invalid_district_slug). İlçe
+      // seçilmediyse 'merkez' fallback — SahaTaraPage ile aynı (il-merkez taraması).
+      districtSlug: selectedDistrict?.slug ?? 'merkez',
       types: Array.from(props.selectedTypes),
       source: props.source,
       intensity: props.intensity,
