@@ -21,6 +21,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
+  AlertTriangle,
   Banknote,
   CalendarClock,
   CalendarDays,
@@ -35,6 +36,7 @@ import {
   Plus,
   Stethoscope,
   StickyNote,
+  Truck,
   X,
 } from 'lucide-react';
 import {
@@ -55,7 +57,15 @@ import {
 
 type FilterMode = 'upcoming' | 'past' | 'all' | 'overdue';
 type ViewMode = 'agenda' | 'month';
-type ReminderType = 'revisit' | 'appointment' | 'tahsilat' | 'tanitim' | 'task' | 'note';
+type ReminderType =
+  | 'revisit'
+  | 'appointment'
+  | 'tahsilat'
+  | 'tanitim'
+  | 'task'
+  | 'note'
+  | 'malzeme_teslim'
+  | 'no_order_alert';
 
 interface ReminderRow {
   id: string;
@@ -128,6 +138,7 @@ const OUTCOME_LABEL: Record<string, string> = {
 // Manuel ekleme tip seçenekleri.
 const ADD_TYPES: { value: ReminderType; label: string }[] = [
   { value: 'appointment', label: 'Randevu' },
+  { value: 'malzeme_teslim', label: 'Malzeme Teslimi' },
   { value: 'tahsilat', label: 'Tahsilat Randevusu' },
   { value: 'tanitim', label: 'Tanıtım Ziyareti' },
   { value: 'revisit', label: 'Tekrar Ziyaret' },
@@ -182,6 +193,10 @@ function typeMeta(type: AgendaItem['type']): {
         color: 'text-emerald-600',
         dot: 'bg-emerald-500',
       };
+    case 'malzeme_teslim':
+      return { label: 'Malzeme Teslimi', Icon: Truck, color: 'text-cyan-600', dot: 'bg-cyan-500' };
+    case 'no_order_alert':
+      return { label: 'Pasif Klinik', Icon: AlertTriangle, color: 'text-red-600', dot: 'bg-red-500' };
     case 'tanitim':
       return { label: 'Tanıtım', Icon: Megaphone, color: 'text-pink-600', dot: 'bg-pink-500' };
     case 'revisit':
