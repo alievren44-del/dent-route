@@ -83,6 +83,12 @@ const TAHSILAT_OUTCOMES: OutcomeOption[] = [
   { key: 'odenmedi', label: 'Ödenmedi', color: 'red' },
 ];
 
+const MALZEME_OUTCOMES: OutcomeOption[] = [
+  { key: 'teslim_edildi', label: 'Teslim Edildi', color: 'green' },
+  { key: 'kismi_teslim', label: 'Kısmi Teslim', color: 'amber' },
+  { key: 'teslim_edilemedi', label: 'Teslim Edilemedi', color: 'red' },
+];
+
 const DEFAULT_OUTCOMES: OutcomeOption[] = [
   { key: 'met', label: 'Görüşüldü', color: 'green' },
   { key: 'callback', label: 'Tekrar Aranacak', color: 'amber' },
@@ -175,7 +181,12 @@ export function ReminderDetailSheet(props: {
   const [completionNoteText, setCompletionNoteText] = useState('');
 
   const isDone = item.status === 'done';
-  const outcomes = item.type === 'tahsilat' ? TAHSILAT_OUTCOMES : DEFAULT_OUTCOMES;
+  const outcomes =
+    item.type === 'tahsilat'
+      ? TAHSILAT_OUTCOMES
+      : item.type === 'malzeme_teslim'
+        ? MALZEME_OUTCOMES
+        : DEFAULT_OUTCOMES;
 
   const phone = clinic?.phone ? clinic.phone.replace(/[^\d+]/g, '') : null;
   const waNumber = phone ? toWaNumber(phone) : null;

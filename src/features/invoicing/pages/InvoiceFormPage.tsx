@@ -166,8 +166,11 @@ function InvoiceFormPage(): JSX.Element {
       kalemler.map((k) => ({
         ...k,
         iskonto_orani: 1 - (1 - k.iskonto_orani) * (1 - genelIskOrani),
+        // Faturasız satış = resmi fatura yok → KDV uygulanmaz; cari borcu KDV-hariç
+        // (net) tutar olur (debug_reports 2026-06-19).
+        kdv_orani: faturasiz ? 0 : k.kdv_orani,
       })),
-    [kalemler, genelIskOrani],
+    [kalemler, genelIskOrani, faturasiz],
   );
   const totals = useMemo(() => calcInvoiceTotals(adjustedKalemler), [adjustedKalemler]);
   const baseTotals = useMemo(() => calcInvoiceTotals(kalemler), [kalemler]);
@@ -219,7 +222,8 @@ function InvoiceFormPage(): JSX.Element {
         // Genel iskonto kalem-iskonto'sunun üzerine çarpımsal eklenir (DB'ye yazılan
         // efektif oran) → trigger fatura toplamını doğru hesaplar.
         iskonto_orani: 1 - (1 - k.iskonto_orani) * (1 - genelIskOrani),
-        kdv_orani: k.kdv_orani,
+        // Faturasız → KDV 0 (cari borç net/KDV-hariç). DB trigger toplamı net hesaplar.
+        kdv_orani: faturasiz ? 0 : k.kdv_orani,
       }));
 
       const { error: kErr } = await supabase.from('saha_fatura_kalemleri').insert(insertRows);
