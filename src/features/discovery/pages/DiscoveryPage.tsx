@@ -289,20 +289,23 @@ function DiscoveryPage(): JSX.Element {
     const scopedMatches = radiusFiltered.filter(matchFn);
     // Geniş arama (il/ilçe-bağımsız ad araması) sonuçlarını ekle → kayıtlı ama
     // başka ilçedeki klinikler (ZDK=mamak vb.) de bulunur. dedup + mesafe sırala.
-    const globalCandidates: DiscoveryCandidate[] = (globalSearchData ?? []).map((r) => ({
-      source: 'google_places',
-      externalId: r.google_place_id,
-      // Carry saha_clinics.id so auto-create works for globally-searched clinics too.
-      sahaClinicId: r.id,
-      name: r.name,
-      lat: r.lat,
-      lng: r.lng,
-      address: r.address ?? undefined,
-      phone: r.phone ?? undefined,
-      rating: r.rating ?? undefined,
-      types: r.types,
-      user_ratings_total: r.user_ratings_total,
-    } as DiscoveryCandidate));
+    const globalCandidates: DiscoveryCandidate[] = (globalSearchData ?? []).map(
+      (r) =>
+        ({
+          source: 'google_places',
+          externalId: r.google_place_id,
+          // Carry saha_clinics.id so auto-create works for globally-searched clinics too.
+          sahaClinicId: r.id,
+          name: r.name,
+          lat: r.lat,
+          lng: r.lng,
+          address: r.address ?? undefined,
+          phone: r.phone ?? undefined,
+          rating: r.rating ?? undefined,
+          types: r.types,
+          user_ratings_total: r.user_ratings_total,
+        }) as DiscoveryCandidate,
+    );
     const merged = dedupCandidates([...scopedMatches, ...globalCandidates]);
     merged.sort(
       (a, b) =>

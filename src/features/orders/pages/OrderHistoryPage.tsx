@@ -195,7 +195,16 @@ function OrderHistoryPage(): JSX.Element {
       const { data, error } = await supabase
         .from('profiles')
         .select('id, ad_soyad, email, role')
-        .in('role', ['rep', 'REP', 'sales_rep', 'SALES_REP', 'manager', 'MANAGER', 'admin', 'ADMIN'])
+        .in('role', [
+          'rep',
+          'REP',
+          'sales_rep',
+          'SALES_REP',
+          'manager',
+          'MANAGER',
+          'admin',
+          'ADMIN',
+        ])
         .order('ad_soyad');
       if (error) return [];
       return (data ?? []).map(

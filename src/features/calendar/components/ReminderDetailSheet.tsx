@@ -30,7 +30,16 @@ import type { ReminderAttachment } from '@lib/reminderAttachments';
 export interface ReminderDetailItem {
   id: string;
   kind: 'reminder' | 'visit';
-  type: 'revisit' | 'appointment' | 'tahsilat' | 'tanitim' | 'task' | 'note' | 'visit';
+  type:
+    | 'revisit'
+    | 'appointment'
+    | 'tahsilat'
+    | 'tanitim'
+    | 'task'
+    | 'note'
+    | 'malzeme_teslim'
+    | 'no_order_alert'
+    | 'visit';
   title: string;
   note: string | null;
   at: string; // ISO
@@ -58,6 +67,8 @@ interface OutcomeOption {
 
 const TYPE_LABELS: Record<ReminderDetailItem['type'], string> = {
   appointment: 'Randevu',
+  malzeme_teslim: 'Malzeme Teslimi',
+  no_order_alert: 'Pasif Klinik',
   tahsilat: 'Tahsilat',
   tanitim: 'Tanıtım',
   revisit: 'Tekrar Ziyaret',
