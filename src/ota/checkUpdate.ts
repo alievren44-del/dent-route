@@ -13,6 +13,31 @@ import { Capacitor } from '@capacitor/core';
 const SB = 'https://rranpzicmhgfupgabgbi.supabase.co';
 const manifestUrl = (app: string) => `${SB}/storage/v1/object/public/ota/${app}/latest.json`;
 
+/**
+ * Yeni capgo bundle'ına geçmeden ÖNCE service-worker + workbox cache'lerini temizle.
+ *
+ * Sorun: capgo yeni web-bundle'ı diske yazıp set()+reload yapsa bile, ESKİ service
+ * worker kayıtlı kalıyor; workbox-precache (eski index.html + asset hash'leri) ve
+ * navigation-cache reload'da bayat shell'i serve ediyor → yeni sürüm cihazda hiç
+ * görünmüyor. Bundle değişiminde SW'yi kaldırıp tüm cache'leri silersek, set()
+ * sonrası reload yeni bundle'ı capgo yerel dosyalarından taze yükler; yeni bundle
+ * SW'yi yeniden kaydeder. (Beta dersi 2026-06-19: OTA çıktı ama cihazda eski UI.)
+ */
+async function clearStaleShellCaches(): Promise<void> {
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister().catch(() => false)));
+    }
+    if (typeof caches !== 'undefined') {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k).catch(() => false)));
+    }
+  } catch {
+    /* best-effort — temizlenemezse set() yine de devam eder */
+  }
+}
+
 export async function otaCheck(app: 'parla' | 'nav'): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   try {
@@ -30,6 +55,8 @@ export async function otaCheck(app: 'parla' | 'nav'): Promise<void> {
     if (m.version === curVer) return; // zaten güncel
 
     const b = await CapacitorUpdater.download({ url: m.url, version: m.version });
+    // Bayat SW/precache yeni bundle'ı maskelemesin → set() reload'undan önce temizle.
+    await clearStaleShellCaches();
     await CapacitorUpdater.set({ id: b.id }); // yeni bundle'a geç (reload)
   } catch (e) {
     // OTA best-effort — hata olsa builtin bundle ile devam
