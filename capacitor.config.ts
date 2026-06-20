@@ -23,10 +23,10 @@ const config: CapacitorConfig = {
     backgroundColor: '#1F4E78',
     allowMixedContent: false,
     captureInput: true,
-    // Security: never allow remote WebView debugging in production builds.
-    // Capacitor defaults to FLAG_DEBUGGABLE, but explicit false guarantees
-    // no USB/ADB attacker can read localStorage tokens regardless of build variant.
-    webContentsDebuggingEnabled: false,
+    // Security: normalde production'da remote WebView debugging KAPALI olmalı (DEVICE-001).
+    // GEÇİCİ (2026-06-21): saha-test/debug için açıldı — adb-CDP ile cihaz-testi yapılabilsin.
+    // ⚠️ TEST DÖNEMİ BİTİNCE false'a geri al (USB/ADB ile localStorage-token okunabilir).
+    webContentsDebuggingEnabled: true,
   },
   plugins: {
     SplashScreen: {
