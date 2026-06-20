@@ -110,6 +110,10 @@ export default function UsersPage(): JSX.Element {
   const usersQuery = useQuery({
     queryKey: ['admin', 'users'],
     queryFn: fetchUsers,
+    // Rol/onay değişikliği sonrası bayat persisted-cache "eski rol" göstermesin
+    // (kullanıcı admin yaptı ama liste hâlâ saha rep gösteriyordu). Her mount'ta taze çek.
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const changeRole = useMutation({
