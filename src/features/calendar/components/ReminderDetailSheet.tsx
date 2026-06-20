@@ -20,6 +20,7 @@ import {
   CalendarPlus,
   Link2,
   CornerDownRight,
+  Trash2,
 } from 'lucide-react';
 import type { ReminderAttachment } from '@lib/reminderAttachments';
 
@@ -161,6 +162,7 @@ export function ReminderDetailSheet(props: {
   onReopen?: (id: string) => void;
   onCreateFollowUp?: (item: ReminderDetailItem) => void;
   onLinkClinic?: () => void;
+  onDelete?: (id: string) => void;
 }): JSX.Element {
   const {
     item,
@@ -174,11 +176,13 @@ export function ReminderDetailSheet(props: {
     onReopen,
     onCreateFollowUp,
     onLinkClinic,
+    onDelete,
   } = props;
 
   const [completionOpen, setCompletionOpen] = useState(false);
   const [selectedOutcome, setSelectedOutcome] = useState<string | null>(null);
   const [completionNoteText, setCompletionNoteText] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const isDone = item.status === 'done';
   const outcomes =
@@ -433,6 +437,42 @@ export function ReminderDetailSheet(props: {
             <CheckCircle2 className="h-4 w-4" />
             Tamamla
           </button>
+        )}
+
+        {/* ---- Sil (yalnız reminder; admin'e bildirim DB-trigger ile düşer) ---- */}
+        {onDelete && item.kind === 'reminder' && (
+          <div className="mt-4 border-t border-border pt-3">
+            {confirmDelete ? (
+              <div className="space-y-2">
+                <p className="text-sm text-red-600">Bu randevu/kayıt kalıcı olarak silinsin mi?</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    className="flex-1 rounded-lg border border-border bg-background py-2 text-sm hover:bg-muted"
+                  >
+                    Vazgeç
+                  </button>
+                  <button
+                    onClick={() => {
+                      onDelete(item.id);
+                      onClose();
+                    }}
+                    className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-medium text-white hover:bg-red-700"
+                  >
+                    Evet, Sil
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 py-2 text-sm font-medium text-red-600 hover:bg-red-100 dark:border-red-900/40 dark:bg-red-900/10"
+              >
+                <Trash2 className="h-4 w-4" />
+                Sil
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>
