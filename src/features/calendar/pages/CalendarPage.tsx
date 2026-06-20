@@ -704,6 +704,19 @@ function CalendarPage(): JSX.Element {
     void syncReminderNotifications();
   }
 
+  // Randevu/reminder sil (RLS: rep-kendi VEYA admin). Admin'e bildirim DB-trigger ile.
+  async function deleteReminder(id: string): Promise<void> {
+    const sb = getSupabaseClient();
+    const { error } = await sb.from('saha_reminders').delete().eq('id', id);
+    if (error) {
+      toast.error('Silinemedi: ' + (error.message || ''));
+      return;
+    }
+    toast.success('Silindi');
+    void queryClient.invalidateQueries({ queryKey: ['calendar'] });
+    void queryClient.invalidateQueries({ queryKey: ['calendar-clinic-names'] });
+  }
+
   const loading = dataQuery.isLoading || !selfId;
   const todayKey = dayKeyOf(new Date());
 
@@ -1125,6 +1138,10 @@ function CalendarPage(): JSX.Element {
           }}
           onReopen={(id) => {
             void reopenReminder(id);
+            setSelectedItem(null);
+          }}
+          onDelete={(id) => {
+            void deleteReminder(id);
             setSelectedItem(null);
           }}
           onCreateFollowUp={(it) => {
