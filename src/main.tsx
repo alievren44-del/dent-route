@@ -1,6 +1,8 @@
 // EN ÖNCE: SSO hand-off hash'ini React/router mount etmeden yakala (redirect silmesin).
 import '@core/auth/ssoCapture';
 import '@/lib/debugLog';
+import { Capacitor } from '@capacitor/core';
+import { StatusBar, Style } from '@capacitor/status-bar';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
@@ -19,6 +21,15 @@ import './styles/globals.css';
 // 1. Config + branding
 const config = loadSahaConfig();
 applyBranding(config.branding);
+
+// 1b. Native statüs çubuğu bootstrap — yalnızca Capacitor native platformda (web build etkilenmez).
+// Android 15 edge-to-edge: statik capacitor.config.ts StatusBar.backgroundColor güvenilmez;
+// runtime setBackgroundColor + setOverlaysWebView zorunlu. Hatalar görmezden gelinir (eklenti yoksa).
+if (Capacitor.isNativePlatform()) {
+  StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
+  StatusBar.setBackgroundColor({ color: '#1F4E78' }).catch(() => {});
+  StatusBar.setStyle({ style: Style.Dark }).catch(() => {}); // Style.Dark = açık/beyaz ikonlar, koyu zemin için
+}
 
 // 2. Query client + localStorage persistence (offline-first için)
 

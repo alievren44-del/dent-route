@@ -14,6 +14,7 @@ import {
   Phone,
   MessageCircle,
   Clock,
+  Pencil,
   RotateCcw,
   MapPin,
   CheckCircle2,
@@ -162,6 +163,7 @@ export function ReminderDetailSheet(props: {
   onReopen?: (id: string) => void;
   onCreateFollowUp?: (item: ReminderDetailItem) => void;
   onLinkClinic?: () => void;
+  onEdit?: (item: ReminderDetailItem) => void;
   onDelete?: (id: string) => void;
 }): JSX.Element {
   const {
@@ -176,6 +178,7 @@ export function ReminderDetailSheet(props: {
     onReopen,
     onCreateFollowUp,
     onLinkClinic,
+    onEdit,
     onDelete,
   } = props;
 
@@ -342,6 +345,15 @@ export function ReminderDetailSheet(props: {
               Tekrar Randevu
             </button>
           )}
+          {onEdit && item.kind === 'reminder' && (
+            <button
+              onClick={() => onEdit(item)}
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-sm hover:bg-muted"
+            >
+              <Pencil className="h-4 w-4" />
+              Düzenle
+            </button>
+          )}
           {!item.accountId && onLinkClinic && (
             <button
               onClick={onLinkClinic}
@@ -365,7 +377,18 @@ export function ReminderDetailSheet(props: {
             </div>
             {item.outcome && (
               <p className="text-sm">
-                Sonuç: <span className="font-medium">{outcomeLabel(outcomes, item.outcome)}</span>
+                Sonuç:{' '}
+                <span
+                  className={`font-medium ${
+                    outcomes.find((o) => o.key === item.outcome)?.color === 'red'
+                      ? 'text-red-600'
+                      : outcomes.find((o) => o.key === item.outcome)?.color === 'green'
+                        ? 'text-green-600'
+                        : 'text-foreground'
+                  }`}
+                >
+                  {outcomeLabel(outcomes, item.outcome)}
+                </span>
               </p>
             )}
             {item.completionNote && (
