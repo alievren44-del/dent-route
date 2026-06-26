@@ -139,16 +139,47 @@ async function markUploaded(id: string): Promise<void> {
 }
 
 // ── Supabase upload (best-effort) ────────────────────────────────────────────
-// Screenshot base64 olarak tabloya yazılır (CapacitorHttp binary-upload'ı bozduğu için
-// Storage yerine JSON insert — robust). Admin MCP ile okuyup decode eder.
+// Screenshot artık DB'ye base64 yazılmaz (DB bloat + egress). Edge Function
+// 'debug-report-create' JSON alır (binary DEĞİL → CapacitorHttp-safe), b64'ü server-side
+// decode edip 'debug-reports' Storage bucket'ına gerçek JPEG yükler + LEAN satır insert eder
+// (screenshot_path). EF erişilemezse eski b64-insert'e düşülür (görsel kaybolmasın).
 interface SupabaseLike {
   from(t: string): { insert(row: unknown): Promise<{ error: unknown }> };
+  functions?: {
+    invoke(name: string, opts: { body: unknown }): Promise<{ data: unknown; error: unknown }>;
+  };
 }
 export async function uploadSupabase(
   supabase: SupabaseLike,
   report: FeedbackReport,
   shotB64: string | null,
 ): Promise<boolean> {
+  // 1) Tercih: Edge Function (DB-lean, görsel Storage'a)
+  try {
+    if (supabase.functions?.invoke) {
+      const { data, error } = await supabase.functions.invoke('debug-report-create', {
+        body: {
+          app: report.app,
+          description: report.description,
+          route: report.route,
+          app_version: report.appVersion,
+          user_id: report.userId || null,
+          user_role: report.userRole || null,
+          device: report.device,
+          online: report.online,
+          breadcrumbs: report.breadcrumbs,
+          shot_b64: shotB64 || null,
+        },
+      });
+      if (!error && (data as { ok?: boolean } | null)?.ok) {
+        await markUploaded(report.id);
+        return true;
+      }
+    }
+  } catch {
+    /* EF erişilemedi → fallback */
+  }
+  // 2) Fallback: eski b64-insert (EF yoksa/hata → görsel kaybolmasın)
   try {
     const { error } = await supabase.from('debug_reports').insert({
       app: report.app,
