@@ -291,7 +291,16 @@ function CalendarPage(): JSX.Element {
         .select('id, ad_soyad, email, role')
         // Admin de saha-rep olabilir (ör. Eda Elmas = sahibi+plasiyer) → plasiyer
         // takviminde görünmeli. (debug_reports 2026-06-27: "eda elmas plasiyer'de yok".)
-        .in('role', ['REP', 'SALES_REP', 'sales_rep', 'rep', 'MANAGER', 'manager', 'ADMIN', 'admin']);
+        .in('role', [
+          'REP',
+          'SALES_REP',
+          'sales_rep',
+          'rep',
+          'MANAGER',
+          'manager',
+          'ADMIN',
+          'admin',
+        ]);
       if (error) throw error;
       return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
         id: String(r.id),
@@ -1041,44 +1050,45 @@ function CalendarPage(): JSX.Element {
           </div>
 
           {/* SC-2 — Klinikler (takvimdeki kalemlerde görünmeyenler) */}
-          {searchTerm.trim().length >= 2 && (() => {
-            const extraClinics = (clinicSearchQuery.data ?? []).filter(
-              (c) => !filteredItems.some((it) => it.accountId === c.id),
-            );
-            if (extraClinics.length === 0) return null;
-            return (
-              <div className="space-y-1.5">
-                <p className="text-xs font-medium text-muted-foreground px-1">Klinikler</p>
-                <ul className="space-y-1">
-                  {extraClinics.map((c) => (
-                    <li
-                      key={c.id}
-                      className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2.5 text-sm"
-                    >
-                      <span className="truncate">{c.name}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setFollowUpInit({
-                            type: 'appointment',
-                            title: '',
-                            note: '',
-                            clinic: { id: c.id, name: c.name },
-                            recurrence: 'none',
-                            sourceId: null,
-                          });
-                          setShowAdd(true);
-                        }}
-                        className="ml-3 shrink-0 text-xs text-primary hover:underline"
+          {searchTerm.trim().length >= 2 &&
+            (() => {
+              const extraClinics = (clinicSearchQuery.data ?? []).filter(
+                (c) => !filteredItems.some((it) => it.accountId === c.id),
+              );
+              if (extraClinics.length === 0) return null;
+              return (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground px-1">Klinikler</p>
+                  <ul className="space-y-1">
+                    {extraClinics.map((c) => (
+                      <li
+                        key={c.id}
+                        className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2.5 text-sm"
                       >
-                        Randevu ekle
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })()}
+                        <span className="truncate">{c.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFollowUpInit({
+                              type: 'appointment',
+                              title: '',
+                              note: '',
+                              clinic: { id: c.id, name: c.name },
+                              recurrence: 'none',
+                              sourceId: null,
+                            });
+                            setShowAdd(true);
+                          }}
+                          className="ml-3 shrink-0 text-xs text-primary hover:underline"
+                        >
+                          Randevu ekle
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })()}
         </>
       )}
 
@@ -1997,68 +2007,70 @@ function AddReminderModal({
           </div>
 
           {/* Foto / ses ekleri — düzenleme modunda gizlenir (ek yükleme desteklenmiyor) */}
-          {!isEdit && <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">Ekler (opsiyonel)</p>
-            <div className="flex flex-wrap gap-2">
-              {/* Gizli dosya input'u */}
-              <input
-                ref={photoInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={handlePhotoSelect}
-              />
-              <button
-                type="button"
-                onClick={() => photoInputRef.current?.click()}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-medium hover:bg-muted"
-              >
-                Foto ekle
-              </button>
-              {recording ? (
+          {!isEdit && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">Ekler (opsiyonel)</p>
+              <div className="flex flex-wrap gap-2">
+                {/* Gizli dosya input'u */}
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={handlePhotoSelect}
+                />
                 <button
                   type="button"
-                  onClick={stopRecording}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-3 text-xs font-medium text-red-700 hover:bg-red-100"
-                >
-                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-red-600" />
-                  Kaydediliyor — Durdur
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => void startRecording()}
+                  onClick={() => photoInputRef.current?.click()}
                   className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-medium hover:bg-muted"
                 >
-                  Ses kaydet
+                  Foto ekle
                 </button>
+                {recording ? (
+                  <button
+                    type="button"
+                    onClick={stopRecording}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-3 text-xs font-medium text-red-700 hover:bg-red-100"
+                  >
+                    <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-red-600" />
+                    Kaydediliyor — Durdur
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void startRecording()}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-medium hover:bg-muted"
+                  >
+                    Ses kaydet
+                  </button>
+                )}
+              </div>
+
+              {attachments.length > 0 && (
+                <ul className="space-y-1">
+                  {attachments.map((a, idx) => (
+                    <li
+                      key={idx}
+                      className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-1.5 text-xs"
+                    >
+                      <span className="text-muted-foreground">
+                        {a.kind === 'photo' ? 'Fotoğraf' : 'Ses kaydı'} #{idx + 1}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(idx)}
+                        className="ml-2 text-muted-foreground hover:text-destructive"
+                        aria-label="Eki kaldır"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
-
-            {attachments.length > 0 && (
-              <ul className="space-y-1">
-                {attachments.map((a, idx) => (
-                  <li
-                    key={idx}
-                    className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-1.5 text-xs"
-                  >
-                    <span className="text-muted-foreground">
-                      {a.kind === 'photo' ? 'Fotoğraf' : 'Ses kaydı'} #{idx + 1}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeAttachment(idx)}
-                      className="ml-2 text-muted-foreground hover:text-destructive"
-                      aria-label="Eki kaldır"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>}
+          )}
 
           <button
             type="button"

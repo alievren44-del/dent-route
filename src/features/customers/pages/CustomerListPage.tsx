@@ -927,8 +927,7 @@ function CustomerListPage(): JSX.Element {
             <div key={r.id} className="relative">
               {r.potential !== null && (
                 <div className="mb-1 px-1 text-[11px] text-muted-foreground">
-                  Potansiyel:{' '}
-                  <span className="font-semibold text-primary">{r.potential}/10</span>
+                  Potansiyel: <span className="font-semibold text-primary">{r.potential}/10</span>
                 </div>
               )}
               {multiSelectMode && (

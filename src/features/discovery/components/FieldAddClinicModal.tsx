@@ -208,8 +208,7 @@ export default function FieldAddClinicModal({
           {/* Telefon */}
           <div>
             <label htmlFor="fac-phone" className="mb-1 block text-xs font-medium text-slate-600">
-              Telefon{' '}
-              <span className="font-normal text-slate-400">(isteğe bağlı)</span>
+              Telefon <span className="font-normal text-slate-400">(isteğe bağlı)</span>
             </label>
             <div className="relative">
               <Phone

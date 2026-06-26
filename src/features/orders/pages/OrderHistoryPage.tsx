@@ -726,49 +726,50 @@ function OrderHistoryPage(): JSX.Element {
               )}
 
             {/* Admin-only soft-delete: yalnız finansal-olmayan statüler */}
-            {isPrivileged && (() => {
-              const dStatus = String(detailFor.status ?? '').toLowerCase();
-              const canDelete = (NON_FINANCIAL_STATUSES as readonly string[]).includes(dStatus);
-              return canDelete ? (
-                confirmDeleteId === detailFor.id ? (
-                  <div className="mt-2 p-3 rounded-lg border border-red-200 bg-red-50 space-y-2">
-                    <p className="text-xs text-red-700 font-medium text-center">
-                      Bu sipariş gizlenecek. Emin misiniz?
-                    </p>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDeleteId(null)}
-                        className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-sm font-medium min-h-tap-min"
-                      >
-                        Hayır
-                      </button>
-                      <button
-                        type="button"
-                        disabled={deletingId === detailFor.id}
-                        onClick={() => void deleteOrder(detailFor)}
-                        className="flex-1 px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-medium min-h-tap-min disabled:opacity-50"
-                      >
-                        {deletingId === detailFor.id ? 'Siliniyor…' : 'Evet, Sil'}
-                      </button>
+            {isPrivileged &&
+              (() => {
+                const dStatus = String(detailFor.status ?? '').toLowerCase();
+                const canDelete = (NON_FINANCIAL_STATUSES as readonly string[]).includes(dStatus);
+                return canDelete ? (
+                  confirmDeleteId === detailFor.id ? (
+                    <div className="mt-2 p-3 rounded-lg border border-red-200 bg-red-50 space-y-2">
+                      <p className="text-xs text-red-700 font-medium text-center">
+                        Bu sipariş gizlenecek. Emin misiniz?
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-sm font-medium min-h-tap-min"
+                        >
+                          Hayır
+                        </button>
+                        <button
+                          type="button"
+                          disabled={deletingId === detailFor.id}
+                          onClick={() => void deleteOrder(detailFor)}
+                          className="flex-1 px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-medium min-h-tap-min disabled:opacity-50"
+                        >
+                          {deletingId === detailFor.id ? 'Siliniyor…' : 'Evet, Sil'}
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteId(detailFor.id)}
+                      className="w-full mt-2 px-3 py-2.5 rounded-lg border border-red-300 text-red-600 text-sm font-medium min-h-tap-min hover:bg-red-50 flex items-center justify-center gap-2"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Siparişi Sil
+                    </button>
+                  )
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDeleteId(detailFor.id)}
-                    className="w-full mt-2 px-3 py-2.5 rounded-lg border border-red-300 text-red-600 text-sm font-medium min-h-tap-min hover:bg-red-50 flex items-center justify-center gap-2"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Siparişi Sil
-                  </button>
-                )
-              ) : (
-                <p className="mt-2 text-center text-[11px] text-muted-foreground px-2">
-                  Finansal kayıt silinemez (onaylı/faturalı sipariş).
-                </p>
-              );
-            })()}
+                  <p className="mt-2 text-center text-[11px] text-muted-foreground px-2">
+                    Finansal kayıt silinemez (onaylı/faturalı sipariş).
+                  </p>
+                );
+              })()}
 
             <button
               type="button"

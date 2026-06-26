@@ -10,7 +10,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { MapPin, Loader2, AlertCircle, Search, Crosshair, ListFilter, PlusCircle } from 'lucide-react';
+import {
+  MapPin,
+  Loader2,
+  AlertCircle,
+  Search,
+  Crosshair,
+  ListFilter,
+  PlusCircle,
+} from 'lucide-react';
 import { useGeolocation } from '@features/map/hooks/useGeolocation';
 import {
   dedupCandidates,
@@ -262,18 +270,20 @@ function DiscoveryPage(): JSX.Element {
       if (error) throw error;
       // RPC does not return google_place_id or types — fill with nulls so the
       // existing filteredData mapper still compiles and works correctly.
-      return ((rows ?? []) as Array<{
-        id: string;
-        name: string;
-        lat: number;
-        lng: number;
-        address: string | null;
-        phone: string | null;
-        rating: number | null;
-        user_ratings_total: number | null;
-        province_slug: string | null;
-        district_slug: string | null;
-      }>).map((r) => ({
+      return (
+        (rows ?? []) as Array<{
+          id: string;
+          name: string;
+          lat: number;
+          lng: number;
+          address: string | null;
+          phone: string | null;
+          rating: number | null;
+          user_ratings_total: number | null;
+          province_slug: string | null;
+          district_slug: string | null;
+        }>
+      ).map((r) => ({
         ...r,
         google_place_id: null,
         types: [] as string[],
@@ -567,7 +577,9 @@ function DiscoveryPage(): JSX.Element {
                 phone={c.phone}
                 lat={c.lat}
                 lng={c.lng}
-                distanceM={origin ? haversineMeters(origin.lat, origin.lng, c.lat, c.lng) : undefined}
+                distanceM={
+                  origin ? haversineMeters(origin.lat, origin.lng, c.lat, c.lng) : undefined
+                }
                 rating={c.rating}
                 userRatingsTotal={reviewsTotal}
                 isExistingCustomer={isExisting}

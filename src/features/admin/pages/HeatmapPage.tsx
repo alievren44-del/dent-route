@@ -105,9 +105,7 @@ export default function HeatmapPage() {
           // saha_clinics ile PostgREST FK ilişkisi YOK → embed çalışmaz. Ayrı sorgu + JS map.
           const accountIds = Array.from(
             new Set(
-              [...visits, ...reminders]
-                .map((r) => r.account_id)
-                .filter((id): id is string => !!id),
+              [...visits, ...reminders].map((r) => r.account_id).filter((id): id is string => !!id),
             ),
           );
           const clinicMap = new Map<string, ClinicInfo>();
@@ -339,9 +337,7 @@ export default function HeatmapPage() {
               ? 'Yükleniyor...'
               : `${pointCount.toLocaleString('tr-TR')} aktivite noktası`}
           </p>
-          {capHit && (
-            <p className="text-xs text-amber-600">Son 10.000 kayıt gösteriliyor</p>
-          )}
+          {capHit && <p className="text-xs text-amber-600">Son 10.000 kayıt gösteriliyor</p>}
         </div>
       </div>
 

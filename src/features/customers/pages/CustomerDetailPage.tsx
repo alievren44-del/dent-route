@@ -11,7 +11,15 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Phone, MessageCircle, ShoppingCart, ArrowLeft, CalendarPlus, Receipt, Navigation } from 'lucide-react';
+import {
+  Phone,
+  MessageCircle,
+  ShoppingCart,
+  ArrowLeft,
+  CalendarPlus,
+  Receipt,
+  Navigation,
+} from 'lucide-react';
 import { getSupabaseClient, getTypedClient } from '@lib/supabase';
 import { googleMapsDirectionsUrl } from '@lib/maps';
 import { useAuthStore } from '@core/auth/authStore';
@@ -365,9 +373,12 @@ function CustomerDetailPage(): JSX.Element {
               void (async () => {
                 try {
                   const sb = getTypedClient();
-                  const { data: cariId, error } = await sb.rpc('saha_get_or_create_cari_for_clinic', {
-                    p_clinic_id: id,
-                  });
+                  const { data: cariId, error } = await sb.rpc(
+                    'saha_get_or_create_cari_for_clinic',
+                    {
+                      p_clinic_id: id,
+                    },
+                  );
                   if (error || !cariId) {
                     toast.error('Cari çözülemedi: ' + (error?.message ?? 'bilinmeyen hata'));
                     return;
