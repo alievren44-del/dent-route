@@ -35,6 +35,17 @@ const ROLE_OPTIONS: { value: Role; label: string }[] = [
   { value: 'USER', label: 'Kullanıcı' },
 ];
 
+// Canonical lowercase values written to profiles.role (web vocabulary). NAV previously
+// wrote UPPERCASE ('ADMIN'…), which diverged from the web's lowercase canonical and caused
+// case-sensitivity bugs. All readers are case-insensitive, but we now write canonical to
+// stop the casing drift at the source. REP → 'sales_rep' (= web canonRole expectation).
+const ROLE_DB_VALUE: Record<Role, string> = {
+  ADMIN: 'admin',
+  MANAGER: 'manager',
+  REP: 'sales_rep',
+  USER: 'user',
+};
+
 interface ProfileRow {
   id: string;
   email: string | null;
@@ -121,7 +132,7 @@ export default function UsersPage(): JSX.Element {
       const supabase = getTypedClient();
       const { error } = await supabase
         .from('profiles')
-        .update({ role: input.role })
+        .update({ role: ROLE_DB_VALUE[input.role] })
         .eq('id', input.userId);
       if (error) throw error;
       // Audit log (best effort — RLS engellerse sessiz geç)
