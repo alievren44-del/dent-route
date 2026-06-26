@@ -114,6 +114,7 @@ function SalesHubPage(): JSX.Element {
         let q = supabase
           .from('orders')
           .select(selectStr)
+          .is('deleted_at', null)
           .gte('created_at', monthStartISO())
           .order('created_at', { ascending: false })
           .limit(50);
@@ -180,10 +181,11 @@ function SalesHubPage(): JSX.Element {
               .select('tutar')
               .eq('created_by', userId!)
               .gte('tarih', monthStart),
-            // Bugünkü sipariş adedi
+            // Bugünkü sipariş adedi (soft-deleted hariç)
             supabase
               .from('orders')
               .select('id', { count: 'exact', head: true })
+              .is('deleted_at', null)
               .eq('sales_rep_id', userId!)
               .gte('created_at', todayISO),
           ]);

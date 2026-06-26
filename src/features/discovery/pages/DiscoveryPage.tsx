@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { MapPin, Loader2, AlertCircle, Search, Crosshair, ListFilter } from 'lucide-react';
+import { MapPin, Loader2, AlertCircle, Search, Crosshair, ListFilter, PlusCircle } from 'lucide-react';
 import { useGeolocation } from '@features/map/hooks/useGeolocation';
 import {
   dedupCandidates,
@@ -28,6 +28,7 @@ import {
   type BasketStop,
   type BasketStopSource,
 } from '@features/routes/store/routeBasketStore';
+import FieldAddClinicModal from '@features/discovery/components/FieldAddClinicModal';
 
 interface Origin {
   lat: number;
@@ -118,6 +119,7 @@ function DiscoveryPage(): JSX.Element {
   const [districtSlug, setDistrictSlug] = useState<string>('');
   const basketAdd = useRouteBasket((s) => s.add);
   const basketItems = useRouteBasket((s) => s.items);
+  const [fieldModalOpen, setFieldModalOpen] = useState(false);
 
   // Manuel origin: seçili ilçe centroid'i (GPS yoksa / planlama için)
   const manualOrigin = useMemo<Origin | null>(() => {
@@ -355,21 +357,34 @@ function DiscoveryPage(): JSX.Element {
           <Search className="h-6 w-6" aria-hidden="true" />
           {vertical.labels.discovery}
         </h1>
-        <button
-          type="button"
-          onClick={() => {
-            void refetch();
-          }}
-          disabled={!origin || showSpinner}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 h-10 text-sm font-medium hover:bg-muted disabled:opacity-50"
-        >
-          {showSpinner ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <Search className="h-4 w-4" aria-hidden="true" />
+        <div className="flex items-center gap-2">
+          {originMode === 'gps' && !!position && (
+            <button
+              type="button"
+              onClick={() => setFieldModalOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-3 h-10 text-sm font-medium text-emerald-700 hover:bg-emerald-100"
+              title="GPS konumuna yeni klinik ekle"
+            >
+              <PlusCircle className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Yeni klinik</span>
+            </button>
           )}
-          Yenile
-        </button>
+          <button
+            type="button"
+            onClick={() => {
+              void refetch();
+            }}
+            disabled={!origin || showSpinner}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 h-10 text-sm font-medium hover:bg-muted disabled:opacity-50"
+          >
+            {showSpinner ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Search className="h-4 w-4" aria-hidden="true" />
+            )}
+            Yenile
+          </button>
+        </div>
       </div>
 
       {/* Origin mode: GPS konumu veya il/ilçe seçimi */}
@@ -599,7 +614,32 @@ function DiscoveryPage(): JSX.Element {
             Admin'e tarama talebinde bulun (vertical: <code>{vertical.id}</code>, konum:{' '}
             {origin.lat.toFixed(4)}, {origin.lng.toFixed(4)}, yarıçap: {radiusKm}km).
           </p>
+          {originMode === 'gps' && !!position && (
+            <button
+              type="button"
+              onClick={() => setFieldModalOpen(true)}
+              className="mx-auto mt-1 inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-4 h-10 text-sm font-medium text-emerald-700 hover:bg-emerald-100"
+            >
+              <PlusCircle className="h-4 w-4" aria-hidden="true" />
+              Bu konuma yeni klinik ekle
+            </button>
+          )}
         </div>
+      )}
+
+      {/* Saha temsilcisi mevcut GPS konumuna yeni klinik ekler */}
+      {originMode === 'gps' && !!position && (
+        <FieldAddClinicModal
+          open={fieldModalOpen}
+          onClose={() => setFieldModalOpen(false)}
+          lat={position.lat}
+          lng={position.lng}
+          verticalKey={vertical.id}
+          onCreated={(newId) => {
+            setFieldModalOpen(false);
+            navigate(`/visits/check-in/${newId}`);
+          }}
+        />
       )}
     </div>
   );

@@ -226,6 +226,8 @@ function VisitFormPage(): JSX.Element {
   const [apptTime, setApptTime] = useState<string>('');
   const [apptNote, setApptNote] = useState<string>('');
   const [processingFile, setProcessingFile] = useState<boolean>(false);
+  /** Çalışma potansiyeli: 0-10 veya null (seçilmedi). */
+  const [potential, setPotential] = useState<number | null>(null);
 
   // Initialize once when visit loads
   const initRef = useRef<string | null>(null);
@@ -385,6 +387,7 @@ function VisitFormPage(): JSX.Element {
       notes: notes.trim() || null,
       custom_fields: customPayload,
       next_visit_date: nextVisitDate || null,
+      potential: potential ?? null,
     };
 
     // Outcome-based navigation helper (aşağıda iki yerde kullanılır)
@@ -522,6 +525,24 @@ function VisitFormPage(): JSX.Element {
         .eq('id', id);
       if (updErr) throw updErr;
 
+      // Klinik potential güncelleme (latest-wins): seçildiyse yaz.
+      if (potential !== null && accountId) {
+        const { error: potErr } = await supabase
+          .from('saha_clinics')
+          .update({ potential, potential_at: new Date().toISOString() } as never)
+          .eq('id', accountId);
+        if (potErr) console.warn('Klinik potansiyel güncellenemedi:', potErr.message);
+      }
+      // İlk temas: first_contact_at null ise şimdiki zamanı yaz (coalesce — mevcut değere dokunmaz).
+      if (accountId) {
+        const { error: fcErr } = await supabase
+          .from('saha_clinics')
+          .update({ first_contact_at: new Date().toISOString() } as never)
+          .eq('id', accountId)
+          .is('first_contact_at', null);
+        if (fcErr) console.warn('first_contact_at güncellenemedi:', fcErr.message);
+      }
+
       // Takvim hatırlatmaları — tekrar ziyaret + hekim randevusu (best-effort, ziyareti bloklamaz).
       await upsertReminders();
 
@@ -649,6 +670,41 @@ function VisitFormPage(): JSX.Element {
               );
             })}
           </div>
+        </section>
+
+        {/* 2b. Çalışma Potansiyeli */}
+        <section className="space-y-2" aria-labelledby="potential-heading">
+          <div id="potential-heading" className="text-sm font-medium text-foreground">
+            Çalışma Potansiyeli (0–10){' '}
+            <span className="text-xs font-normal text-muted-foreground">(opsiyonel)</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {Array.from({ length: 11 }, (_, i) => i).map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setPotential((prev) => (prev === n ? null : n))}
+                className={`h-11 w-11 min-h-tap-min rounded-xl border text-sm font-semibold transition-colors ${
+                  potential === n
+                    ? 'bg-primary border-primary text-primary-foreground'
+                    : 'bg-background border-border text-foreground hover:bg-muted'
+                }`}
+                aria-pressed={potential === n}
+                aria-label={`Potansiyel ${n}`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          {potential !== null && (
+            <button
+              type="button"
+              onClick={() => setPotential(null)}
+              className="text-xs text-muted-foreground underline"
+            >
+              Temizle
+            </button>
+          )}
         </section>
 
         {/* 3. Notes */}

@@ -16,9 +16,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
-import { ArrowLeft, Calendar, FileSpreadsheet, Filter, Search, X } from 'lucide-react';
+import { ArrowLeft, Calendar, FileSpreadsheet, Filter, Search, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { getTypedClient } from '@lib/supabase';
@@ -54,6 +54,18 @@ const STATUS_STYLES: Record<string, string> = {
 const STATUS_LABELS: Record<string, string> = Object.fromEntries(
   STATUS_OPTIONS.map((s) => [s.value, s.label]),
 );
+
+// Yalnız bu statülerdeki siparişler soft-delete edilebilir.
+// Finansal iz bırakmış (approved, invoiced, paid, shipped, delivered…) siparişlere dokunulamaz.
+const NON_FINANCIAL_STATUSES = [
+  'draft',
+  'pending',
+  'approval_pending',
+  'rejected',
+  'cancelled',
+  'failed',
+  'payment_failed',
+] as const;
 
 interface OrderHistoryRow {
   id: string;
@@ -173,6 +185,14 @@ function OrderHistoryPage(): JSX.Element {
   const [page, setPage] = useState<number>(1);
   const [showFilters, setShowFilters] = useState<boolean>(false);
   const [detailFor, setDetailFor] = useState<OrderHistoryRow | null>(null);
+  const queryClient = useQueryClient();
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Farklı bir sipariş açıldığında / modal kapandığında onay durumunu sıfırla.
+  useEffect(() => {
+    setConfirmDeleteId(null);
+  }, [detailFor]);
 
   // URL sync — customer_id ve status
   useEffect(() => {
@@ -244,6 +264,7 @@ function OrderHistoryPage(): JSX.Element {
         let q = supabase
           .from('orders')
           .select(selectStr, { count: 'exact' })
+          .is('deleted_at', null)
           .order('created_at', { ascending: false })
           .range(0, page * PAGE_SIZE - 1);
 
@@ -332,6 +353,54 @@ function OrderHistoryPage(): JSX.Element {
       }
     } finally {
       setInvoicingId(null);
+    }
+  }
+
+  // Soft-delete — yalnız admin + finansal-olmayan statüler (NON_FINANCIAL_STATUSES).
+  // Hard delete YASAK: payments / account_transactions / saha_faturalar / referral_rewards gibi
+  // bağımlı tablolar nedeniyle referans bütünlüğü bozulur.
+  async function deleteOrder(o: OrderHistoryRow): Promise<void> {
+    const status = String(o.status ?? '').toLowerCase();
+    if (!(NON_FINANCIAL_STATUSES as readonly string[]).includes(status)) {
+      toast.error('Finansal kayıt silinemez (onaylı/faturalı sipariş).');
+      setConfirmDeleteId(null);
+      return;
+    }
+    setDeletingId(o.id);
+    try {
+      const supabase = getTypedClient();
+      const { error } = await supabase
+        .from('orders')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', o.id);
+      if (error) throw error;
+
+      // Best-effort audit kaydı — admin_audit_logs typed olmayabilir, any ile güvenli geç.
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from('admin_audit_logs').insert({
+          actor_id: profile?.id ?? null,
+          action: 'delete_order',
+          target_table: 'orders',
+          target_id: o.id,
+          details: {
+            order_number: o.order_number,
+            total: o.total ?? o.total_amount,
+            status: o.status,
+          },
+        });
+      } catch {
+        // Audit başarısız olsa bile silme işlemi geçerli.
+      }
+
+      toast.success('Sipariş silindi.');
+      setDetailFor(null);
+      setConfirmDeleteId(null);
+      void queryClient.invalidateQueries({ queryKey: ['order-history'] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Sipariş silinemedi.');
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -655,6 +724,51 @@ function OrderHistoryPage(): JSX.Element {
                   {invoicingId === detailFor.id ? 'Gönderiliyor…' : 'Faturaya Gönder'}
                 </button>
               )}
+
+            {/* Admin-only soft-delete: yalnız finansal-olmayan statüler */}
+            {isPrivileged && (() => {
+              const dStatus = String(detailFor.status ?? '').toLowerCase();
+              const canDelete = (NON_FINANCIAL_STATUSES as readonly string[]).includes(dStatus);
+              return canDelete ? (
+                confirmDeleteId === detailFor.id ? (
+                  <div className="mt-2 p-3 rounded-lg border border-red-200 bg-red-50 space-y-2">
+                    <p className="text-xs text-red-700 font-medium text-center">
+                      Bu sipariş gizlenecek. Emin misiniz?
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteId(null)}
+                        className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-sm font-medium min-h-tap-min"
+                      >
+                        Hayır
+                      </button>
+                      <button
+                        type="button"
+                        disabled={deletingId === detailFor.id}
+                        onClick={() => void deleteOrder(detailFor)}
+                        className="flex-1 px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-medium min-h-tap-min disabled:opacity-50"
+                      >
+                        {deletingId === detailFor.id ? 'Siliniyor…' : 'Evet, Sil'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteId(detailFor.id)}
+                    className="w-full mt-2 px-3 py-2.5 rounded-lg border border-red-300 text-red-600 text-sm font-medium min-h-tap-min hover:bg-red-50 flex items-center justify-center gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Siparişi Sil
+                  </button>
+                )
+              ) : (
+                <p className="mt-2 text-center text-[11px] text-muted-foreground px-2">
+                  Finansal kayıt silinemez (onaylı/faturalı sipariş).
+                </p>
+              );
+            })()}
 
             <button
               type="button"

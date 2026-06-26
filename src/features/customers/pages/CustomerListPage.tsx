@@ -51,7 +51,7 @@ import { exportToXlsx, type AccountRow as ExportRow } from '@features/customers/
 // Built-in CRM adapter — module scope (OrderFormPage/DiscoveryPage ile aynı desen).
 const adapter = new SupabaseCRMAdapter();
 
-type SortKey = 'name' | 'distance' | 'last_visit' | 'reviews' | 'balance';
+type SortKey = 'name' | 'distance' | 'last_visit' | 'reviews' | 'balance' | 'potential';
 
 interface VisitRow {
   account_id: string;
@@ -76,6 +76,7 @@ interface CustomerListRow {
   balance: number | null;
   lastVisitAt: string | null;
   lastVisitOutcome: string | null;
+  potential: number | null;
   /** Rep'in ziyaret/randevu/not bıraktığı kendi kliniği mi (üstte sabitlenir). */
   isMine?: boolean;
 }
@@ -124,7 +125,7 @@ function useDebounced<T>(value: T, delayMs: number): T {
 }
 
 const CLINIC_COLS =
-  'id, name, lat, lng, address, phone, rating, user_ratings_total, types, province_slug, district_slug, raw_payload';
+  'id, name, lat, lng, address, phone, rating, user_ratings_total, types, province_slug, district_slug, raw_payload, potential';
 
 type ClinicSelectRow = {
   id: string;
@@ -139,6 +140,7 @@ type ClinicSelectRow = {
   province_slug: string | null;
   district_slug: string | null;
   raw_payload?: Record<string, unknown> | null;
+  potential?: number | null;
 };
 
 function clinicRowToCustomerListRow(c: ClinicSelectRow): CustomerListRow {
@@ -173,6 +175,7 @@ function clinicRowToCustomerListRow(c: ClinicSelectRow): CustomerListRow {
     balance,
     lastVisitAt: null,
     lastVisitOutcome: null,
+    potential: typeof c.potential === 'number' ? c.potential : null,
   };
 }
 
@@ -281,6 +284,7 @@ async function fetchAccounts(
             balance: null,
             lastVisitAt: null,
             lastVisitOutcome: null,
+            potential: null,
           };
         }),
       );
@@ -321,6 +325,7 @@ async function fetchAccounts(
         user_ratings_total: number | null;
         province_slug: string | null;
         district_slug: string | null;
+        potential: number | null;
       };
       merge(
         (rpcRows as SearchClinicRow[])
@@ -338,6 +343,7 @@ async function fetchAccounts(
               province_slug: r.province_slug,
               district_slug: r.district_slug,
               raw_payload: null,
+              potential: r.potential,
             }),
           )
           .map(clinicRowToCustomerListRow),
@@ -639,6 +645,13 @@ function CustomerListPage(): JSX.Element {
           return (b.reviews ?? 0) - (a.reviews ?? 0);
         case 'balance':
           return (b.balance ?? 0) - (a.balance ?? 0);
+        case 'potential': {
+          // Yüksek potansiyel önce; null olanlar sona düşer.
+          if (a.potential === null && b.potential === null) return 0;
+          if (a.potential === null) return 1;
+          if (b.potential === null) return -1;
+          return b.potential - a.potential;
+        }
       }
     });
     // "Benim kliniklerim" (ziyaret/randevu/not) üstte sabit — 1000+ alfabetik
@@ -849,6 +862,7 @@ function CustomerListPage(): JSX.Element {
             <option value="last_visit">Son Ziyaret</option>
             <option value="reviews">Değerlendirme</option>
             <option value="balance">Bakiye</option>
+            <option value="potential">Potansiyele göre</option>
           </select>
           {sortKey === 'distance' && !position && (
             <span className="text-xs text-muted-foreground">
@@ -911,6 +925,12 @@ function CustomerListPage(): JSX.Element {
           const selected = selectedIds.has(r.id);
           return (
             <div key={r.id} className="relative">
+              {r.potential !== null && (
+                <div className="mb-1 px-1 text-[11px] text-muted-foreground">
+                  Potansiyel:{' '}
+                  <span className="font-semibold text-primary">{r.potential}/10</span>
+                </div>
+              )}
               {multiSelectMode && (
                 <label className="absolute left-2 top-2 z-10 flex h-7 w-7 cursor-pointer items-center justify-center rounded-md bg-background/90 shadow">
                   <input

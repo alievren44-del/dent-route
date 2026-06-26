@@ -363,15 +363,28 @@ function CalendarPage(): JSX.Element {
     queryKey: ['calendar-clinic-names', accountIds.sort().join(',')],
     enabled: accountIds.length > 0,
     staleTime: 5 * 60 * 1000,
-    queryFn: async (): Promise<Record<string, { name: string; phone: string | null }>> => {
+    queryFn: async (): Promise<
+      Record<string, { name: string; phone: string | null; lat: number | null; lng: number | null }>
+    > => {
       const typed = getTypedClient();
       const { data } = await typed
         .from('saha_clinics')
-        .select('id, name, phone')
+        .select('id, name, phone, lat, lng')
         .in('id', accountIds);
-      const map: Record<string, { name: string; phone: string | null }> = {};
-      ((data ?? []) as { id: string; name: string; phone: string | null }[]).forEach((c) => {
-        map[c.id] = { name: c.name, phone: c.phone };
+      const map: Record<
+        string,
+        { name: string; phone: string | null; lat: number | null; lng: number | null }
+      > = {};
+      (
+        (data ?? []) as {
+          id: string;
+          name: string;
+          phone: string | null;
+          lat: number | null;
+          lng: number | null;
+        }[]
+      ).forEach((c) => {
+        map[c.id] = { name: c.name, phone: c.phone, lat: c.lat, lng: c.lng };
       });
       return map;
     },
@@ -638,7 +651,12 @@ function CalendarPage(): JSX.Element {
     else toast.error(res.reason === 'full' ? 'Sepet dolu (max 12).' : 'Zaten sepette.');
   }
 
-  async function completeReminder(id: string, outcome: string, note: string): Promise<void> {
+  async function completeReminder(
+    id: string,
+    outcome: string,
+    note: string,
+    potential?: number | null,
+  ): Promise<void> {
     const sb = getSupabaseClient();
     const { error } = await sb
       .from('saha_reminders')
@@ -652,6 +670,17 @@ function CalendarPage(): JSX.Element {
     if (error) {
       toast.error('Kaydedilemedi');
       return;
+    }
+    // Potansiyel seçildiyse klinik kaydını güncelle (latest-wins; fire-and-forget).
+    if (potential != null) {
+      const sourceR = reminders.find((r) => r.id === id);
+      if (sourceR?.account_id) {
+        const typed = getTypedClient();
+        void typed
+          .from('saha_clinics')
+          .update({ potential, potential_at: new Date().toISOString() })
+          .eq('id', sourceR.account_id);
+      }
     }
     toast.success('Tamamlandı');
     // C3 — Tekrarlayan: tamamlananın recurrence'ı varsa sonraki occurrence'ı oluştur.
@@ -1221,8 +1250,8 @@ function CalendarPage(): JSX.Element {
           onAddToRoute={(aid) => {
             void addReminderToRoute(aid);
           }}
-          onComplete={(id, outcome, note) => {
-            void completeReminder(id, outcome, note);
+          onComplete={(id, outcome, note, potential) => {
+            void completeReminder(id, outcome, note, potential);
             setSelectedItem(null);
           }}
           onReopen={(id) => {

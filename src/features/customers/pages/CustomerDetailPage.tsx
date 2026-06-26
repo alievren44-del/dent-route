@@ -11,8 +11,9 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Phone, MessageCircle, ShoppingCart, ArrowLeft, CalendarPlus, Receipt } from 'lucide-react';
+import { Phone, MessageCircle, ShoppingCart, ArrowLeft, CalendarPlus, Receipt, Navigation } from 'lucide-react';
 import { getSupabaseClient, getTypedClient } from '@lib/supabase';
+import { googleMapsDirectionsUrl } from '@lib/maps';
 import { useAuthStore } from '@core/auth/authStore';
 import { usePermissionCached } from '@core/auth/usePermissions';
 
@@ -183,6 +184,40 @@ function CustomerDetailPage(): JSX.Element {
     },
   });
 
+  // Klinik koordinat + potansiyel — her iki path (profile + raw saha_clinics) için tek sorgu.
+  const { data: clinicGeo } = useQuery({
+    queryKey: ['customer-clinic-geo', id],
+    enabled: !!id,
+    // Potansiyel rozeti check-out sonrası taze görünsün (mount'ta yeniden çek).
+    staleTime: 0,
+    refetchOnMount: 'always',
+    queryFn: async () => {
+      const supabase = getTypedClient();
+      const { data } = await supabase
+        .from('saha_clinics')
+        .select('id, lat, lng, potential')
+        .eq('id', id!)
+        .maybeSingle();
+      return data ?? null;
+    },
+  });
+
+  // İlk Görüşme affordance: klinike daha önce hiç ziyaret yapılmadıysa true.
+  const { data: visitCountData } = useQuery({
+    queryKey: ['customer-visit-count', id],
+    enabled: !!id,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    queryFn: async () => {
+      const supabase = getTypedClient();
+      const { count } = await supabase
+        .from('saha_visits')
+        .select('*', { count: 'exact', head: true })
+        .eq('account_id', id!);
+      return count ?? null;
+    },
+  });
+
   const addNoteMutation = useMutation({
     mutationFn: async (body: string): Promise<void> => {
       const supabase = getTypedClient();
@@ -211,6 +246,18 @@ function CustomerDetailPage(): JSX.Element {
   const phone = customerData?.telefon ?? '';
   const customerType = customerData?.role ?? '';
 
+  // Klinik coğrafi verileri
+  const clinicLat = typeof clinicGeo?.lat === 'number' ? clinicGeo.lat : null;
+  const clinicLng = typeof clinicGeo?.lng === 'number' ? clinicGeo.lng : null;
+  const clinicPotential = clinicGeo?.potential ?? null;
+  const directionsHref =
+    clinicLat != null && clinicLng != null
+      ? googleMapsDirectionsUrl(clinicLat, clinicLng, name)
+      : null;
+
+  // İlk görüşme: saha_visits sayısı 0 ise
+  const isFirstContact = visitCountData === 0;
+
   if (!id) {
     return <div className="p-6 text-center text-muted-foreground">Müşteri ID bulunamadı.</div>;
   }
@@ -235,6 +282,11 @@ function CustomerDetailPage(): JSX.Element {
               <p className="text-xs text-muted-foreground truncate">{customerData.city}</p>
             )}
           </div>
+          {clinicPotential != null && (
+            <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700 font-medium">
+              Puan: {clinicPotential}/10
+            </span>
+          )}
           {customerType && (
             <span className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary font-medium">
               {customerType}
@@ -263,6 +315,18 @@ function CustomerDetailPage(): JSX.Element {
               </a>
             </>
           )}
+          {directionsHref && (
+            <a
+              href={directionsHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border border-border text-sm font-medium min-h-tap-min hover:bg-muted"
+              aria-label="Yol Tarifi"
+            >
+              <Navigation className="h-4 w-4" />
+              Yol Tarifi
+            </a>
+          )}
         </div>
       </div>
 
@@ -287,28 +351,32 @@ function CustomerDetailPage(): JSX.Element {
           className="flex flex-col items-center justify-center gap-1 px-2 py-3 rounded-xl border border-border bg-card hover:bg-muted/40 min-h-tap-min"
         >
           <CalendarPlus className="h-5 w-5 text-primary" />
-          <span className="text-[11px] font-medium text-foreground">Yeni Ziyaret</span>
+          <span className="text-[11px] font-medium text-foreground">
+            {isFirstContact ? 'İlk Görüşme' : 'Yeni Ziyaret'}
+          </span>
         </button>
         {canInvoice && (
           <button
             type="button"
-            onClick={async () => {
+            onClick={() => {
               // Klinik id'sinden cari'yi çöz (yoksa oluştur) → fatura formuna cari_id ile git.
               // Eski hâli ?profile_id=<klinik_id> gönderiyordu; InvoiceFormPage ?cari_id okuyor
               // → cari boş açılıyordu. RPC clinic_id ile cariyi get-or-create eder.
-              try {
-                const sb = getTypedClient();
-                const { data: cariId, error } = await sb.rpc('saha_get_or_create_cari_for_clinic', {
-                  p_clinic_id: id!,
-                });
-                if (error || !cariId) {
-                  toast.error('Cari çözülemedi: ' + (error?.message ?? 'bilinmeyen hata'));
-                  return;
+              void (async () => {
+                try {
+                  const sb = getTypedClient();
+                  const { data: cariId, error } = await sb.rpc('saha_get_or_create_cari_for_clinic', {
+                    p_clinic_id: id,
+                  });
+                  if (error || !cariId) {
+                    toast.error('Cari çözülemedi: ' + (error?.message ?? 'bilinmeyen hata'));
+                    return;
+                  }
+                  navigate(`/invoicing/fatura/yeni?cari_id=${cariId}`);
+                } catch {
+                  toast.error('Cari çözülemedi.');
                 }
-                navigate(`/invoicing/fatura/yeni?cari_id=${cariId as string}`);
-              } catch (e) {
-                toast.error('Cari çözülemedi.');
-              }
+              })();
             }}
             className="flex flex-col items-center justify-center gap-1 px-2 py-3 rounded-xl border border-border bg-card hover:bg-muted/40 min-h-tap-min"
           >

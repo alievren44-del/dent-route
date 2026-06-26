@@ -1958,6 +1958,7 @@ export type Database = {
           clinic_id: string | null;
           coupon_id: string | null;
           created_at: string | null;
+          deleted_at: string | null;
           delivery_type: string | null;
           discount_amount: number | null;
           email_sent: boolean | null;
@@ -2043,6 +2044,7 @@ export type Database = {
           updated_at?: string | null;
           user_id?: string | null;
           vat_amount?: number | null;
+          deleted_at?: string | null;
         };
         Update: {
           approved_at?: string | null;
@@ -2092,6 +2094,7 @@ export type Database = {
           updated_at?: string | null;
           user_id?: string | null;
           vat_amount?: number | null;
+          deleted_at?: string | null;
         };
         Relationships: [
           {
@@ -3601,6 +3604,9 @@ export type Database = {
           user_ratings_total: number | null;
           vertical_key: string;
           website: string | null;
+          potential: number | null;
+          potential_at: string | null;
+          first_contact_at: string | null;
         };
         Insert: {
           address?: string | null;
@@ -3628,6 +3634,9 @@ export type Database = {
           user_ratings_total?: number | null;
           vertical_key?: string;
           website?: string | null;
+          potential?: number | null;
+          potential_at?: string | null;
+          first_contact_at?: string | null;
         };
         Update: {
           address?: string | null;
@@ -3655,6 +3664,9 @@ export type Database = {
           user_ratings_total?: number | null;
           vertical_key?: string;
           website?: string | null;
+          potential?: number | null;
+          potential_at?: string | null;
+          first_contact_at?: string | null;
         };
         Relationships: [];
       };
@@ -4660,6 +4672,7 @@ export type Database = {
           route_id: string | null;
           status: string;
           updated_at: string;
+          potential: number | null;
         };
         Insert: {
           account_id: string;
@@ -4680,6 +4693,7 @@ export type Database = {
           route_id?: string | null;
           status?: string;
           updated_at?: string;
+          potential?: number | null;
         };
         Update: {
           account_id?: string;
@@ -4700,6 +4714,7 @@ export type Database = {
           route_id?: string | null;
           status?: string;
           updated_at?: string;
+          potential?: number | null;
         };
         Relationships: [
           {
@@ -7244,6 +7259,7 @@ export type Database = {
           status: string;
           rating: number;
           user_ratings_total: number;
+          potential: number;
         }[];
       };
       saha_search_nearby_clinics: {
