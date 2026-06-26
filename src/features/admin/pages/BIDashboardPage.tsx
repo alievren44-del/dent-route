@@ -102,7 +102,7 @@ async function fetchBI(sinceIso: string): Promise<BIData> {
     supabase
       .from('profiles')
       .select('id, ad_soyad, email')
-      .in('role', ['sales_rep', 'SALES_REP', 'rep', 'REP', 'manager', 'MANAGER']),
+      .in('role', ['sales_rep', 'SALES_REP', 'rep', 'REP', 'manager', 'MANAGER', 'admin', 'ADMIN']),
     supabase.from('saha_visits').select('status').gte('check_in_at', sinceIso),
     supabase.from('saha_odemeler').select('tutar, tarih').gte('tarih', sinceDate),
     supabase

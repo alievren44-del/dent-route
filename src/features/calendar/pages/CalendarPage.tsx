@@ -289,7 +289,9 @@ function CalendarPage(): JSX.Element {
       const { data, error } = await sb
         .from('profiles')
         .select('id, ad_soyad, email, role')
-        .in('role', ['REP', 'SALES_REP', 'sales_rep', 'rep', 'MANAGER', 'manager']);
+        // Admin de saha-rep olabilir (ör. Eda Elmas = sahibi+plasiyer) → plasiyer
+        // takviminde görünmeli. (debug_reports 2026-06-27: "eda elmas plasiyer'de yok".)
+        .in('role', ['REP', 'SALES_REP', 'sales_rep', 'rep', 'MANAGER', 'manager', 'ADMIN', 'admin']);
       if (error) throw error;
       return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
         id: String(r.id),
