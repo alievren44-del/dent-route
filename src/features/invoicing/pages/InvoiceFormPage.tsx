@@ -35,6 +35,13 @@ interface CariOption {
   odeme_vadesi_gun: number;
 }
 
+interface VariantLite {
+  sku: string;
+  paket_adi: string | null;
+  price_try: number;
+  hasta_sayisi?: number | null;
+}
+
 interface ProductOption {
   id: string;
   name: string;
@@ -42,6 +49,7 @@ interface ProductOption {
   base_price?: number | null;
   sale_price?: number | null;
   tax_rate?: number | null;
+  product_variants?: VariantLite[] | null;
 }
 
 interface KalemDraft extends LineItem {
@@ -237,6 +245,8 @@ function InvoiceFormPage(): JSX.Element {
         void queryClient.invalidateQueries({ queryKey: ['cari-detail', cariId] });
       }
       void queryClient.invalidateQueries({ queryKey: ['cariler-fatura-sums'] });
+      // CariBalanceCard is keyed by saha_clinics.id (refetchOnMount:'always' refreshes it); aging is cari-agnostic.
+      void queryClient.invalidateQueries({ queryKey: ['invoicing', 'aging'] });
       navigate(`/invoicing/fatura/${faturaId}`);
     },
     onError: (err: unknown) => {
@@ -548,6 +558,7 @@ function KalemRow({
 }): JSX.Element {
   const [productSearch, setProductSearch] = useState('');
   const [productOpen, setProductOpen] = useState(false);
+  const [variantPickFor, setVariantPickFor] = useState<ProductOption | null>(null);
   const debounced = useDebounced(productSearch, 300);
 
   const { data: products } = useQuery({
@@ -561,30 +572,67 @@ function KalemRow({
       // birim_fiyat 0 kalıyordu ("fiyatlar sıfır" bug). OrderForm da v_saha_products kullanır.
       const { data, error } = await supabase
         .from('v_saha_products')
-        .select('id, name, sku, base_price, sale_price, tax_rate')
+        .select('id, name, sku, base_price, sale_price, tax_rate, product_variants')
         .or(`name.ilike.${term},sku.ilike.${term}`)
         .limit(10);
       if (error) return [];
-      return (data ?? []) as ProductOption[];
+      // v_saha_products variant JSON: paket_adi/hasta_sayisi nested under `attributes`
+      // (price_try/sku are top-level). Flatten to VariantLite top-level so the picker
+      // shows the package name (was "undefined" because it read top-level paket_adi).
+      type RawVariant = {
+        sku: string;
+        price_try: number;
+        paket_adi?: string | null;
+        hasta_sayisi?: number | null;
+        attributes?: { paket_adi?: string | null; hasta_sayisi?: number | null } | null;
+      };
+      type RawProduct = Omit<ProductOption, 'product_variants'> & {
+        product_variants?: RawVariant[] | null;
+      };
+      return ((data ?? []) as unknown as RawProduct[]).map((p) => ({
+        ...p,
+        product_variants: (p.product_variants ?? []).map((v) => ({
+          sku: v.sku,
+          price_try: v.price_try,
+          paket_adi: v.attributes?.paket_adi ?? v.paket_adi ?? null,
+          hasta_sayisi: v.attributes?.hasta_sayisi ?? v.hasta_sayisi ?? null,
+        })),
+      })) as ProductOption[];
     },
   });
 
   const line = calcLineTotal(kalem.miktar, kalem.birim_fiyat, kalem.iskonto_orani, kalem.kdv_orani);
 
-  function pickProduct(p: ProductOption): void {
+  /** Ürün + opsiyonel varyant seçimini satıra yazar. */
+  function finalizeProduct(p: ProductOption, variant?: VariantLite): void {
     // KDV ürünün tax_rate'inden (WEB ile aynı: ClearOne %20, gerisi %10).
     const kdv = p.tax_rate != null ? Number(p.tax_rate) / 100 : 0.1;
     // urun_id UUID kolonu — fanta/olident ürün id'leri text ("fanta-12") → uuid değil →
-    // null'a düşür (insert patlamasın); ürün adı zaten urun_adi'de tutulur.
+    // null'a düşür (insert patlamasın). Varyant sku'su değil, parent ürün uuid'si tutulur.
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p.id);
+    const price = variant != null ? Number(variant.price_try) : Number(p.sale_price ?? p.base_price ?? 0);
+    // Only append the package label when it actually exists (1-variant generics may lack one).
+    const name = variant != null && variant.paket_adi ? `${p.name} · ${variant.paket_adi}` : p.name;
     onChange({
       urun_id: isUuid ? p.id : null,
-      urun_adi: p.name,
-      birim_fiyat: Number(p.sale_price ?? p.base_price ?? 0),
+      urun_adi: name,
+      birim_fiyat: price,
       kdv_orani: kdv,
     });
     setProductOpen(false);
     setProductSearch('');
+    setVariantPickFor(null);
+  }
+
+  /** Ürün tıklandı: ≥2 varyant varsa paket seçici aç, değilse direkt bitir. */
+  function pickProduct(p: ProductOption): void {
+    const variants = p.product_variants ?? [];
+    if (variants.length >= 2) {
+      setVariantPickFor(p);
+      setProductOpen(false);
+    } else {
+      finalizeProduct(p, variants[0]);
+    }
   }
 
   return (
@@ -604,17 +652,51 @@ function KalemRow({
             placeholder="Ürün adı"
             className="w-full px-2 py-1.5 rounded-md border border-border bg-background text-sm"
           />
-          {productOpen && debounced.trim().length >= 2 && (products?.length ?? 0) > 0 && (
+          {productOpen && debounced.trim().length >= 2 && (products?.length ?? 0) > 0 && !variantPickFor && (
             <div className="absolute z-10 left-0 right-0 mt-1 rounded-lg border border-border bg-card shadow-lg max-h-48 overflow-y-auto">
-              {(products ?? []).map((p) => (
+              {(products ?? []).map((p) => {
+                const variantCount = p.product_variants?.length ?? 0;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onMouseDown={() => pickProduct(p)}
+                    className="w-full text-left px-2 py-1.5 hover:bg-muted/60 border-b border-border last:border-b-0"
+                  >
+                    <p className="text-xs font-medium text-foreground truncate">{p.name}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {p.sku ?? ''}
+                      {variantCount >= 2 ? `${p.sku ? ' · ' : ''}${variantCount} paket ›` : ''}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {variantPickFor && (
+            <div className="absolute z-10 left-0 right-0 mt-1 rounded-lg border border-border bg-card shadow-lg max-h-48 overflow-y-auto">
+              <div className="flex items-center justify-between px-2 py-1.5 border-b border-border bg-muted/40 sticky top-0">
+                <span className="text-xs font-medium truncate">{variantPickFor.name} — paket seç</span>
                 <button
-                  key={p.id}
                   type="button"
-                  onMouseDown={() => pickProduct(p)}
+                  onMouseDown={(e) => { e.preventDefault(); setVariantPickFor(null); setProductOpen(true); }}
+                  className="text-xs text-primary ml-2 shrink-0"
+                >
+                  ← Geri
+                </button>
+              </div>
+              {(variantPickFor.product_variants ?? []).map((v) => (
+                <button
+                  key={v.sku}
+                  type="button"
+                  onMouseDown={() => finalizeProduct(variantPickFor, v)}
                   className="w-full text-left px-2 py-1.5 hover:bg-muted/60 border-b border-border last:border-b-0"
                 >
-                  <p className="text-xs font-medium text-foreground truncate">{p.name}</p>
-                  {p.sku && <p className="text-[10px] text-muted-foreground">{p.sku}</p>}
+                  <p className="text-xs font-medium">{v.paket_adi ?? v.sku}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {v.hasta_sayisi != null ? `${v.hasta_sayisi} hasta · ` : ''}
+                    {Number(v.price_try).toFixed(2)} TL
+                  </p>
                 </button>
               ))}
             </div>

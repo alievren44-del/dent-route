@@ -39,6 +39,10 @@ const config: CapacitorConfig = {
       splashImmersive: true,
     },
     StatusBar: {
+      // style:'dark' = Style.Dark = light/white icons — kurumsal koyu-mavi şerit üzerinde okunur.
+      // backgroundColor: Android 15 edge-to-edge'de statik config güvenilmez;
+      //   runtime bootstrap (src/main.tsx) setBackgroundColor + setOverlaysWebView ile halleder.
+      // overlaysWebView: CapacitorConfig plugin schema'sında geçerli key DEĞİL — sadece runtime'da set edilir.
       style: 'dark',
       backgroundColor: '#1F4E78',
     },

@@ -45,6 +45,7 @@ import { useVertical } from '@core/verticals/useVertical';
 import { resizeImage, extensionFor } from '@lib/imageResize';
 import type { CustomField, VisitOutcomeOption } from '@core/verticals/types';
 import { enqueueOp } from '@core/offline/syncQueue';
+import { buildDueAt, isPastDay } from '@lib/datetime';
 
 interface VisitRow {
   id: string;
@@ -219,10 +220,14 @@ function VisitFormPage(): JSX.Element {
   const [photos, setPhotos] = useState<PendingPhoto[]>([]);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
   const [nextVisitDate, setNextVisitDate] = useState<string>('');
-  // Hekimden alınan randevu (tarih-saat) + not — takvime 'appointment' hatırlatması yazar.
-  const [apptAt, setApptAt] = useState<string>('');
+  // Hekimden alınan randevu — tarih (zorunlu) + saat (opsiyonel, default 09:00) + not.
+  // İki ayrı alan: datetime-local'ın bugüne varsayılan gün hatası önlenir.
+  const [apptDate, setApptDate] = useState<string>('');
+  const [apptTime, setApptTime] = useState<string>('');
   const [apptNote, setApptNote] = useState<string>('');
   const [processingFile, setProcessingFile] = useState<boolean>(false);
+  /** Çalışma potansiyeli: 0-10 veya null (seçilmedi). */
+  const [potential, setPotential] = useState<number | null>(null);
 
   // Initialize once when visit loads
   const initRef = useRef<string | null>(null);
@@ -351,6 +356,12 @@ function VisitFormPage(): JSX.Element {
       }
     }
 
+    // Randevu tarihi geçmişte olamaz (60sn tolerans)
+    if (apptDate && isPastDay(apptDate, apptTime || undefined)) {
+      toast.error('Randevu tarihi geçmişte olamaz.');
+      return;
+    }
+
     setSubmitting(true);
 
     // custom_fields type-aware dönüştürme (paylaşılan mantık)
@@ -376,6 +387,7 @@ function VisitFormPage(): JSX.Element {
       notes: notes.trim() || null,
       custom_fields: customPayload,
       next_visit_date: nextVisitDate || null,
+      potential: potential ?? null,
     };
 
     // Outcome-based navigation helper (aşağıda iki yerde kullanılır)
@@ -384,6 +396,12 @@ function VisitFormPage(): JSX.Element {
       // (Aksi halde "Bugün" sekmesi save öncesi boş cache'i gösteriyordu.)
       void queryClient.invalidateQueries({ queryKey: ['visit-history'] });
       void queryClient.invalidateQueries({ queryKey: ['calendar'] });
+      // Müşteri detay sayfasındaki ziyaret timeline'ını da tazele.
+      if (visit?.account_id) {
+        void queryClient.invalidateQueries({
+          queryKey: ['customer-visit-timeline', visit.account_id],
+        });
+      }
       // Yeni hatırlatma(lar) için yerel bildirimleri yeniden zamanla (aksiyon butonlu).
       void syncReminderNotifications();
       const opt = outcomes.find((o) => o.key === outcome);
@@ -420,21 +438,19 @@ function VisitFormPage(): JSX.Element {
         due_at: revisitDue.toISOString(),
         status: 'open',
       });
-      if (apptAt) {
-        const due = new Date(apptAt);
-        if (!Number.isNaN(due.getTime())) {
-          rows.push({
-            rep_id: visit.rep_id,
-            account_id: visit.account_id,
-            visit_id: id,
-            created_by: visit.rep_id,
-            type: 'appointment',
-            title: `Randevu — ${accountName}`,
-            note: apptNote.trim() || null,
-            due_at: due.toISOString(),
-            status: 'open',
-          });
-        }
+      if (apptDate) {
+        // buildDueAt: tarih + opsiyonel saat → LOCAL Date → ISO; gün kayması yok.
+        rows.push({
+          rep_id: visit.rep_id,
+          account_id: visit.account_id,
+          visit_id: id,
+          created_by: visit.rep_id,
+          type: 'appointment',
+          title: `Randevu — ${accountName}`,
+          note: apptNote.trim() || null,
+          due_at: buildDueAt(apptDate, apptTime || undefined),
+          status: 'open',
+        });
       }
       if (rows.length === 0) return;
       try {
@@ -508,6 +524,24 @@ function VisitFormPage(): JSX.Element {
         .update(updatePayload as never)
         .eq('id', id);
       if (updErr) throw updErr;
+
+      // Klinik potential güncelleme (latest-wins): seçildiyse yaz.
+      if (potential !== null && accountId) {
+        const { error: potErr } = await supabase
+          .from('saha_clinics')
+          .update({ potential, potential_at: new Date().toISOString() } as never)
+          .eq('id', accountId);
+        if (potErr) console.warn('Klinik potansiyel güncellenemedi:', potErr.message);
+      }
+      // İlk temas: first_contact_at null ise şimdiki zamanı yaz (coalesce — mevcut değere dokunmaz).
+      if (accountId) {
+        const { error: fcErr } = await supabase
+          .from('saha_clinics')
+          .update({ first_contact_at: new Date().toISOString() } as never)
+          .eq('id', accountId)
+          .is('first_contact_at', null);
+        if (fcErr) console.warn('first_contact_at güncellenemedi:', fcErr.message);
+      }
 
       // Takvim hatırlatmaları — tekrar ziyaret + hekim randevusu (best-effort, ziyareti bloklamaz).
       await upsertReminders();
@@ -636,6 +670,41 @@ function VisitFormPage(): JSX.Element {
               );
             })}
           </div>
+        </section>
+
+        {/* 2b. Çalışma Potansiyeli */}
+        <section className="space-y-2" aria-labelledby="potential-heading">
+          <div id="potential-heading" className="text-sm font-medium text-foreground">
+            Çalışma Potansiyeli (0–10){' '}
+            <span className="text-xs font-normal text-muted-foreground">(opsiyonel)</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {Array.from({ length: 11 }, (_, i) => i).map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setPotential((prev) => (prev === n ? null : n))}
+                className={`h-11 w-11 min-h-tap-min rounded-xl border text-sm font-semibold transition-colors ${
+                  potential === n
+                    ? 'bg-primary border-primary text-primary-foreground'
+                    : 'bg-background border-border text-foreground hover:bg-muted'
+                }`}
+                aria-pressed={potential === n}
+                aria-label={`Potansiyel ${n}`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          {potential !== null && (
+            <button
+              type="button"
+              onClick={() => setPotential(null)}
+              className="text-xs text-muted-foreground underline"
+            >
+              Temizle
+            </button>
+          )}
         </section>
 
         {/* 3. Notes */}
@@ -783,25 +852,37 @@ function VisitFormPage(): JSX.Element {
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="appt-at" className="text-xs text-muted-foreground">
-              Hekimden Randevu (tarih + saat)
+            <label htmlFor="appt-date" className="text-xs text-muted-foreground">
+              Hekimden Randevu Tarihi
             </label>
             <input
-              id="appt-at"
-              type="datetime-local"
-              value={apptAt}
-              onChange={(e) => setApptAt(e.target.value)}
+              id="appt-date"
+              type="date"
+              value={apptDate}
+              onChange={(e) => setApptDate(e.target.value)}
               className="w-full rounded-xl border border-border bg-background px-3 h-12 min-h-tap-min text-base"
             />
-            {apptAt && (
-              <input
-                type="text"
-                value={apptNote}
-                onChange={(e) => setApptNote(e.target.value)}
-                maxLength={200}
-                placeholder="Randevu notu (opsiyonel)"
-                className="w-full rounded-xl border border-border bg-background px-3 h-11 min-h-tap-min text-sm"
-              />
+            {apptDate && (
+              <>
+                <label htmlFor="appt-time" className="text-xs text-muted-foreground">
+                  Saat (opsiyonel — boşsa 09:00 varsayılır)
+                </label>
+                <input
+                  id="appt-time"
+                  type="time"
+                  value={apptTime}
+                  onChange={(e) => setApptTime(e.target.value)}
+                  className="w-full rounded-xl border border-border bg-background px-3 h-12 min-h-tap-min text-base"
+                />
+                <input
+                  type="text"
+                  value={apptNote}
+                  onChange={(e) => setApptNote(e.target.value)}
+                  maxLength={200}
+                  placeholder="Randevu notu (opsiyonel)"
+                  className="w-full rounded-xl border border-border bg-background px-3 h-11 min-h-tap-min text-sm"
+                />
+              </>
             )}
           </div>
 

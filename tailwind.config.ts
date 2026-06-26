@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss';
+import plugin from 'tailwindcss/plugin';
 
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
@@ -38,5 +39,25 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    // iOS/Android safe-area yardımcıları — env(safe-area-inset-*) gerçek CSS değeri döner.
+    // pt-safe: statüs çubuğu yüksekliği kadar üst boşluk (edge-to-edge modunda zorunlu).
+    // pb-safe: Home indicator çubuğu için alt boşluk.
+    plugin(function ({ addUtilities }) {
+      addUtilities({
+        '.pt-safe': {
+          'padding-top': 'env(safe-area-inset-top)',
+        },
+        '.pb-safe': {
+          'padding-bottom': 'env(safe-area-inset-bottom)',
+        },
+        '.pl-safe': {
+          'padding-left': 'env(safe-area-inset-left)',
+        },
+        '.pr-safe': {
+          'padding-right': 'env(safe-area-inset-right)',
+        },
+      });
+    }),
+  ],
 } satisfies Config;

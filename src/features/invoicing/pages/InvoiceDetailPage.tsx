@@ -205,6 +205,9 @@ function InvoiceDetailPage(): JSX.Element {
       }
       void queryClient.invalidateQueries({ queryKey: ['cariler-fatura-sums'] });
       void queryClient.invalidateQueries({ queryKey: ['cariler'] });
+      // Previously orphaned: aging report never refreshed after cancel.
+      // (CariBalanceCard is keyed by saha_clinics.id, not cari_id — it refreshes via refetchOnMount:'always'.)
+      void queryClient.invalidateQueries({ queryKey: ['invoicing', 'aging'] });
     },
   });
 

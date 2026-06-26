@@ -27,6 +27,7 @@ import {
 import { toast } from 'sonner';
 import { SupabaseCRMAdapter } from '@core/adapters/builtin/SupabaseCRMAdapter';
 import { getTypedClient } from '@lib/supabase';
+import { invalidateOrderDomain } from '@lib/queryKeys';
 import type { Json } from '@/types/database.types';
 import { useAuthStore } from '@core/auth/authStore';
 import type { NewOrderItem, Product } from '@core/adapters/types';
@@ -413,6 +414,9 @@ function OrderFormPage(): JSX.Element {
         }
       }
 
+      // Invalidate order-related queries so approval list, sales hub, and
+      // recent-orders cards all reflect the newly created order immediately.
+      void invalidateOrderDomain(queryClient);
       navigate('/orders/history');
     } catch (err) {
       // Ağ/sunucu hatası → kuyruğa al, kullanıcıyı bilgilendir.

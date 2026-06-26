@@ -13,6 +13,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ClipboardList, RefreshCw } from 'lucide-react';
 
 import { getTypedClient } from '@/lib/supabase';
+import { ACTION_LABELS, TABLE_LABELS, describeAudit } from '../lib/auditLabels';
 
 const PAGE_SIZE = 50;
 
@@ -85,12 +86,7 @@ async function fetchAuditLogs(input: {
 
 const ACTION_OPTIONS: { value: string; label: string }[] = [
   { value: '', label: 'Tüm Eylemler' },
-  { value: 'create_user', label: 'Kullanıcı oluştur' },
-  { value: 'change_role', label: 'Rol değiştir' },
-  { value: 'reset_password', label: 'Şifre sıfırla' },
-  { value: 'deactivate_user', label: 'Kullanıcı deaktive' },
-  { value: 'activate_user', label: 'Kullanıcı aktive' },
-  { value: 'assign_region', label: 'Bölge ata' },
+  ...Object.entries(ACTION_LABELS).map(([value, label]) => ({ value, label })),
 ];
 
 function formatDateTime(iso: string): string {
@@ -118,15 +114,6 @@ export default function AuditLogPage(): JSX.Element {
 
   const rows = useMemo(() => logsQuery.data ?? [], [logsQuery.data]);
   const reachedEnd = rows.length < limit;
-
-  const detailsPreview = useMemo(
-    () =>
-      rows.map((r) => ({
-        id: r.id,
-        preview: r.details ? JSON.stringify(r.details) : '—',
-      })),
-    [rows],
-  );
 
   return (
     <div className="flex min-h-full flex-col bg-slate-50">
@@ -217,7 +204,7 @@ export default function AuditLogPage(): JSX.Element {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {rows.map((r, idx) => (
+              {rows.map((r) => (
                 <tr key={r.id} className="align-top">
                   <td className="whitespace-nowrap px-3 py-2 text-slate-600">
                     {formatDateTime(r.created_at)}
@@ -225,21 +212,25 @@ export default function AuditLogPage(): JSX.Element {
                   <td className="px-3 py-2 text-slate-700">{r.actorLabel}</td>
                   <td className="px-3 py-2">
                     <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
-                      {r.action}
+                      {ACTION_LABELS[r.action] ?? r.action}
                     </span>
                   </td>
                   <td className="px-3 py-2 text-slate-600">
                     {r.target_table ? (
-                      <span className="font-mono text-xs">
-                        {r.target_table}
-                        {r.target_id ? `:${r.target_id.slice(0, 8)}` : ''}
+                      <span className="text-xs">
+                        {TABLE_LABELS[r.target_table] ?? r.target_table}
+                        {r.target_id ? (
+                          <span className="ml-1 font-mono text-slate-400">
+                            #{r.target_id.slice(0, 8)}
+                          </span>
+                        ) : null}
                       </span>
                     ) : (
                       '—'
                     )}
                   </td>
-                  <td className="max-w-xs truncate px-3 py-2 font-mono text-xs text-slate-500">
-                    {detailsPreview[idx]?.preview ?? '—'}
+                  <td className="max-w-xs truncate px-3 py-2 text-xs text-slate-500">
+                    {describeAudit(r.action, r.details, r.target_table)}
                   </td>
                 </tr>
               ))}

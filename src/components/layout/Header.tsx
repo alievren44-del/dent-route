@@ -18,7 +18,16 @@ export function Header() {
 
   return (
     <>
-      <header className="flex items-center justify-between border-b border-border bg-background px-4 py-3 pt-safe">
+      {/*
+        Statüs çubuğu şeridi: bg-[#1F4E78] + pt-safe → kurumsal koyu-mavi zemin üzerinde
+        beyaz sistem ikonları (saat/batarya/bildirim) okunur olur.
+        Android 15 edge-to-edge'de OS, WebView içeriğini şeffaf statüs çubuğunun altına kadar
+        genişletir; bu sarmalayıcı şerit, şeffaf katmanın arkasındaki rengi sağlar.
+        Gerçek uygulama başlık satırı (aşağıdaki <header>) beyaz bg-background ile tasarım
+        tutarlılığını korur.
+      */}
+      <div className="bg-[#1F4E78] pt-safe">
+      <header className="flex items-center justify-between border-b border-border bg-background px-4 py-3">
         <div className="flex items-center gap-2">
           {profile && (
             <button
@@ -49,6 +58,7 @@ export function Header() {
           </div>
         )}
       </header>
+      </div>
 
       {profile && (
         <NavDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} isAdmin={isAdmin} />

@@ -322,7 +322,7 @@ export default function SahaTaraPage() {
         _lng: searchOrigin.lng,
         _radius_m: radius,
         _vertical_key: 'dental',
-        _limit: 100,
+        _limit: 3000,
       });
       if (error) throw error;
       setClinics((data ?? []) as NearbyClinic[]);

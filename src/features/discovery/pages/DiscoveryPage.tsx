@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { MapPin, Loader2, AlertCircle, Search, Crosshair, ListFilter } from 'lucide-react';
+import { MapPin, Loader2, AlertCircle, Search, Crosshair, ListFilter, PlusCircle } from 'lucide-react';
 import { useGeolocation } from '@features/map/hooks/useGeolocation';
 import {
   dedupCandidates,
@@ -28,6 +28,7 @@ import {
   type BasketStop,
   type BasketStopSource,
 } from '@features/routes/store/routeBasketStore';
+import FieldAddClinicModal from '@features/discovery/components/FieldAddClinicModal';
 
 interface Origin {
   lat: number;
@@ -39,7 +40,7 @@ const adapter = new SupabaseCRMAdapter();
 
 interface SahaClinicRow {
   id: string;
-  google_place_id: string;
+  google_place_id: string | null;
   name: string;
   lat: number;
   lng: number;
@@ -65,7 +66,7 @@ async function fetchSahaClinics(
     _lng: lng,
     _radius_m: radiusM,
     _vertical_key: verticalKey,
-    _limit: 100,
+    _limit: 3000,
   });
   if (error) throw error;
   return (data ?? []) as SahaClinicRow[];
@@ -118,6 +119,7 @@ function DiscoveryPage(): JSX.Element {
   const [districtSlug, setDistrictSlug] = useState<string>('');
   const basketAdd = useRouteBasket((s) => s.add);
   const basketItems = useRouteBasket((s) => s.items);
+  const [fieldModalOpen, setFieldModalOpen] = useState(false);
 
   // Manuel origin: seçili ilçe centroid'i (GPS yoksa / planlama için)
   const manualOrigin = useMemo<Origin | null>(() => {
@@ -178,7 +180,7 @@ function DiscoveryPage(): JSX.Element {
         : fetchSahaClinics(origin.lat, origin.lng, radiusKm * 1000, vertical.id);
       const [sahaResult, clinicsResult] = await Promise.allSettled([
         adapter.searchNearby({ lat: origin.lat, lng: origin.lng }, sahaRadiusKm, {
-          limit: 100,
+          limit: 3000,
         }),
         clinicsFetch,
       ]);
@@ -243,57 +245,87 @@ function DiscoveryPage(): JSX.Element {
   const globalSearchEnabled = searchTrim.length >= 2;
   // PostgREST filtre-injection önle: özel karakterleri boşlukla değiştir.
   const safeTerm = searchTrim.replace(/[,()%_*]/g, ' ').trim();
-  const { data: globalSearchData } = useQuery({
+  const { data: globalSearchData, isLoading: isSearchLoading } = useQuery({
     queryKey: ['discovery-search', safeTerm, vertical.id],
     enabled: globalSearchEnabled && safeTerm.length >= 2,
     staleTime: 60 * 1000,
     retry: false,
     queryFn: async (): Promise<Omit<SahaClinicRow, 'distance_m'>[]> => {
       const supabase = getTypedClient();
-      const { data: rows, error } = await supabase
-        .from('saha_clinics')
-        .select(
-          'id, google_place_id, name, lat, lng, address, phone, rating, user_ratings_total, types, province_slug, district_slug',
-        )
-        .ilike('name', `%${safeTerm}%`)
-        .eq('status', 'active')
-        .eq('vertical_key', vertical.id)
-        .limit(40);
+      // Use saha_search_clinics RPC for Turkish-diacritic/İ-insensitive name search.
+      // Replaces the accent-blind .ilike() that missed "irem yilmaz" → "İrem Yılmaz" etc.
+      const { data: rows, error } = await supabase.rpc('saha_search_clinics', {
+        _q: safeTerm,
+        _vertical_key: vertical.id,
+        _limit: 40,
+      });
       if (error) throw error;
-      return (rows ?? []) as Omit<SahaClinicRow, 'distance_m'>[];
+      // RPC does not return google_place_id or types — fill with nulls so the
+      // existing filteredData mapper still compiles and works correctly.
+      return ((rows ?? []) as Array<{
+        id: string;
+        name: string;
+        lat: number;
+        lng: number;
+        address: string | null;
+        phone: string | null;
+        rating: number | null;
+        user_ratings_total: number | null;
+        province_slug: string | null;
+        district_slug: string | null;
+      }>).map((r) => ({
+        ...r,
+        google_place_id: null,
+        types: [] as string[],
+      }));
     },
   });
 
   // Akıllı aramaya göre filtrelenmiş liste (tek hesap — sayaç + render paylaşır)
   const filteredData = useMemo(() => {
-    if (!data || !origin) return [];
+    const q = foldTr(searchQuery.trim());
+    const qDigits = searchQuery.replace(/\D+/g, '');
 
+    // Yakın-alan modu (arama yok): origin + data gerekli.
     // BUG #07 FIX: GPS modunda sonuçları client-side yarıçap filtresiyle kes.
     // RPC radius'u sunucu tarafında uygular ancak adapter.searchNearby sonuçları
     // (saha müşterileri) dedupCandidates sonrası birleştiğinden farklı radius
     // seçildiğinde cache'den yanlış veri görünebiliyordu. Kesin güvence için
     // her durumda haversine ≤ radiusKm * 1000 kontrolü uygula.
     // İlçe modunda radius filtresi UYGULANMAZ — tüm ilçe gösterilir.
-    const radiusFiltered = !isDistrictMode
-      ? data.filter((c) => haversineMeters(origin.lat, origin.lng, c.lat, c.lng) <= radiusKm * 1000)
-      : data;
+    if (!q) {
+      if (!data || !origin) return [];
+      return !isDistrictMode
+        ? data.filter(
+            (c) => haversineMeters(origin.lat, origin.lng, c.lat, c.lng) <= radiusKm * 1000,
+          )
+        : data;
+    }
 
-    const q = foldTr(searchQuery.trim());
-    if (!q) return radiusFiltered;
-    const qDigits = searchQuery.replace(/\D+/g, '');
+    // Arama modu: origin olmasa bile globalSearchData (RPC) sonuçlarını göster (SC-4).
     const matchFn = (c: DiscoveryCandidate) => {
       const hay = foldTr(`${c.name} ${c.phone ?? ''} ${c.address ?? ''}`);
       const phoneHay = (c.phone ?? '').replace(/\D+/g, '');
       return hay.includes(q) || (qDigits.length >= 3 && phoneHay.includes(qDigits));
     };
-    const scopedMatches = radiusFiltered.filter(matchFn);
+
+    let scopedMatches: DiscoveryCandidate[] = [];
+    if (data && origin) {
+      const radiusFiltered = !isDistrictMode
+        ? data.filter(
+            (c) => haversineMeters(origin.lat, origin.lng, c.lat, c.lng) <= radiusKm * 1000,
+          )
+        : data;
+      scopedMatches = radiusFiltered.filter(matchFn);
+    }
+
     // Geniş arama (il/ilçe-bağımsız ad araması) sonuçlarını ekle → kayıtlı ama
     // başka ilçedeki klinikler (ZDK=mamak vb.) de bulunur. dedup + mesafe sırala.
     const globalCandidates: DiscoveryCandidate[] = (globalSearchData ?? []).map(
       (r) =>
         ({
           source: 'google_places',
-          externalId: r.google_place_id,
+          externalId: r.google_place_id ?? undefined,
           // Carry saha_clinics.id so auto-create works for globally-searched clinics too.
           sahaClinicId: r.id,
           name: r.name,
@@ -307,11 +339,13 @@ function DiscoveryPage(): JSX.Element {
         }) as DiscoveryCandidate,
     );
     const merged = dedupCandidates([...scopedMatches, ...globalCandidates]);
-    merged.sort(
-      (a, b) =>
-        haversineMeters(origin.lat, origin.lng, a.lat, a.lng) -
-        haversineMeters(origin.lat, origin.lng, b.lat, b.lng),
-    );
+    if (origin) {
+      merged.sort(
+        (a, b) =>
+          haversineMeters(origin.lat, origin.lng, a.lat, a.lng) -
+          haversineMeters(origin.lat, origin.lng, b.lat, b.lng),
+      );
+    }
     return merged;
   }, [data, searchQuery, origin, isDistrictMode, radiusKm, globalSearchData]);
 
@@ -323,21 +357,34 @@ function DiscoveryPage(): JSX.Element {
           <Search className="h-6 w-6" aria-hidden="true" />
           {vertical.labels.discovery}
         </h1>
-        <button
-          type="button"
-          onClick={() => {
-            void refetch();
-          }}
-          disabled={!origin || showSpinner}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 h-10 text-sm font-medium hover:bg-muted disabled:opacity-50"
-        >
-          {showSpinner ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <Search className="h-4 w-4" aria-hidden="true" />
+        <div className="flex items-center gap-2">
+          {originMode === 'gps' && !!position && (
+            <button
+              type="button"
+              onClick={() => setFieldModalOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-3 h-10 text-sm font-medium text-emerald-700 hover:bg-emerald-100"
+              title="GPS konumuna yeni klinik ekle"
+            >
+              <PlusCircle className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Yeni klinik</span>
+            </button>
           )}
-          Yenile
-        </button>
+          <button
+            type="button"
+            onClick={() => {
+              void refetch();
+            }}
+            disabled={!origin || showSpinner}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 h-10 text-sm font-medium hover:bg-muted disabled:opacity-50"
+          >
+            {showSpinner ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Search className="h-4 w-4" aria-hidden="true" />
+            )}
+            Yenile
+          </button>
+        </div>
       </div>
 
       {/* Origin mode: GPS konumu veya il/ilçe seçimi */}
@@ -447,51 +494,53 @@ function DiscoveryPage(): JSX.Element {
         </div>
       )}
 
-      {/* Akıllı arama */}
-      {origin && data && data.length > 0 && (
-        <div className="relative">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Akıllı arama: ad, telefon, adres…"
-            className="w-full rounded-xl border border-border bg-background pl-9 pr-9 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-muted"
-              aria-label="Temizle"
-            >
-              <AlertCircle className="h-4 w-4 rotate-45" />
-            </button>
-          )}
-        </div>
-      )}
+      {/* Akıllı arama — GPS gerektirmez: RPC ile origin olmadan da çalışır (SC-4) */}
+      <div className="relative">
+        <Search
+          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Akıllı arama: ad, telefon, adres…"
+          className="w-full rounded-xl border border-border bg-background pl-9 pr-9 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery('')}
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-muted"
+            aria-label="Temizle"
+          >
+            <AlertCircle className="h-4 w-4 rotate-45" />
+          </button>
+        )}
+      </div>
 
       {/* Sonuç sayacı — teyit için */}
-      {origin && data && data.length > 0 && (
+      {((origin && data && data.length > 0) || filteredData.length > 0) && (
         <div className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2 text-sm">
           <span className="font-medium text-foreground">
             {searchQuery.trim()
-              ? `${filteredData.length} / ${data.length} klinik`
-              : `${data.length} klinik`}
+              ? origin && data
+                ? `${filteredData.length} / ${data.length} klinik`
+                : `${filteredData.length} klinik`
+              : `${filteredData.length} klinik`}
           </span>
-          <span className="text-xs text-muted-foreground">{origin.label}</span>
+          <span className="text-xs text-muted-foreground">{origin?.label ?? ''}</span>
         </div>
       )}
 
-      {/* Results */}
-      {origin && data && data.length > 0 && (
+      {/* Arama yapıldı ama sonuç yok (origin olmadan arama dahil) */}
+      {globalSearchEnabled && filteredData.length === 0 && !showSpinner && !isSearchLoading && (
+        <p className="text-sm text-muted-foreground">"{searchQuery}" için sonuç yok.</p>
+      )}
+
+      {/* Results — origin olmasa bile arama sonuçları gösterilir (SC-4) */}
+      {filteredData.length > 0 && (
         <div className="space-y-3">
-          {filteredData.length === 0 && searchQuery.trim() && (
-            <p className="text-sm text-muted-foreground">"{searchQuery}" için sonuç yok.</p>
-          )}
           {filteredData.map((c) => {
             const key = c.customerId ?? c.externalId ?? `${c.lat},${c.lng},${c.name}`;
             const isExisting = c.sources.includes('saha');
@@ -518,7 +567,7 @@ function DiscoveryPage(): JSX.Element {
                 phone={c.phone}
                 lat={c.lat}
                 lng={c.lng}
-                distanceM={haversineMeters(origin.lat, origin.lng, c.lat, c.lng)}
+                distanceM={origin ? haversineMeters(origin.lat, origin.lng, c.lat, c.lng) : undefined}
                 rating={c.rating}
                 userRatingsTotal={reviewsTotal}
                 isExistingCustomer={isExisting}
@@ -565,7 +614,32 @@ function DiscoveryPage(): JSX.Element {
             Admin'e tarama talebinde bulun (vertical: <code>{vertical.id}</code>, konum:{' '}
             {origin.lat.toFixed(4)}, {origin.lng.toFixed(4)}, yarıçap: {radiusKm}km).
           </p>
+          {originMode === 'gps' && !!position && (
+            <button
+              type="button"
+              onClick={() => setFieldModalOpen(true)}
+              className="mx-auto mt-1 inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-4 h-10 text-sm font-medium text-emerald-700 hover:bg-emerald-100"
+            >
+              <PlusCircle className="h-4 w-4" aria-hidden="true" />
+              Bu konuma yeni klinik ekle
+            </button>
+          )}
         </div>
+      )}
+
+      {/* Saha temsilcisi mevcut GPS konumuna yeni klinik ekler */}
+      {originMode === 'gps' && !!position && (
+        <FieldAddClinicModal
+          open={fieldModalOpen}
+          onClose={() => setFieldModalOpen(false)}
+          lat={position.lat}
+          lng={position.lng}
+          verticalKey={vertical.id}
+          onCreated={(newId) => {
+            setFieldModalOpen(false);
+            navigate(`/visits/check-in/${newId}`);
+          }}
+        />
       )}
     </div>
   );

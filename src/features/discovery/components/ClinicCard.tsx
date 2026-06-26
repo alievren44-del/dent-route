@@ -19,6 +19,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useVertical } from '@core/verticals/useVertical';
+import { googleMapsDirectionsUrl } from '@lib/maps';
 
 export interface ClinicCardProps {
   name: string;
@@ -40,12 +41,6 @@ export interface ClinicCardProps {
   onOpenDetail?: () => void;
   /** BUG #10 FIX (b): Ziyaret/not butonu — check-in sayfasına yönlendirir. */
   onStartVisit?: () => void;
-}
-
-/** Google Maps yol tarifi deep-link (API değil, ücretsiz URL) */
-function googleMapsDirectionsUrl(lat: number, lng: number, name?: string): string {
-  const dest = name ? `${name} @${lat},${lng}` : `${lat},${lng}`;
-  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}`;
 }
 
 function formatDistance(m: number): string {

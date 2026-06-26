@@ -54,8 +54,9 @@ import {
   getReminderAttachmentsMap,
   type ReminderAttachment,
 } from '@lib/reminderAttachments';
+import { localDayKey, localDayLabel, buildDueAt, isPastDay } from '@lib/datetime';
 
-type FilterMode = 'upcoming' | 'past' | 'all' | 'overdue';
+type FilterMode = 'upcoming' | 'past' | 'all' | 'overdue' | 'recent';
 type ViewMode = 'agenda' | 'month';
 type ReminderType =
   | 'revisit'
@@ -105,6 +106,17 @@ interface ReminderInitial {
   clinic: { id: string; name: string } | null;
   recurrence: 'none' | 'weekly' | 'monthly';
   sourceId: string | null; // kaynak randevu (R5 bağ → source_ref)
+}
+
+// H4: mevcut reminder'ı düzenlemek için AddReminderModal'a geçilen veri.
+interface ReminderEditData {
+  id: string;
+  type: ReminderType;
+  title: string;
+  note: string | null;
+  at: string; // ISO
+  clinic: { id: string; name: string } | null;
+  recurrence: 'none' | 'weekly' | 'monthly';
 }
 
 interface AgendaItem {
@@ -169,27 +181,18 @@ function startOfTodayISO(): string {
   return d.toISOString();
 }
 
-function dayKey(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+// H2: son 7 günü kapsayan "yakın geçmiş + gelecek" filtresi için.
+function sevenDaysAgoISO(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 7);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
 }
 
-function dayKeyOf(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function dayLabel(iso: string): string {
-  const d = new Date(iso);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(d);
-  target.setHours(0, 0, 0, 0);
-  const diffDays = Math.round((target.getTime() - today.getTime()) / 86_400_000);
-  if (diffDays === 0) return 'Bugün';
-  if (diffDays === 1) return 'Yarın';
-  if (diffDays === -1) return 'Dün';
-  return d.toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' });
-}
+// Thin wrappers so callers stay unchanged; logic lives in src/lib/datetime.ts.
+const dayKey = (iso: string) => localDayKey(iso);
+const dayKeyOf = (d: Date) => localDayKey(d);
+const dayLabel = (iso: string) => localDayLabel(iso);
 
 function timeLabel(iso: string): string {
   return new Date(iso).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
@@ -243,7 +246,8 @@ function CalendarPage(): JSX.Element {
   const { isAdmin } = usePermissions();
   const queryClient = useQueryClient();
   const [view, setView] = useState<ViewMode>('agenda');
-  const [filter, setFilter] = useState<FilterMode>('upcoming');
+  // H2: default 'recent' → son 7 gün tamamlananlar + gelecek randevular görünür.
+  const [filter, setFilter] = useState<FilterMode>('recent');
   const [repFilter, setRepFilter] = useState<string>('self');
   const [monthCursor, setMonthCursor] = useState<Date>(() => {
     const d = new Date();
@@ -262,6 +266,8 @@ function CalendarPage(): JSX.Element {
   // "Tekrar Randevu" → AddReminderModal'ı klinik/tür/başlık dolu açar (kullanıcı
   // yalnız yeni tarih-saat seçer). null = normal boş ekleme.
   const [followUpInit, setFollowUpInit] = useState<ReminderInitial | null>(null);
+  // H4: mevcut reminder'ı düzenlemek için. null = yeni ekleme.
+  const [editReminder, setEditReminder] = useState<ReminderEditData | null>(null);
 
   // ?reminder=<id> → scroll + highlight (state sadece; effect allItems'tan sonra)
   const [searchParams] = useSearchParams();
@@ -312,6 +318,7 @@ function CalendarPage(): JSX.Element {
         .neq('status', 'cancelled')
         .order('due_at', { ascending: true });
       if (effectiveFilter === 'upcoming') rq = rq.gte('due_at', startOfTodayISO());
+      if (effectiveFilter === 'recent') rq = rq.gte('due_at', sevenDaysAgoISO()); // H2
       if (effectiveFilter === 'past') rq = rq.lt('due_at', startOfTodayISO());
       if (effectiveFilter === 'overdue')
         rq = rq.lt('due_at', new Date().toISOString()).eq('status', 'open');
@@ -325,6 +332,7 @@ function CalendarPage(): JSX.Element {
         .limit(200);
       // overdue filtresi sadece reminderlar için; ziyaret sorgusu boş kalsın
       if (effectiveFilter === 'upcoming') vq = vq.gte('check_in_at', startOfTodayISO());
+      if (effectiveFilter === 'recent') vq = vq.gte('check_in_at', sevenDaysAgoISO()); // H2
       if (effectiveFilter === 'past') vq = vq.lt('check_in_at', startOfTodayISO());
 
       const [rRes, vRes] = await Promise.all([
@@ -355,15 +363,28 @@ function CalendarPage(): JSX.Element {
     queryKey: ['calendar-clinic-names', accountIds.sort().join(',')],
     enabled: accountIds.length > 0,
     staleTime: 5 * 60 * 1000,
-    queryFn: async (): Promise<Record<string, { name: string; phone: string | null }>> => {
+    queryFn: async (): Promise<
+      Record<string, { name: string; phone: string | null; lat: number | null; lng: number | null }>
+    > => {
       const typed = getTypedClient();
       const { data } = await typed
         .from('saha_clinics')
-        .select('id, name, phone')
+        .select('id, name, phone, lat, lng')
         .in('id', accountIds);
-      const map: Record<string, { name: string; phone: string | null }> = {};
-      ((data ?? []) as { id: string; name: string; phone: string | null }[]).forEach((c) => {
-        map[c.id] = { name: c.name, phone: c.phone };
+      const map: Record<
+        string,
+        { name: string; phone: string | null; lat: number | null; lng: number | null }
+      > = {};
+      (
+        (data ?? []) as {
+          id: string;
+          name: string;
+          phone: string | null;
+          lat: number | null;
+          lng: number | null;
+        }[]
+      ).forEach((c) => {
+        map[c.id] = { name: c.name, phone: c.phone, lat: c.lat, lng: c.lng };
       });
       return map;
     },
@@ -395,6 +416,25 @@ function CalendarPage(): JSX.Element {
     },
   });
   const assignerMap = assignerQuery.data ?? {};
+
+  // SC-2 — Takvim dışı klinik arama: term >= 2 karakter olunca RPC çağrılır.
+  // Sonuçlar, takvim öğelerinin yanında klinik listesi olarak gösterilir.
+  const clinicSearchQuery = useQuery({
+    queryKey: ['calendar-clinic-search', searchTerm],
+    enabled: searchTerm.trim().length >= 2,
+    staleTime: 30_000,
+    queryFn: async (): Promise<{ id: string; name: string }[]> => {
+      const sb = getSupabaseClient();
+      const { data } = await sb.rpc('saha_search_clinics', {
+        _q: searchTerm.trim(),
+        _limit: 20,
+      });
+      return ((data ?? []) as { id: string; name: string }[]).map((c) => ({
+        id: c.id,
+        name: c.name,
+      }));
+    },
+  });
 
   // Foto/ses ekleri — görünür reminder id'leri için yükle.
   const reminderIds = useMemo(() => reminders.map((r) => r.id), [reminders]);
@@ -489,15 +529,18 @@ function CalendarPage(): JSX.Element {
   }, [focusReminderId, dataQuery.isLoading, allItems]);
 
   // Arama filtresi — klinik adı veya nota göre (boşsa tüm öğeler)
+  // H6: tanıtım hatırlatmaları ajanda listesinden gizlenir; byDay (ay görünümü) etkilenmez.
   const filteredItems = useMemo<AgendaItem[]>(() => {
     const term = searchTerm.trim().toLocaleLowerCase('tr');
-    let items = allItems;
+    // H6: tanıtım ajandadan gizli — ama deep-link ile odaklanılan tanıtım kaydı görünsün.
+    let items = allItems.filter((it) => it.type !== 'tanitim' || it.id === focusId);
     if (term) {
       items = items.filter((it) => {
         const clinicName = it.accountId ? (nameMap[it.accountId]?.name ?? '') : '';
         return (
           clinicName.toLocaleLowerCase('tr').includes(term) ||
-          (it.note ?? '').toLocaleLowerCase('tr').includes(term)
+          (it.note ?? '').toLocaleLowerCase('tr').includes(term) ||
+          it.title.toLocaleLowerCase('tr').includes(term)
         );
       });
     }
@@ -505,15 +548,30 @@ function CalendarPage(): JSX.Element {
       items = items.filter((it) => typeFilter.has(groupOf(it.type)));
     }
     return items;
-  }, [allItems, searchTerm, nameMap, typeFilter]);
+  }, [allItems, searchTerm, nameMap, typeFilter, focusId]);
 
   // Ajanda görünümü: güne göre grupla
   const grouped = useMemo(() => {
-    const items = [...filteredItems].sort((a, b) =>
-      filter === 'upcoming'
+    // H2 sıralama: 'recent' modunda geçmiş günler (tamamlananlar) en üstte-yeni önce,
+    // ardından bugün+gelecek yakın önce. 'upcoming' ve 'all' yakın önce. Geçmiş ters.
+    const items = [...filteredItems].sort((a, b) => {
+      if (filter === 'recent') {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayTs = todayStart.getTime();
+        const aTime = new Date(a.at).getTime();
+        const bTime = new Date(b.at).getTime();
+        const aIsPast = aTime < todayTs;
+        const bIsPast = bTime < todayTs;
+        if (aIsPast && !bIsPast) return -1; // geçmiş günler önce
+        if (!aIsPast && bIsPast) return 1;
+        if (aIsPast && bIsPast) return bTime - aTime; // geçmiş: en yeni önce
+        return aTime - bTime; // gelecek: en yakın önce
+      }
+      return filter === 'upcoming'
         ? new Date(a.at).getTime() - new Date(b.at).getTime()
-        : new Date(b.at).getTime() - new Date(a.at).getTime(),
-    );
+        : new Date(b.at).getTime() - new Date(a.at).getTime();
+    });
     const map = new Map<string, AgendaItem[]>();
     for (const it of items) {
       const k = dayKey(it.at);
@@ -593,7 +651,12 @@ function CalendarPage(): JSX.Element {
     else toast.error(res.reason === 'full' ? 'Sepet dolu (max 12).' : 'Zaten sepette.');
   }
 
-  async function completeReminder(id: string, outcome: string, note: string): Promise<void> {
+  async function completeReminder(
+    id: string,
+    outcome: string,
+    note: string,
+    potential?: number | null,
+  ): Promise<void> {
     const sb = getSupabaseClient();
     const { error } = await sb
       .from('saha_reminders')
@@ -607,6 +670,17 @@ function CalendarPage(): JSX.Element {
     if (error) {
       toast.error('Kaydedilemedi');
       return;
+    }
+    // Potansiyel seçildiyse klinik kaydını güncelle (latest-wins; fire-and-forget).
+    if (potential != null) {
+      const sourceR = reminders.find((r) => r.id === id);
+      if (sourceR?.account_id) {
+        const typed = getTypedClient();
+        void typed
+          .from('saha_clinics')
+          .update({ potential, potential_at: new Date().toISOString() })
+          .eq('id', sourceR.account_id);
+      }
     }
     toast.success('Tamamlandı');
     // C3 — Tekrarlayan: tamamlananın recurrence'ı varsa sonraki occurrence'ı oluştur.
@@ -729,7 +803,8 @@ function CalendarPage(): JSX.Element {
       const clinicName = it.accountId ? (nameMap[it.accountId]?.name ?? '') : '';
       return (
         clinicName.toLocaleLowerCase('tr').includes(term) ||
-        (it.note ?? '').toLocaleLowerCase('tr').includes(term)
+        (it.note ?? '').toLocaleLowerCase('tr').includes(term) ||
+        it.title.toLocaleLowerCase('tr').includes(term)
       );
     });
   }, [selectedDay, byDay, searchTerm, nameMap]);
@@ -830,7 +905,7 @@ function CalendarPage(): JSX.Element {
           <div className="grid grid-cols-4 gap-1.5">
             {(
               [
-                ['upcoming', 'Yaklaşan'],
+                ['recent', 'Yaklaşan'],
                 ['past', 'Geçmiş'],
                 ['all', 'Tümü'],
                 ['overdue', 'Gecikti'],
@@ -962,6 +1037,46 @@ function CalendarPage(): JSX.Element {
               );
             })}
           </div>
+
+          {/* SC-2 — Klinikler (takvimdeki kalemlerde görünmeyenler) */}
+          {searchTerm.trim().length >= 2 && (() => {
+            const extraClinics = (clinicSearchQuery.data ?? []).filter(
+              (c) => !filteredItems.some((it) => it.accountId === c.id),
+            );
+            if (extraClinics.length === 0) return null;
+            return (
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground px-1">Klinikler</p>
+                <ul className="space-y-1">
+                  {extraClinics.map((c) => (
+                    <li
+                      key={c.id}
+                      className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2.5 text-sm"
+                    >
+                      <span className="truncate">{c.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFollowUpInit({
+                            type: 'appointment',
+                            title: '',
+                            note: '',
+                            clinic: { id: c.id, name: c.name },
+                            recurrence: 'none',
+                            sourceId: null,
+                          });
+                          setShowAdd(true);
+                        }}
+                        className="ml-3 shrink-0 text-xs text-primary hover:underline"
+                      >
+                        Randevu ekle
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })()}
         </>
       )}
 
@@ -1080,19 +1195,22 @@ function CalendarPage(): JSX.Element {
             : (repsQuery.data ?? [])
           ).filter((r) => r.id !== selfId)}
           initial={followUpInit ?? undefined}
+          editReminder={editReminder ?? undefined}
           onClose={() => {
             setShowAdd(false);
             setFollowUpInit(null);
+            setEditReminder(null);
           }}
           onAdded={(assignedRepId) => {
             setShowAdd(false);
             setFollowUpInit(null);
+            setEditReminder(null);
             // Başka plasiyere atandıysa admin'in görünümünü o plasiyere geçir →
             // atanan kayıt anında görünür (aksi halde 'gözükmüyor' algısı).
             if (assignedRepId && assignedRepId !== selfId) {
               setRepFilter(assignedRepId);
               setView('agenda');
-              setFilter('upcoming');
+              setFilter('recent');
               setSelectedDay(null);
             }
             void queryClient.invalidateQueries({ queryKey: ['calendar'] });
@@ -1132,8 +1250,8 @@ function CalendarPage(): JSX.Element {
           onAddToRoute={(aid) => {
             void addReminderToRoute(aid);
           }}
-          onComplete={(id, outcome, note) => {
-            void completeReminder(id, outcome, note);
+          onComplete={(id, outcome, note, potential) => {
+            void completeReminder(id, outcome, note, potential);
             setSelectedItem(null);
           }}
           onReopen={(id) => {
@@ -1167,6 +1285,27 @@ function CalendarPage(): JSX.Element {
               ? () => {
                   setLinkClinicFor(selectedItem.id);
                   setSelectedItem(null);
+                }
+              : undefined
+          }
+          onEdit={
+            selectedItem.kind === 'reminder'
+              ? (it) => {
+                  const acct = it.accountId ? nameMap[it.accountId] : undefined;
+                  const clinic =
+                    it.accountId && acct ? { id: it.accountId, name: acct.name } : null;
+                  const src = reminders.find((r) => r.id === it.id);
+                  setEditReminder({
+                    id: it.id,
+                    type: (it.type === 'visit' ? 'revisit' : it.type) as ReminderType,
+                    title: it.title,
+                    note: it.note,
+                    at: it.at,
+                    clinic,
+                    recurrence: src?.recurrence ?? 'none',
+                  });
+                  setSelectedItem(null);
+                  setShowAdd(true);
                 }
               : undefined
           }
@@ -1232,7 +1371,7 @@ function AgendaCard({
         <div className="min-w-0 flex-1">
           {/* Üst satır: tip chip + başlık + gecikti rozeti */}
           <p
-            className={`flex flex-wrap items-center gap-1.5 text-sm font-medium text-foreground ${done ? 'line-through' : ''}`}
+            className={`flex flex-wrap items-center gap-1.5 text-sm font-medium ${done && it.outcome === 'no_meeting' ? 'text-red-600' : 'text-foreground'} ${done ? 'line-through' : ''}`}
           >
             <span
               className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${meta.color} border-current/20 bg-current/5`}
@@ -1260,7 +1399,9 @@ function AgendaCard({
           )}
           {/* Done outcome özeti */}
           {done && it.outcome && (
-            <p className="mt-1 text-[11px] font-medium text-green-600">
+            <p
+              className={`mt-1 text-[11px] font-medium ${['no_meeting', 'odenmedi', 'teslim_edilemedi'].includes(it.outcome) ? 'text-red-600' : 'text-green-600'}`}
+            >
               ✓ {OUTCOME_LABEL[it.outcome] ?? it.outcome}
               {it.completionNote ? ` — ${it.completionNote}` : ''}
             </p>
@@ -1394,13 +1535,27 @@ function AgendaCard({
   );
 }
 
-// ---- Manuel ekleme modalı ----
+// H4: ISO tarih/saat → input[type=date/time] formatları
+function parseISODate(iso: string): string {
+  const dt = new Date(iso);
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, '0');
+  const d = String(dt.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+function parseISOTime(iso: string): string {
+  const dt = new Date(iso);
+  return `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+}
+
+// ---- Manuel ekleme / düzenleme modalı ----
 function AddReminderModal({
   repId,
   selfId,
   isAdmin,
   assignableReps,
   initial,
+  editReminder,
   onClose,
   onAdded,
 }: {
@@ -1409,23 +1564,28 @@ function AddReminderModal({
   isAdmin: boolean;
   assignableReps: RepOption[];
   initial?: ReminderInitial;
+  editReminder?: ReminderEditData; // H4: dolu ise düzenleme modu
   onClose: () => void;
   onAdded: (assignedRepId?: string) => void;
 }): JSX.Element {
+  const isEdit = Boolean(editReminder);
   // Hedef plasiyer (kimin takvimine). Admin başka plasiyere atayabilir → assigned_by=self.
   const [targetRep, setTargetRep] = useState<string>(repId);
-  // initial varsa (Tekrar Randevu) tür/başlık/not/klinik ön-dolu; tarih boş kalır.
-  const [type, setType] = useState<ReminderType>(initial?.type ?? 'appointment');
-  const [title, setTitle] = useState(initial?.title ?? '');
-  const [note, setNote] = useState(initial?.note ?? '');
-  const [at, setAt] = useState('');
+  // editReminder > initial > defaults
+  const [type, setType] = useState<ReminderType>(
+    editReminder?.type ?? initial?.type ?? 'appointment',
+  );
+  const [title, setTitle] = useState(editReminder?.title ?? initial?.title ?? '');
+  const [note, setNote] = useState(editReminder?.note ?? initial?.note ?? '');
+  const [atDate, setAtDate] = useState(editReminder ? parseISODate(editReminder.at) : '');
+  const [atTime, setAtTime] = useState(editReminder ? parseISOTime(editReminder.at) : '');
   const [clinicQuery, setClinicQuery] = useState('');
   const [clinic, setClinic] = useState<{ id: string; name: string } | null>(
-    initial?.clinic ?? null,
+    editReminder?.clinic ?? initial?.clinic ?? null,
   );
   const [saving, setSaving] = useState(false);
   const [recurrence, setRecurrence] = useState<'none' | 'weekly' | 'monthly'>(
-    initial?.recurrence ?? 'none',
+    editReminder?.recurrence ?? initial?.recurrence ?? 'none',
   );
 
   // Foto / ses ekleri (kaydetmeden önce toplanır, insert sonrası yüklenir)
@@ -1494,13 +1654,12 @@ function AddReminderModal({
     queryKey: ['add-reminder-clinic-search', clinicQuery],
     enabled: clinicQuery.trim().length >= 2 && !clinic,
     queryFn: async (): Promise<{ id: string; name: string }[]> => {
-      const sb = getTypedClient();
-      const { data } = await sb
-        .from('saha_clinics')
-        .select('id, name')
-        .ilike('name', `%${clinicQuery.trim()}%`)
-        .eq('status', 'active')
-        .limit(8);
+      // saha_search_clinics RPC: diyakritik+Türkçe-İ duyarsız, token-AND.
+      const sb = getSupabaseClient();
+      const { data } = await sb.rpc('saha_search_clinics', {
+        _q: clinicQuery.trim(),
+        _limit: 8,
+      });
       return ((data ?? []) as { id: string; name: string }[]).map((c) => ({
         id: c.id,
         name: c.name,
@@ -1509,23 +1668,50 @@ function AddReminderModal({
   });
 
   async function save(): Promise<void> {
-    if (!at) {
-      toast.error('Tarih-saat seçin.');
+    if (!atDate) {
+      toast.error('Tarih seçin.');
       return;
     }
-    const due = new Date(at);
-    if (Number.isNaN(due.getTime())) {
-      toast.error('Geçersiz tarih.');
-      return;
-    }
-    // 60sn tolerans: "şu an" yazılan saatin kaydet'e basılana dek geçmişe düşmesini önle.
-    if (due.getTime() < Date.now() - 60_000) {
+    // isPastDay: yalnız yeni kayıt için; düzenleme geçmiş tarihli kayıtlara izin verir.
+    if (!isEdit && isPastDay(atDate, atTime || undefined)) {
       toast.error('Geçmiş tarihe randevu eklenemez.');
       return;
     }
+    // H4: düzenleme offline yapılamaz (offline queue'da reminder.update yok) —
+    // setSaving'den ÖNCE kontrol et ki buton 1-frame spinner'a girmesin.
+    if (isEdit && !navigator.onLine) {
+      toast.error('Düzenleme için internet bağlantısı gerekli.');
+      return;
+    }
+    const due = new Date(buildDueAt(atDate, atTime || undefined));
     setSaving(true);
     const typeLabel = ADD_TYPES.find((t) => t.value === type)?.label ?? 'Hatırlatma';
     const finalTitle = title.trim() || (clinic ? `${typeLabel} — ${clinic.name}` : typeLabel);
+
+    // H4: düzenleme — online-only UPDATE (offline zaten yukarıda yakalandı)
+    if (isEdit && editReminder) {
+      const sb = getSupabaseClient();
+      const { error } = await sb
+        .from('saha_reminders')
+        .update({
+          type,
+          title: finalTitle,
+          note: note.trim() || null,
+          due_at: due.toISOString(),
+          account_id: clinic?.id ?? null,
+          recurrence,
+        })
+        .eq('id', editReminder.id);
+      setSaving(false);
+      if (error) {
+        toast.error(`Güncellenemedi: ${error.message}`);
+        return;
+      }
+      toast.success('Güncellendi');
+      onAdded(undefined);
+      return;
+    }
+
     const isAssignment = targetRep !== selfId;
 
     // B2 — Offline: kuyruğa al, online olunca insert edilir.
@@ -1629,7 +1815,7 @@ function AddReminderModal({
     >
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-background p-4 shadow-xl sm:rounded-2xl">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold">Takvime Ekle</h2>
+          <h2 className="text-base font-semibold">{isEdit ? 'Düzenle' : 'Takvime Ekle'}</h2>
           <button
             type="button"
             onClick={onClose}
@@ -1641,7 +1827,8 @@ function AddReminderModal({
         </div>
 
         <div className="space-y-3">
-          {isAdmin && assignableReps.length > 0 && (
+          {/* Düzenleme modunda rep seçici gösterilmez (mevcut kayıt sahibi değişmez). */}
+          {!isEdit && isAdmin && assignableReps.length > 0 && (
             <div className="space-y-1">
               <label htmlFor="ar-rep" className="text-xs text-muted-foreground">
                 Kime (plasiyer takvimi)
@@ -1709,14 +1896,24 @@ function AddReminderModal({
           </div>
 
           <div className="space-y-1">
-            <label htmlFor="ar-at" className="text-xs text-muted-foreground">
-              Tarih & Saat
+            <label htmlFor="ar-at-date" className="text-xs text-muted-foreground">
+              Tarih <span className="text-red-600">*</span>
             </label>
             <input
-              id="ar-at"
-              type="datetime-local"
-              value={at}
-              onChange={(e) => setAt(e.target.value)}
+              id="ar-at-date"
+              type="date"
+              value={atDate}
+              onChange={(e) => setAtDate(e.target.value)}
+              className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm"
+            />
+            <label htmlFor="ar-at-time" className="text-xs text-muted-foreground">
+              Saat (opsiyonel — boşsa 09:00 varsayılır)
+            </label>
+            <input
+              id="ar-at-time"
+              type="time"
+              value={atTime}
+              onChange={(e) => setAtTime(e.target.value)}
               className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm"
             />
           </div>
@@ -1797,8 +1994,8 @@ function AddReminderModal({
             />
           </div>
 
-          {/* Foto / ses ekleri */}
-          <div className="space-y-2">
+          {/* Foto / ses ekleri — düzenleme modunda gizlenir (ek yükleme desteklenmiyor) */}
+          {!isEdit && <div className="space-y-2">
             <p className="text-xs text-muted-foreground">Ekler (opsiyonel)</p>
             <div className="flex flex-wrap gap-2">
               {/* Gizli dosya input'u */}
@@ -1859,7 +2056,7 @@ function AddReminderModal({
                 ))}
               </ul>
             )}
-          </div>
+          </div>}
 
           <button
             type="button"
@@ -1867,8 +2064,12 @@ function AddReminderModal({
             disabled={saving}
             className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
-            {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
-            Takvime Ekle
+            {saving ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : isEdit ? null : (
+              <Plus className="h-5 w-5" />
+            )}
+            {isEdit ? 'Güncelle' : 'Takvime Ekle'}
           </button>
         </div>
       </div>
@@ -1889,15 +2090,13 @@ function LinkClinicModal({
     queryKey: ['link-clinic-search', q],
     enabled: q.trim().length >= 2,
     queryFn: async (): Promise<{ id: string; name: string }[]> => {
-      const sb = getTypedClient();
-      // status filtresi kaldırıldı: bazı üniversite/kamu kurumu kayıtları
-      // 'active' dışı durumda olabildiği için arama dışı kalmasın
-      // (kullanıcı doğru kaydı manuel seçer).
-      const { data } = await sb
-        .from('saha_clinics')
-        .select('id, name')
-        .ilike('name', `%${q.trim()}%`)
-        .limit(8);
+      const sb = getSupabaseClient();
+      // 'duplicate' dahil: ZDK gibi çift-kayıtlı klinikler de bulunabilsin.
+      const { data } = await sb.rpc('saha_search_clinics', {
+        _q: q.trim(),
+        _limit: 8,
+        _statuses: ['active', 'duplicate'],
+      });
       return ((data ?? []) as { id: string; name: string }[]).map((c) => ({
         id: c.id,
         name: c.name,

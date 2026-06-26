@@ -14,6 +14,7 @@ import {
   Phone,
   MessageCircle,
   Clock,
+  Pencil,
   RotateCcw,
   MapPin,
   CheckCircle2,
@@ -21,8 +22,10 @@ import {
   Link2,
   CornerDownRight,
   Trash2,
+  Navigation,
 } from 'lucide-react';
 import type { ReminderAttachment } from '@lib/reminderAttachments';
+import { googleMapsDirectionsUrl } from '@lib/maps';
 
 // ---------------------------------------------------------------------------
 // Public types (W-cal bu tipleri import eder)
@@ -152,16 +155,22 @@ function toWaNumber(phone: string): string {
 
 export function ReminderDetailSheet(props: {
   item: ReminderDetailItem;
-  clinic: { name: string; phone: string | null } | null;
+  /** Klinik bilgileri; lat/lng varsa "Yol Tarifi" deep-link gösterilir. */
+  clinic: { name: string; phone: string | null; lat?: number | null; lng?: number | null } | null;
   attachments?: ReminderAttachment[];
   assignerName?: string | null;
   onClose: () => void;
   onSnooze: (id: string, ms: number, label: string) => void;
   onAddToRoute?: (accountId: string) => void;
-  onComplete: (id: string, outcome: string, note: string) => void;
+  /**
+   * Tamamlama callback'i. `potential` seçilmişse (0-10 arası sayı) iletilir;
+   * seçilmemişse `null` — parent `saha_clinics.potential` günceller.
+   */
+  onComplete: (id: string, outcome: string, note: string, potential?: number | null) => void;
   onReopen?: (id: string) => void;
   onCreateFollowUp?: (item: ReminderDetailItem) => void;
   onLinkClinic?: () => void;
+  onEdit?: (item: ReminderDetailItem) => void;
   onDelete?: (id: string) => void;
 }): JSX.Element {
   const {
@@ -176,6 +185,7 @@ export function ReminderDetailSheet(props: {
     onReopen,
     onCreateFollowUp,
     onLinkClinic,
+    onEdit,
     onDelete,
   } = props;
 
@@ -183,6 +193,8 @@ export function ReminderDetailSheet(props: {
   const [selectedOutcome, setSelectedOutcome] = useState<string | null>(null);
   const [completionNoteText, setCompletionNoteText] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Çalışma Potansiyeli seçici (0-10); null = seçilmedi, parent'a iletilmez.
+  const [potentialSelected, setPotentialSelected] = useState<number | null>(null);
 
   const isDone = item.status === 'done';
   const outcomes =
@@ -194,10 +206,16 @@ export function ReminderDetailSheet(props: {
 
   const phone = clinic?.phone ? clinic.phone.replace(/[^\d+]/g, '') : null;
   const waNumber = phone ? toWaNumber(phone) : null;
+  const clinicLat = typeof clinic?.lat === 'number' ? clinic.lat : null;
+  const clinicLng = typeof clinic?.lng === 'number' ? clinic.lng : null;
+  const directionsHref =
+    clinicLat != null && clinicLng != null
+      ? googleMapsDirectionsUrl(clinicLat, clinicLng, clinic?.name)
+      : null;
 
   function handleComplete(): void {
     if (!selectedOutcome) return;
-    onComplete(item.id, selectedOutcome, completionNoteText.trim());
+    onComplete(item.id, selectedOutcome, completionNoteText.trim(), potentialSelected);
   }
 
   return (
@@ -333,6 +351,18 @@ export function ReminderDetailSheet(props: {
               Rotaya Ekle
             </button>
           )}
+          {directionsHref && (
+            <a
+              href={directionsHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-sm hover:bg-muted"
+              aria-label="Yol Tarifi"
+            >
+              <Navigation className="h-4 w-4" />
+              Yol Tarifi
+            </a>
+          )}
           {onCreateFollowUp && (
             <button
               onClick={() => onCreateFollowUp(item)}
@@ -340,6 +370,15 @@ export function ReminderDetailSheet(props: {
             >
               <CalendarPlus className="h-4 w-4" />
               Tekrar Randevu
+            </button>
+          )}
+          {onEdit && item.kind === 'reminder' && (
+            <button
+              onClick={() => onEdit(item)}
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-sm hover:bg-muted"
+            >
+              <Pencil className="h-4 w-4" />
+              Düzenle
             </button>
           )}
           {!item.accountId && onLinkClinic && (
@@ -365,7 +404,18 @@ export function ReminderDetailSheet(props: {
             </div>
             {item.outcome && (
               <p className="text-sm">
-                Sonuç: <span className="font-medium">{outcomeLabel(outcomes, item.outcome)}</span>
+                Sonuç:{' '}
+                <span
+                  className={`font-medium ${
+                    outcomes.find((o) => o.key === item.outcome)?.color === 'red'
+                      ? 'text-red-600'
+                      : outcomes.find((o) => o.key === item.outcome)?.color === 'green'
+                        ? 'text-green-600'
+                        : 'text-foreground'
+                  }`}
+                >
+                  {outcomeLabel(outcomes, item.outcome)}
+                </span>
               </p>
             )}
             {item.completionNote && (
@@ -408,12 +458,39 @@ export function ReminderDetailSheet(props: {
               rows={3}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
+            {/* Çalışma Potansiyeli — klinik bağlı randevularda gösterilir; opsiyonel */}
+            {item.accountId && (
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">
+                  Çalışma Potansiyeli (0-10){' '}
+                  <span className="text-muted-foreground/60">— opsiyonel</span>
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {Array.from({ length: 11 }, (_, i) => i).map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setPotentialSelected(potentialSelected === n ? null : n)}
+                      className={[
+                        'inline-flex h-9 w-9 items-center justify-center rounded-lg border text-sm font-medium transition-colors',
+                        potentialSelected === n
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-border bg-background text-foreground hover:bg-muted',
+                      ].join(' ')}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex gap-2">
               <button
                 onClick={() => {
                   setCompletionOpen(false);
                   setSelectedOutcome(null);
                   setCompletionNoteText('');
+                  setPotentialSelected(null);
                 }}
                 className="flex-1 rounded-lg border border-border bg-background py-2 text-sm hover:bg-muted"
               >
