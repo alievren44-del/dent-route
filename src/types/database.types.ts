@@ -7225,6 +7225,27 @@ export type Database = {
           whatsapp: string;
         }[];
       };
+      saha_search_clinics: {
+        Args: {
+          _q: string;
+          _vertical_key?: string;
+          _statuses?: string[];
+          _limit?: number;
+        };
+        Returns: {
+          id: string;
+          name: string;
+          address: string;
+          phone: string;
+          lat: number;
+          lng: number;
+          province_slug: string;
+          district_slug: string;
+          status: string;
+          rating: number;
+          user_ratings_total: number;
+        }[];
+      };
       saha_search_nearby_clinics: {
         Args: {
           _lat: number;

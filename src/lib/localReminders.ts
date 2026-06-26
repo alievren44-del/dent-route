@@ -113,7 +113,13 @@ export async function syncReminderNotifications(): Promise<void> {
           body:
             (clinic?.name ?? 'Klinik') +
             (r.note ? ` · ${r.note}` : isAppt ? '' : ' · 1 ay önce ziyaret edildi'),
-          schedule: { at: new Date(r.due_at), allowWhileIdle: true },
+          schedule: {
+            // #4: 1 saat öncesine zamanla; 1 saati geçtiyse "şimdi + 5sn" (clamp).
+            at: new Date(
+              Math.max(Date.now() + 5_000, new Date(r.due_at).getTime() - 60 * 60 * 1000),
+            ),
+            allowWhileIdle: true,
+          },
           actionTypeId: ACTION_TYPE_ID,
           extra: {
             kind: 'visit_reminder',

@@ -17,7 +17,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { invalidateVisitDomain } from '@lib/queryKeys';
 import { toast } from 'sonner';
 import { ArrowLeft, FileText, Loader2, MapPin, Navigation } from 'lucide-react';
 import { useGeolocation } from '@features/map/hooks/useGeolocation';
@@ -113,6 +114,7 @@ function CheckInPage(): JSX.Element {
   const { position, status, error: geoError, request } = useGeolocation();
   const repId = useAuthStore((s) => s.session?.userId ?? null);
   const supabase = getTypedClient();
+  const queryClient = useQueryClient();
   const customerLabel = vertical.labels.customer.singular;
 
   useEffect(() => {
@@ -263,6 +265,9 @@ function CheckInPage(): JSX.Element {
       if (error) throw error;
       const visitId = (data as { id: string }).id;
       toast.success('Check-in başarılı');
+      // Invalidate visit-history and calendar so lists stay fresh after check-in.
+      // Fire-and-forget: navigation unmounts this page; invalidation is queued in QC.
+      void invalidateVisitDomain(queryClient);
       navigate(`/visits/${visitId}`, { replace: true });
     } catch (err) {
       // Supabase/PostgREST hataları Error instance değil — düz nesne (message/details/hint).

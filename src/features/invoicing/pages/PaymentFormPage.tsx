@@ -302,6 +302,8 @@ function PaymentFormPage(): JSX.Element {
         void queryClient.invalidateQueries({ queryKey: ['cari-detail', cariId] });
       }
       void queryClient.invalidateQueries({ queryKey: ['cariler-fatura-sums'] });
+      // Previously orphaned: aging report never refreshed after payment.
+      void queryClient.invalidateQueries({ queryKey: ['invoicing', 'aging'] });
       if (cariId) navigate(`/invoicing/cari/${cariId}`);
     },
     onError: (err: unknown) => {

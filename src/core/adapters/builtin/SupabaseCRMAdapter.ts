@@ -125,7 +125,25 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       q = q.eq('status', 'active');
     }
     if (opts?.region) q = q.eq('province_slug', opts.region);
-    if (opts?.search) q = q.ilike('name', `%${opts.search}%`);
+    // Turkish-diacritic-aware name search via RPC (replaces accent-blind .ilike).
+    // When a search term is present, fetch matching IDs from saha_search_clinics and
+    // constrain the main query with .in() so all other filters (status, region,
+    // pagination) continue to apply normally.
+    if (opts?.search) {
+      const rpcStatuses =
+        opts.status === 'inactive' ? ['closed', 'duplicate', 'flagged'] : ['active'];
+      const { data: searchRows } = await this.supabase.rpc('saha_search_clinics', {
+        _q: opts.search,
+        _vertical_key: 'dental',
+        _statuses: rpcStatuses,
+        _limit: 3000,
+      });
+      const matchIds = ((searchRows ?? []) as Array<{ id: string }>).map((r) => r.id);
+      if (matchIds.length === 0) {
+        return { items: [], total: 0 };
+      }
+      q = q.in('id', matchIds);
+    }
     const limit = opts?.limit ?? 50;
     q = q.order('name');
     // offset verildiğinde range-tabanlı sayfalama (PostgREST 1000-satır default cap'ini aşmak için);
@@ -170,7 +188,7 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
     opts?: SearchOptions,
   ): Promise<Customer[]> {
     const radiusM = Math.round(radiusKm * 1000);
-    const limit = opts?.limit ?? 50;
+    const limit = opts?.limit ?? 3000;
 
     const { data, error } = await this.supabase.rpc('saha_search_nearby_clinics', {
       _lat: location.lat,

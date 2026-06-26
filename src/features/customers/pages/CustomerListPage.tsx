@@ -301,16 +301,48 @@ async function fetchAccounts(
     }
   }
 
-  // 3. Sunucu-tarafı ad araması
+  // 3. Sunucu-tarafı ad araması — Turkish-diacritic-aware RPC (replaces accent-blind .ilike)
   const q = search.trim();
   if (q.length >= 2) {
-    const { data } = await supabase
-      .from('saha_clinics')
-      .select(CLINIC_COLS)
-      .eq('status', 'active')
-      .ilike('name', `%${q}%`)
-      .limit(30);
-    merge(((data ?? []) as ClinicSelectRow[]).map(clinicRowToCustomerListRow));
+    const { data: rpcRows, error: rpcSearchErr } = await supabase.rpc('saha_search_clinics', {
+      _q: q,
+      _vertical_key: 'dental',
+      _limit: 30,
+    });
+    if (!rpcSearchErr && rpcRows) {
+      type SearchClinicRow = {
+        id: string;
+        name: string;
+        lat: number | null;
+        lng: number | null;
+        address: string | null;
+        phone: string | null;
+        rating: number | null;
+        user_ratings_total: number | null;
+        province_slug: string | null;
+        district_slug: string | null;
+      };
+      merge(
+        (rpcRows as SearchClinicRow[])
+          .map(
+            (r): ClinicSelectRow => ({
+              id: r.id,
+              name: r.name,
+              lat: r.lat,
+              lng: r.lng,
+              address: r.address,
+              phone: r.phone,
+              rating: r.rating,
+              user_ratings_total: r.user_ratings_total,
+              types: null,
+              province_slug: r.province_slug,
+              district_slug: r.district_slug,
+              raw_payload: null,
+            }),
+          )
+          .map(clinicRowToCustomerListRow),
+      );
+    }
   }
 
   // 4. Son ziyaret + "benim kliniğim" işareti — tüm id'ler için tek sorgu

@@ -237,6 +237,8 @@ function InvoiceFormPage(): JSX.Element {
         void queryClient.invalidateQueries({ queryKey: ['cari-detail', cariId] });
       }
       void queryClient.invalidateQueries({ queryKey: ['cariler-fatura-sums'] });
+      // CariBalanceCard is keyed by saha_clinics.id (refetchOnMount:'always' refreshes it); aging is cari-agnostic.
+      void queryClient.invalidateQueries({ queryKey: ['invoicing', 'aging'] });
       navigate(`/invoicing/fatura/${faturaId}`);
     },
     onError: (err: unknown) => {
