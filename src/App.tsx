@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
+import { App as CapacitorApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { AppRouter } from './router';
 import { useVertical } from '@core/verticals/useVertical';
 import '@/lib/debugLog';
@@ -32,6 +34,39 @@ function PushNavigateBridge() {
   return null;
 }
 
+/**
+ * AndroidBackButtonBridge — donanım geri tuşunu SPA navigasyonuna bağlar.
+ * KÖK SORUN: Capacitor'da backButton listener'ı YOKKEN, donanım geri tuşu
+ * doğrudan uygulamayı kapatır → kullanıcı herhangi bir detay/alt ekrandan
+ * geri bastığında tüm uygulamadan ani çıkış (saha kullanıcısı için kötü UX).
+ * ÇÖZÜM: canGoBack ise router geçmişinde geri git (window.history.back →
+ * popstate → BrowserRouter), kök ekranda ise uygulamayı arka plana al.
+ * Listener mount'ta bir kez kurulur, unmount'ta kaldırılır (leak yok; addListener
+ * Promise döndüğü için unmount-yarışına karşı `active` bayrağı ile korunur).
+ */
+function AndroidBackButtonBridge() {
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let active = true;
+    let handle: { remove: () => void } | undefined;
+    void CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+      if (canGoBack) {
+        window.history.back();
+      } else {
+        void CapacitorApp.exitApp();
+      }
+    }).then((h) => {
+      if (active) handle = h;
+      else void h.remove();
+    });
+    return () => {
+      active = false;
+      handle?.remove();
+    };
+  }, []);
+  return null;
+}
+
 function App() {
   // Vertical erişilebilir mi smoke check (Sprint 1 sonu acceptance criteria)
   const vertical = useVertical();
@@ -39,6 +74,7 @@ function App() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <PushNavigateBridge />
+      <AndroidBackButtonBridge />
       {/* Geliştirme aşamasında: aktif vertical göstergesi */}
       {import.meta.env.DEV && (
         <div className="bg-primary px-4 py-2 text-xs text-white">

@@ -52,8 +52,16 @@ export function FeedbackButton({ app, appVersion, getUser, supabase, toast }: Fe
         },
       });
       await saveLocal(report, screenshotBase64);
-      // Supabase upload best-effort — bloklamadan
-      uploadSupabase(supabase, report, screenshotBase64).catch(() => {});
+      // Supabase upload best-effort — bloklamadan. Yerel kayıt garanti (yukarıda
+      // await edildi); sunucu yüklemesi başarısızsa SESSİZCE yutma — aksi halde
+      // saha kullanıcısı "✓" görür ama rapor sunucuya hiç ulaşmaz (kaybolan bug).
+      uploadSupabase(supabase, report, screenshotBase64).catch((err) => {
+        console.warn('[feedback] sunucu yüklemesi başarısız (yerel kayıt mevcut):', err);
+        notify(
+          'Yerel kaydedildi; sunucuya gönderilemedi (bağlantı dönünce tekrar deneyin)',
+          'error',
+        );
+      });
       notify('Bug kaydedildi ✓');
       setDesc('');
       setOpen(false);

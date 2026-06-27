@@ -37,6 +37,7 @@ import { computeDetour } from '@features/routes/lib/detour-calc';
 import { useRouteBasket, MAX_BASKET } from '@features/routes/store/routeBasketStore';
 
 import { getTypedClient } from '@lib/supabase';
+import { invalidateVisitDomain } from '@lib/queryKeys';
 import { getEnv } from '@config/env';
 import { useAuthStore } from '@core/auth/authStore';
 import { useGeolocation } from '@features/map/hooks/useGeolocation';
@@ -497,6 +498,10 @@ export default function ActiveRoutePage(): JSX.Element {
       setShowFinishModal(false);
       setFinishError(null);
       await queryClient.invalidateQueries({ queryKey: ['active-route', id] });
+      // Rota tamamlanınca yapılan ziyaretler saha_visits'e yazıldı → ziyaret
+      // geçmişi / takvim / müşteri timeline'ları da tazelensin (yoksa rota
+      // bitse de bu ekranlar eski check-out verisini gösterir).
+      await invalidateVisitDomain(queryClient);
     },
     onError: (err: Error) => {
       setFinishError(err.message || 'Bilinmeyen hata');

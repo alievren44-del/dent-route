@@ -335,8 +335,10 @@ export default function ManualAddClinicModal(props: Props): JSX.Element | null {
           action: 'create_manual',
           after: payload,
         });
-      } catch {
-        /* yutulur */
+      } catch (auditErr) {
+        // Audit-log yazımı klinik eklemeyi BLOKLAMAMALI, ama tamamen sessiz de
+        // olmamalı — denetim izi eksikse en azından konsola düşsün (uyum/teşhis).
+        console.warn('[audit] saha_clinic_edit_logs create_manual yazılamadı:', auditErr);
       }
 
       toast.success('Klinik eklendi');
