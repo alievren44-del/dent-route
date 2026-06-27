@@ -159,6 +159,12 @@ function CariListPage(): JSX.Element {
   const { data: cariler, isLoading } = useQuery({
     queryKey: ['cariler', debouncedSearch, filterDurum, filterIl],
     queryFn: () => fetchCariler({ search: debouncedSearch, durum: filterDurum, il: filterIl }),
+    // Egress: cari listesi (500-5000 satır) ağır. Global staleTime:0+refetchOnMount:'always'
+    // her mount'ta yeniden çekiyordu. Cari master-data saatlik değişir → 60s pencere yeterli.
+    // Para/bakiye AYRI key ('cariler-fatura-sums', staleTime:0 kalır) + tüm mutasyonlar
+    // ['cariler']'i invalidate ettiği için tazelik korunur (staleTime sadece pasif remount'u kısar).
+    staleTime: 60_000,
+    refetchOnMount: true,
   });
 
   const cariIds = useMemo(() => (cariler ?? []).map((c) => c.id), [cariler]);
