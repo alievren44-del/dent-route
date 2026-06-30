@@ -567,7 +567,7 @@ export default function SahaTaraPage() {
             <button
               type="button"
               onClick={() => void triggerFreshScan()}
-              disabled={scanning || usage.remaining <= 0 || !geo.position}
+              disabled={scanning || usage.remaining <= 0 || !searchOrigin}
               className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
             >
               {scanning ? 'Taranıyor…' : 'Yeni Tarama Yap'}
