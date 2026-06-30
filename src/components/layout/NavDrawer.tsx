@@ -137,6 +137,7 @@ const SECTIONS: NavSection[] = [
       { to: '/admin/clinics', label: 'CSV / Excel İçe Aktar', Icon: FileUp },
       { to: '/admin/heatmap', label: 'Heatmap', Icon: Activity },
       { to: '/admin/regions', label: 'Bölge Atama', Icon: MapPinned },
+      { to: '/admin/sample-budget', label: 'Numune Bütçesi', Icon: Wallet },
       { to: '/admin/users', label: 'Kullanıcı Yönetimi', Icon: UserCog },
       { to: '/admin/audit-logs', label: 'Audit Log', Icon: ScrollText },
       { to: '/admin/broadcast', label: 'Toplu Bildirim', Icon: Megaphone },

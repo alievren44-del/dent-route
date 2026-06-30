@@ -25,6 +25,7 @@ const DownloadAPKPage = lazy(() => import('@features/app/pages/DownloadAPKPage')
 const SamplesPage = lazy(() => import('@features/sampling/pages/SamplesPage'));
 const NotificationsPage = lazy(() => import('@features/notifications/pages/NotificationsPage'));
 const RegionAssignmentPage = lazy(() => import('@features/admin/pages/RegionAssignmentPage'));
+const SampleBudgetPage = lazy(() => import('@features/admin/pages/SampleBudgetPage'));
 const CustomerListPage = lazy(() => import('@features/customers/pages/CustomerListPage'));
 const CustomerDetailPage = lazy(() => import('@features/customers/pages/CustomerDetailPage'));
 const OrderFormPage = lazy(() => import('@features/orders/pages/OrderFormPage'));
@@ -456,6 +457,16 @@ export function AppRouter() {
             <ProtectedRoute requireRole="admin">
               <AppShell>
                 <RegionAssignmentPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/sample-budget"
+          element={
+            <ProtectedRoute requireRole="admin">
+              <AppShell>
+                <SampleBudgetPage />
               </AppShell>
             </ProtectedRoute>
           }
