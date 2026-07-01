@@ -353,6 +353,26 @@ function SampleFormMobile({
   });
   const remainingBudget = getRemainingBudget(quotaQuery.data ?? null);
 
+  // H3: Seçili hesabın son 1 yıllık numuneleri — cooldown + yıllık-max kontrolü için.
+  // Eskiden validateCanGiveSample'a sabit `[]` geçiliyordu (TODO Sprint 5.5+) → cooldown
+  // (.find→undefined) ve maxPerAccountYearly (.filter.length→0) HİÇ tetiklenmiyordu →
+  // numune-avcısı klinikler sınırsız numune alabiliyordu. Gerçek geçmişi besliyoruz.
+  const previousSamplesQuery = useQuery({
+    queryKey: ['prev-samples', selectedAccount?.id ?? null],
+    enabled: Boolean(selectedAccount?.id),
+    queryFn: async (): Promise<{ givenAt: string }[]> => {
+      const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await supabase
+        .from('saha_samples')
+        .select('given_at')
+        .eq('account_id', selectedAccount!.id)
+        .gte('given_at', oneYearAgo);
+      if (error) throw error;
+      return ((data ?? []) as { given_at: string }[]).map((r) => ({ givenAt: r.given_at }));
+    },
+  });
+  const previousSamplesThisAccount = previousSamplesQuery.data ?? [];
+
   // ----- Estimated total cost
   const totalCost = useMemo<number>(() => {
     return lines.reduce((s, l) => s + (l.unitCostTl ?? 0) * (l.qty || 0), 0);
@@ -373,15 +393,25 @@ function SampleFormMobile({
         verticalKey: vertical.id,
         policy: vertical.samplePolicy,
         overrides: [],
-        // TODO Sprint 5.5+: previousSamplesThisAccount RPC ile çekilecek
         isBlacklisted,
-        previousSamplesThisAccount: [],
+        // H3: gerçek son-1-yıl geçmişi (yalnız givenAt okunur; Sample[] cast güvenli).
+        previousSamplesThisAccount: previousSamplesThisAccount as unknown as Parameters<
+          typeof validateCanGiveSample
+        >[0]['previousSamplesThisAccount'],
         // Admin/yönetici bütçe limitine takılmaz.
         remainingBudgetTl: isAdmin ? Number.POSITIVE_INFINITY : remainingBudget,
         estimatedLineCostTl: (line.unitCostTl ?? 0) * (line.qty || 0),
       }),
     );
-  }, [lines, vertical.id, vertical.samplePolicy, isBlacklisted, remainingBudget, isAdmin]);
+  }, [
+    lines,
+    vertical.id,
+    vertical.samplePolicy,
+    isBlacklisted,
+    remainingBudget,
+    isAdmin,
+    previousSamplesThisAccount,
+  ]);
 
   const hasBlockingIssue = validationResults.some((r) => !r.ok);
   const budgetExceeded = !isAdmin && totalCost > remainingBudget && remainingBudget > 0;
@@ -426,7 +456,10 @@ function SampleFormMobile({
     !submitting &&
     Boolean(selectedAccount) &&
     lines.length > 0 &&
-    lines.every((l) => l.productName.trim().length > 0 && l.qty > 0) &&
+    // H2: birim maliyet ZORUNLU. Boş bırakılırsa totalCost=0 → kota RPC'si (totalCost>0
+    // gate'i) hiç çağrılmaz → spent_tl artmaz = izlenmeyen bedava numune (suistimal
+    // vektörü). Maliyet, bütçe-muhasebesinin girdisi olduğundan zorunlu tutuluyor.
+    lines.every((l) => l.productName.trim().length > 0 && l.qty > 0 && (l.unitCostTl ?? 0) > 0) &&
     kvkkChecked &&
     !hasBlockingIssue &&
     Boolean(repId) &&
@@ -439,6 +472,10 @@ function SampleFormMobile({
     if (!selectedAccount) out.push(`${customerLabel} seçilmedi`);
     if (lines.length === 0 || !lines.every((l) => l.productName.trim().length > 0 && l.qty > 0)) {
       out.push('Her satırda ürün + miktar olmalı');
+    }
+    // H2: birim maliyet zorunlu (kota izlenebilsin).
+    if (lines.length > 0 && !lines.every((l) => (l.unitCostTl ?? 0) > 0)) {
+      out.push('Her satırda birim maliyet (TL) girilmeli');
     }
     if (!kvkkChecked) out.push('KVKK onay kutusu işaretlenmeli');
     if (hasBlockingIssue) {
@@ -543,6 +580,12 @@ function SampleFormMobile({
         );
         if (quotaErr) {
           if (quotaErr.message?.includes('budget_exceeded')) {
+            // H1: bütçe aşıldı — RPC reddetti AMA sample+lines yukarıda ZATEN commit
+            // edildi (üç ayrı auto-commit çağrı). Telafi: kaydedilen satırları geri al.
+            // Aksi halde bedava ürün klinikte kalır ama spent_tl artmaz = bütçe muhasebesi
+            // bozulur (trigger-free şema, DB telafisi yok). budget_exceeded → 0 satır kalmalı.
+            await supabase.from('saha_sample_lines').delete().eq('sample_id', sampleId);
+            await supabase.from('saha_samples').delete().eq('id', sampleId);
             setSubmitError('Aylık numune bütçesi aşıldı. Bu numune kaydedilemedi.');
             setSubmitting(false);
             return;
