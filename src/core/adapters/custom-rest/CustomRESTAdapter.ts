@@ -41,10 +41,30 @@ export class CustomRESTAdapter implements ICRMAdapter {
 
   constructor(private deps: CustomRESTAdapterDeps) {}
 
+  /**
+   * M4: Ham fetch'lerin native (Capacitor/Android WebView) default timeout'u yoktur.
+   * White-label REST endpoint TCP'yi açık tutup yanıt vermezse promise asla settle
+   * olmaz → React Query/mutation süresiz asılır, spinner sonsuza döner. AbortController
+   * ile ~15s'e sınırla; timeout AbortError fırlatır, çağıran NETWORK_ERROR(retryable) sarar.
+   */
+  private async fetchWithTimeout(
+    url: string,
+    init?: RequestInit,
+    ms = 15000,
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ms);
+    try {
+      return await fetch(url, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async testConnection(): Promise<HealthStatus> {
     const start = performance.now();
     try {
-      const res = await fetch(`${this.deps.config.baseUrl}/health`, {
+      const res = await this.fetchWithTimeout(`${this.deps.config.baseUrl}/health`, {
         headers: this.buildHeaders(),
       });
       const latencyMs = Math.round(performance.now() - start);
@@ -201,7 +221,7 @@ export class CustomRESTAdapter implements ICRMAdapter {
     const ep = this.endpoint(key);
     const url = this.buildUrl(ep.path, opts.params, opts.query);
     try {
-      const res = await fetch(url, {
+      const res = await this.fetchWithTimeout(url, {
         method: ep.method.toUpperCase(),
         headers: this.buildHeaders(),
         body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
