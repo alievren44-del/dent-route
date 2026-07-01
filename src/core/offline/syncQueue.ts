@@ -98,7 +98,38 @@ export async function removeOp(id: number | undefined): Promise<void> {
   await offlineDB.ops.delete(id);
 }
 
-export async function processQueue(): Promise<{ success: number; failed: number }> {
+/**
+ * H4: Kesintiyle 'syncing'de kalan op'ları kurtar. processQueue bir op'u 'syncing'
+ * işaretleyip executeOp arasında uygulama/sekme/native-süreç kapanırsa op kalıcı
+ * 'syncing'de kalır (listPending yalnız 'pending' okur, hiçbir reaper yok) → kayıt
+ * sunucuya hiç ulaşmaz = sessiz veri kaybı. Açılışta (aktif flush başlamadan =
+ * güvenli) bunları 'pending'e geri al. executeOp idempotent yolları (visit upsert
+ * onConflict, order.create idempotency_key) çift-insert'e karşı korur.
+ */
+export async function recoverStuckSyncing(): Promise<number> {
+  const stuck = await offlineDB.ops.where('status').equals('syncing').toArray();
+  for (const op of stuck) {
+    await offlineDB.ops.update(op.id!, { status: 'pending' });
+  }
+  return stuck.length;
+}
+
+// M1: eşzamanlı flush kilidi. processQueue dört noktadan tetiklenir (online event,
+// SW 'saha-sync-flush' mesajı, init, retryFailed). Guard yokken iki eşzamanlı çağrı
+// aynı pending op'ları alıp ikisi de executeOp çalıştırır → idempotent olmayan
+// insert'ler (reminder.create düz insert) çift kayıt oluşturur. İlk çağrı çalışır,
+// çakışan çağrılar aynı Promise'e zincirlenir.
+let _processing: Promise<{ success: number; failed: number }> | null = null;
+
+export function processQueue(): Promise<{ success: number; failed: number }> {
+  if (_processing) return _processing;
+  _processing = _processQueueInner().finally(() => {
+    _processing = null;
+  });
+  return _processing;
+}
+
+async function _processQueueInner(): Promise<{ success: number; failed: number }> {
   const pending = await listPending();
   let success = 0;
   let failed = 0;
@@ -215,12 +246,12 @@ export function initSyncQueue(): void {
       }
     });
   }
-  // Initial check
-  if (navigator.onLine) {
-    // Açılışta yalnız PENDING'i flush et. Kalıcı-failed op'lara açılışta otomatik
-    // retryCount-sıfırlama YAPMA (denetmen MAJOR): her başlatmada failed→pending+
-    // retryCount:0 sonsuz-deneme döngüsü + bozuk insert yükü yaratıyordu. Failed,
-    // kullanıcı "Tekrar Dene"ye basana kadar terminal kalır (banner kırmızı, görünür).
-    void processQueue();
-  }
+  // H4: Açılışta kesintiyle 'syncing'de kalan op'ları önce 'pending'e geri al
+  // (aktif flush yok = güvenli), sonra flush. Böylece yarıda kesilen kayıt kaybolmaz.
+  // Kalıcı-failed op'lara açılışta otomatik retryCount-sıfırlama YAPMA (denetmen
+  // MAJOR): her başlatmada failed→pending+retryCount:0 sonsuz-deneme döngüsü yaratıyordu.
+  // Failed, kullanıcı "Tekrar Dene"ye basana kadar terminal kalır (banner görünür).
+  void recoverStuckSyncing().then(() => {
+    if (navigator.onLine) void processQueue();
+  });
 }
