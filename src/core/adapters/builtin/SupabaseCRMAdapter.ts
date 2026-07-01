@@ -587,14 +587,19 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
     );
 
     // Tutarları hesapla (server-side doğrulama Parla'da).
+    // L1: invoiceCalc.ts ile AYNI yuvarlama disiplini (sum-of-rounds) — satır-başına
+    // round2, subtotal/vatTotal birikimi round2. Eskiden subtotal ham float birikiyor,
+    // grandTotal hiç yuvarlanmıyordu → sipariş↔fatura kuruş sapması + float artefaktı
+    // (0.30000000000000004) payload'a giriyordu.
+    const round2 = (n: number) => Math.round(n * 100) / 100;
     let subtotal = 0;
     let vatTotal = 0;
     const lineItems = order.items.map((it) => {
       const meta = priceMap.get(it.productId);
       const unitPrice = it.unitPriceOverride ?? meta?.price ?? 0;
-      const lineTotal = unitPrice * it.quantity;
-      subtotal += lineTotal;
-      vatTotal += lineTotal * (meta?.taxRate ?? 0.1);
+      const lineTotal = round2(unitPrice * it.quantity);
+      subtotal = round2(subtotal + lineTotal);
+      vatTotal = round2(vatTotal + lineTotal * (meta?.taxRate ?? 0.1));
       return {
         ...it,
         unitPrice,
@@ -603,8 +608,7 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
         productName: meta?.name ?? 'Ürün',
       };
     });
-    vatTotal = Math.round(vatTotal * 100) / 100;
-    const grandTotal = subtotal + vatTotal;
+    const grandTotal = round2(subtotal + vatTotal);
 
     // Müşteri kimliği iki dünyadan gelebilir:
     //  - saha_clinics (3116 prospect) → cari find-or-create, sipariş cariye+kliniğe bağlanır.
@@ -682,10 +686,16 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
     }));
     const { error: itemsErr } = await this.supabase.from('order_items').insert(itemsPayload);
     if (itemsErr) {
-      // Kalemsiz sipariş sessizce oluşmasın — hatayı yüzeye çıkar.
-      throw new AdapterError('UNKNOWN', `Sipariş kalemleri eklenemedi: ${itemsErr.message}`, {
-        originalError: itemsErr,
-      });
+      // M2: kalemler eklenemezse önce oluşturulan orders satırını best-effort geri al.
+      // Aksi halde 0 kalemli "hayalet" sipariş DB'de kalır → onay listesinde tutarları
+      // dolu ama kalemsiz görünür, rapor tutarlarını şişirir. (Tek transaction/RPC ideal;
+      // bu best-effort telafi mevcut iki-adımlı yapıyı bozmadan orphan'ı önler.)
+      await this.supabase.from('orders').delete().eq('id', newOrder.id);
+      throw new AdapterError(
+        'UNKNOWN',
+        `Sipariş kalemleri eklenemedi (sipariş geri alındı): ${itemsErr.message}`,
+        { originalError: itemsErr },
+      );
     }
 
     return this.getOrder(newOrder.id);
