@@ -216,6 +216,23 @@ function PaymentFormPage(): JSX.Element {
       if (!cariId) throw new Error('Cari seçin.');
       if (tutar <= 0) throw new Error("Tutar 0'dan büyük olmalı.");
 
+      // M5: her tahsis ilgili faturanın KALANINI aşamaz. Aksi halde odenen>toplam,
+      // kalan negatif olur, status 'odendi'ye döner ve aging/hatırlatma sorguları
+      // (kalan>0 filtresi) faturayı sessizce dışlar → cari bakiye/aging bozulur.
+      // DB'de CHECK yok → client-side guard. Fazla ödeme için ayrı avans akışı gerekir.
+      {
+        const single = selectedFaturalarOrdered.length <= 1;
+        for (const f of selectedFaturalarOrdered) {
+          const alloc = single ? tutar : Number(effectiveAlloc[f.id]) || 0;
+          const kalan = Number(f.kalan) || 0;
+          if (alloc - kalan > 0.01) {
+            throw new Error(
+              `${f.fatura_no ?? 'Fatura'} tahsisi (${formatTRY(alloc)}) fatura kalanını (${formatTRY(kalan)}) aşıyor.`,
+            );
+          }
+        }
+      }
+
       let cekSenetId: string | null = null;
       if (yontem === 'cek' || yontem === 'senet') {
         if (!csKesideci.trim()) throw new Error('Keşideci zorunlu.');
@@ -238,6 +255,10 @@ function PaymentFormPage(): JSX.Element {
         cekSenetId = (cs as { id: string }).id;
       }
 
+      // L2: ödeme kaydı oluşturulamazsa (getUser/RLS/ağ) yukarıda eklenen çek/senet
+      // satırını best-effort geri al — aksi halde bir ödemeye bağlı olmayan yetim
+      // 'portfoyde' çek/senet birikir (çek-senet listesi/raporu şişer).
+      try {
       // created_by RLS WITH CHECK için zorunlu (DB default yok).
       const { data: userData, error: userErr } = await supabase.auth.getUser();
       if (userErr || !userData.user) throw new Error('Oturum bulunamadı. Tekrar giriş yapın.');
@@ -294,6 +315,12 @@ function PaymentFormPage(): JSX.Element {
       const { error: err } = await supabase.from('saha_odemeler').insert(rows);
       if (err) throw err;
       return { id: 'multi' };
+      } catch (e) {
+        if (cekSenetId) {
+          await supabase.from('saha_cek_senetler').delete().eq('id', cekSenetId);
+        }
+        throw e;
+      }
     },
     onSuccess: () => {
       if (cariId) {
