@@ -85,7 +85,11 @@ export function usePermissionCached(code: string): boolean | null {
     return () => {
       cancelled = true;
     };
-  }, [code, perms]);
+    // M3: `perms` her render'da YENİ nesne → effect her render tetikleniyor, non-admin'de
+    // her render has_permission RPC ağ çağrısı yapıyordu ("cached" adına rağmen). Stabil
+    // primitivelere indir: hasPermission useCallback([userId,isAdmin]) ile memoize (yalnız
+    // userId/isAdmin değişince değişir), isAuthenticated boolean.
+  }, [code, perms.hasPermission, perms.isAuthenticated]);
 
   return result;
 }
