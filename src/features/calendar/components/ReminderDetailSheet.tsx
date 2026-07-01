@@ -23,6 +23,7 @@ import {
   CornerDownRight,
   Trash2,
   Navigation,
+  UserPlus,
 } from 'lucide-react';
 import type { ReminderAttachment } from '@lib/reminderAttachments';
 import { googleMapsDirectionsUrl } from '@lib/maps';
@@ -171,6 +172,8 @@ export function ReminderDetailSheet(props: {
   onCreateFollowUp?: (item: ReminderDetailItem) => void;
   onLinkClinic?: () => void;
   onEdit?: (item: ReminderDetailItem) => void;
+  /** Randevuyu başka admin/plasiyere ata (mevcut kaydı tekrar yazmadan). */
+  onAssign?: (item: ReminderDetailItem) => void;
   onDelete?: (id: string) => void;
 }): JSX.Element {
   const {
@@ -186,6 +189,7 @@ export function ReminderDetailSheet(props: {
     onCreateFollowUp,
     onLinkClinic,
     onEdit,
+    onAssign,
     onDelete,
   } = props;
 
@@ -379,6 +383,15 @@ export function ReminderDetailSheet(props: {
             >
               <Pencil className="h-4 w-4" />
               Düzenle
+            </button>
+          )}
+          {onAssign && item.kind === 'reminder' && (
+            <button
+              onClick={() => onAssign(item)}
+              className="flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/5 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/10"
+            >
+              <UserPlus className="h-4 w-4" />
+              Ata
             </button>
           )}
           {!item.accountId && onLinkClinic && (

@@ -1321,6 +1321,29 @@ function CalendarPage(): JSX.Element {
                 }
               : undefined
           }
+          // Atama: düzenleme modalını açar; admin "Kime" seçici ile başka
+          // admin/plasiyere atar (alanlar prefilled → tekrar yazmaya gerek yok).
+          onAssign={
+            isAdmin && selectedItem.kind === 'reminder'
+              ? (it) => {
+                  const acct = it.accountId ? nameMap[it.accountId] : undefined;
+                  const clinic =
+                    it.accountId && acct ? { id: it.accountId, name: acct.name } : null;
+                  const src = reminders.find((r) => r.id === it.id);
+                  setEditReminder({
+                    id: it.id,
+                    type: (it.type === 'visit' ? 'revisit' : it.type) as ReminderType,
+                    title: it.title,
+                    note: it.note,
+                    at: it.at,
+                    clinic,
+                    recurrence: src?.recurrence ?? 'none',
+                  });
+                  setSelectedItem(null);
+                  setShowAdd(true);
+                }
+              : undefined
+          }
         />
       )}
 
@@ -1703,24 +1726,54 @@ function AddReminderModal({
     // H4: düzenleme — online-only UPDATE (offline zaten yukarıda yakalandı)
     if (isEdit && editReminder) {
       const sb = getSupabaseClient();
+      // Yeniden-atama: yalnız takvim-sahibi (repId) değiştiyse rep_id+assigned_by'a dokun.
+      // Aksi halde (düz düzenleme) assigned_by'ı KORU — admin'in düzenlemesi orijinal
+      // atayanı yanlışlıkla ezmemeli.
+      const ownerChanged = targetRep !== repId;
+      const updatePayload: Record<string, unknown> = {
+        type,
+        title: finalTitle,
+        note: note.trim() || null,
+        due_at: due.toISOString(),
+        account_id: clinic?.id ?? null,
+        recurrence,
+      };
+      if (ownerChanged) {
+        updatePayload.rep_id = targetRep;
+        updatePayload.assigned_by = targetRep !== selfId ? selfId : null;
+      }
       const { error } = await sb
         .from('saha_reminders')
-        .update({
-          type,
-          title: finalTitle,
-          note: note.trim() || null,
-          due_at: due.toISOString(),
-          account_id: clinic?.id ?? null,
-          recurrence,
-        })
+        .update(updatePayload)
         .eq('id', editReminder.id);
-      setSaving(false);
       if (error) {
+        setSaving(false);
         toast.error(`Güncellenemedi: ${error.message}`);
         return;
       }
-      toast.success('Güncellendi');
-      onAdded(undefined);
+      // Başka kullanıcıya atandıysa → hedefe bildirim (create akışıyla aynı RPC).
+      const reassignedToOther = ownerChanged && targetRep !== selfId;
+      let notifFailed = false;
+      if (reassignedToOther) {
+        const { error: notifErr } = await sb.rpc('saha_notify_rep', {
+          p_user_id: targetRep,
+          p_saha_type: 'system',
+          p_title: `${typeLabel} atandı`,
+          p_body: `${finalTitle} — ${due.toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' })}`,
+          p_data: {
+            kind: 'visit_reminder',
+            route: `/takvim?reminder=${editReminder.id}`,
+            deeplink: `/takvim?reminder=${editReminder.id}`,
+            reminder_id: editReminder.id,
+          },
+          p_push: true,
+        });
+        if (notifErr) notifFailed = true;
+      }
+      setSaving(false);
+      if (notifFailed) toast.warning('Atandı, fakat bildirim gönderilemedi.');
+      else toast.success(reassignedToOther ? 'Atandı' : 'Güncellendi');
+      onAdded(ownerChanged ? targetRep : undefined);
       return;
     }
 
@@ -1839,11 +1892,12 @@ function AddReminderModal({
         </div>
 
         <div className="space-y-3">
-          {/* Düzenleme modunda rep seçici gösterilmez (mevcut kayıt sahibi değişmez). */}
-          {!isEdit && isAdmin && assignableReps.length > 0 && (
+          {/* Kime seçici: yeni kayıtta atama, düzenlemede yeniden-atama (owner değişimi).
+              Admin başka admin/plasiyere atayabilir; alanlar prefilled → tekrar yazma yok. */}
+          {isAdmin && assignableReps.length > 0 && (
             <div className="space-y-1">
               <label htmlFor="ar-rep" className="text-xs text-muted-foreground">
-                Kime (plasiyer takvimi)
+                {isEdit ? 'Kime ata (takvim sahibi)' : 'Kime (plasiyer takvimi)'}
               </label>
               <select
                 id="ar-rep"
