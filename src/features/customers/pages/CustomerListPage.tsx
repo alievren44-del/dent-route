@@ -447,8 +447,9 @@ function CustomerListPage(): JSX.Element {
   const selfId = useAuthStore((s) => s.session?.userId ?? null);
   const role = (profile?.role ?? '').toUpperCase();
   const isAdmin = role === 'ADMIN';
-  const isManager = role === 'MANAGER';
-  const canSeeRepFilter = isAdmin || isManager;
+  // L6: MANAGER'a rep-filtresi gösterilmez. DB/RLS OTORİTEDİR — MANAGER başka
+  // temsilcinin müşterilerini göremez, filtre seçilse sonuç sessizce boş dönerdi.
+  const canSeeRepFilter = isAdmin;
 
   // URL'den initial state
   const initialSearch = searchParams.get('search') ?? '';

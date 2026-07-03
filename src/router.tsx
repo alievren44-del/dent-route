@@ -295,7 +295,7 @@ export function AppRouter() {
         <Route
           path="/orders/approval"
           element={
-            <ProtectedRoute requireRole="admin">
+            <ProtectedRoute allowRawRoles={['MANAGER', 'ADMIN']}>
               <AppShell>
                 <OrderApprovalPage />
               </AppShell>

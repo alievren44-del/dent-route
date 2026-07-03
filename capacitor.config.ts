@@ -23,10 +23,12 @@ const config: CapacitorConfig = {
     backgroundColor: '#1F4E78',
     allowMixedContent: false,
     captureInput: true,
-    // Security: normalde production'da remote WebView debugging KAPALI olmalı (DEVICE-001).
-    // GEÇİCİ (2026-06-21): saha-test/debug için açıldı — adb-CDP ile cihaz-testi yapılabilsin.
-    // ⚠️ TEST DÖNEMİ BİTİNCE false'a geri al (USB/ADB ile localStorage-token okunabilir).
-    webContentsDebuggingEnabled: true,
+    // Security (DEVICE-001): remote WebView debugging RELEASE'de KAPALI olmalı — açık
+    // kalırsa USB/ADB ile WebView devtools açılıp localStorage'daki Supabase session
+    // token'ı sızdırılabilir. Varsayılan KAPALI (release güvenli).
+    // Yerel cihaz-testi/debug için: `CAP_WEBVIEW_DEBUG=true npx cap sync` ile aç.
+    // (NODE_ENV `cap sync` sırasında güvenilir set edilmediğinden açık opt-in flag kullanılır.)
+    webContentsDebuggingEnabled: process.env.CAP_WEBVIEW_DEBUG === 'true',
   },
   plugins: {
     SplashScreen: {

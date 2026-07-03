@@ -64,8 +64,11 @@ export function mapParlaToSahaRole(
   const normalized = String(role).trim().toUpperCase();
   if (normalized === 'REP' || normalized === 'SALES_REP') return 'sales_rep';
   if (normalized === 'ADMIN') return 'admin';
-  // MANAGER → admin saha rolü: onay zinciri (50.000 TL eşiği) çalışabilmesi için
-  // yükseltilmiş erişim gerekiyor. SahaRole 'manager' değeri yok; 'admin' map edilir.
-  if (normalized === 'MANAGER') return 'admin';
+  // MANAGER → sales_rep. DB/RLS OTORİTEDİR: Parla RLS MANAGER'a admin yetkisi
+  // (ata/yeniden-ata, başka temsilcinin verisini görme) VERMEZ. Önceden 'admin'
+  // map ediliyordu → UI bu butonları gösteriyor ama DB reddediyor = SESSİZ HATA.
+  // Rep'e map edildi: hasPermission artık DB'ye sorar, admin-butonları gizlenir.
+  // Onay zinciri (50.000 TL) ham 'MANAGER' rolüyle çalışır (approvalRules), bu map'ten bağımsız.
+  if (normalized === 'MANAGER') return 'sales_rep';
   return null;
 }

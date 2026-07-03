@@ -2,16 +2,14 @@
 
 import { precacheAndRoute, type PrecacheEntry } from 'workbox-precaching';
 import { registerRoute, NavigationRoute } from 'workbox-routing';
-import { NetworkFirst, StaleWhileRevalidate } from 'workbox-strategies';
-import { ExpirationPlugin } from 'workbox-expiration';
+import { NetworkFirst } from 'workbox-strategies';
 
 declare const self: ServiceWorkerGlobalScope & typeof globalThis;
 
 // Bump bu sürümü her deploy'da; eski cache'ler activate'te temizlenir.
 const SW_VERSION = 'v3';
 const NAV_CACHE = `saha-navigations-${SW_VERSION}`;
-const API_CACHE = `saha-api-${SW_VERSION}`;
-const KNOWN_CACHES = new Set([NAV_CACHE, API_CACHE]);
+const KNOWN_CACHES = new Set([NAV_CACHE]);
 
 // ─── Precache (Vite injectManifest tarafından doldurulur) ────
 precacheAndRoute(self.__WB_MANIFEST);
@@ -26,22 +24,21 @@ registerRoute(
   ),
 );
 
-// ─── REST GET — stale-while-revalidate ──────────────────
-// Edge fn'leri (/functions/v1/) ASLA cache'leme — POST + non-idempotent.
-// Routing/clinic-scan response cache'lenirse stale data döner (550km vs 685km
-// gibi). Sadece /rest/v1/ GET PostgREST select için cache.
-registerRoute(
-  ({ url, request }) => request.method === 'GET' && url.pathname.includes('/rest/v1/'),
-  new StaleWhileRevalidate({
-    cacheName: API_CACHE,
-    plugins: [
-      new ExpirationPlugin({
-        maxEntries: 100,
-        maxAgeSeconds: 24 * 60 * 60, // 1 gün
-      }),
-    ],
-  }),
-);
+// ─── REST GET — CACHE'LENMEZ (bilinçli / güvenlik) ──────────────────
+// PostgREST (/rest/v1/) GET'leri ARTIK RUNTIME-CACHE EDİLMEZ. Önceki
+// blanket StaleWhileRevalidate ('saha-api', 24h) para/durum verisini
+// (bakiye/fatura/sipariş/cari) stale-first servis ediyordu VE cache
+// anahtarı yalnız URL'di, Authorization header'a göre değişmiyordu →
+// paylaşımlı saha cihazında bir temsilcinin RLS-scoped yanıtı diğerine
+// sızabiliyordu. Tüm /rest/v1/ GET'leri artık NETWORK-ONLY (default
+// fetch, route yok). Güvenli statik lookup'lar zaten react-query ile
+// persist ediliyor (bkz. main.tsx). Edge fn'leri (/functions/v1/) de
+// hiçbir zaman cache'lenmez (POST + non-idempotent).
+//
+// NOT: Runtime API cache kaldırıldığı için cross-temsilci sızıntı
+// vektörü tamamen kapandı; client'ın auth-change'de postMessage
+// göndermesine gerek yoktur. Eski 'saha-api-*' cache'leri activate'te
+// (KNOWN_CACHES dışı) silinir.
 
 // ─── Background Sync için event hook (#49/#55/#74) ──────────
 // Dexie kuyruğu Supabase client ile flush'lanır; ancak bizim Supabase

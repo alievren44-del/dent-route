@@ -119,7 +119,7 @@ function buildStopId(c: DiscoveryCandidate): string {
 function DiscoveryPage(): JSX.Element {
   const vertical = useVertical();
   const navigate = useNavigate();
-  const { position, status, request } = useGeolocation();
+  const { position, status, error, request } = useGeolocation();
   const [radiusKm, setRadiusKm] = useState<number>(5);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [originMode, setOriginMode] = useState<'gps' | 'manual'>('gps');
@@ -480,6 +480,35 @@ function DiscoveryPage(): JSX.Element {
         <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
           <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden="true" />
           <span>Konum servisi mevcut değil. "İl / İlçe seç" ile manuel ara.</span>
+        </div>
+      )}
+
+      {/* GPS zaman aşımı / bilinmeyen hata: hook status'ü 'idle'a döner ama error dolu
+          kalır ve position yok → ekran boş kalmasın. Tekrar-dene + İlçe seç sun. */}
+      {originMode === 'gps' && status === 'idle' && !position && error && (
+        <div className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden="true" />
+            <span>Konum alınamadı (zaman aşımı). Tekrar deneyebilir ya da il/ilçe seçebilirsin.</span>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => request()}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 h-9 text-sm font-medium text-amber-800 hover:bg-amber-100"
+            >
+              <Crosshair className="h-4 w-4" aria-hidden="true" />
+              Tekrar dene
+            </button>
+            <button
+              type="button"
+              onClick={() => setOriginMode('manual')}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 h-9 text-sm font-medium text-amber-800 hover:bg-amber-100"
+            >
+              <ListFilter className="h-4 w-4" aria-hidden="true" />
+              İl / İlçe seç
+            </button>
+          </div>
         </div>
       )}
 

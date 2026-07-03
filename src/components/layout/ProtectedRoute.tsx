@@ -13,10 +13,18 @@ export interface ProtectedRouteProps {
    * bağımsız — ikisi birlikte de verilebilir (her ikisi de sağlanmalı).
    */
   requirePermission?: string;
+  /**
+   * HAM Parla rolü bazlı kapı (örn ['MANAGER','ADMIN']). Saha-role map'inden BAĞIMSIZ.
+   * Kullanım: MANAGER saha-role='sales_rep'e map edilir (admin-UI'ı gizlemek için) ama
+   * bazı rotalara (onay akışı /orders/approval — DB RPC 50.000 TL limitiyle korur)
+   * ham MANAGER rolüyle erişmelidir. Bu kapı requireRole yerine kullanılır.
+   */
+  allowRawRoles?: string[];
 }
 
-export function ProtectedRoute({ children, requireRole, requirePermission }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, requireRole, requirePermission, allowRawRoles }: ProtectedRouteProps) {
   const loading = useAuthStore((s) => s.loading);
+  const rawRole = useAuthStore((s) => s.profile?.role ?? null);
   const { isAuthenticated, kvkkAccepted, sahaRole, isAdmin } = usePermissions();
   const location = useLocation();
   // Hook koşulsuz çağrılmalı — enforcement aşağıda requirePermission set ise yapılır.
@@ -40,6 +48,15 @@ export function ProtectedRoute({ children, requireRole, requirePermission }: Pro
 
   if (requireRole) {
     const allowed = sahaRole === requireRole || (requireRole === 'sales_rep' && isAdmin);
+    if (!allowed) {
+      return <AccessDenied />;
+    }
+  }
+
+  if (allowRawRoles) {
+    const normalized = rawRole ? String(rawRole).trim().toUpperCase() : null;
+    const allowed =
+      normalized !== null && allowRawRoles.some((r) => r.trim().toUpperCase() === normalized);
     if (!allowed) {
       return <AccessDenied />;
     }
