@@ -44,6 +44,7 @@ import {
   type ReminderDetailItem,
 } from '@features/calendar/components/ReminderDetailSheet';
 import { InlineOrderSheet } from '@features/orders/components/InlineOrderSheet';
+import { PullToRefresh } from '@components/ui/PullToRefresh';
 import { getSupabaseClient, getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 import { usePermissions } from '@core/auth/usePermissions';
@@ -890,7 +891,8 @@ function CalendarPage(): JSX.Element {
   }, [selectedDay, byDay, searchTerm, nameMap]);
 
   return (
-    <div className="space-y-4 p-4 pb-24">
+    <PullToRefresh onRefresh={() => queryClient.invalidateQueries({ queryKey: ['calendar'] })}>
+      <div className="space-y-4 p-4 pb-24">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <CalendarDays className="h-6 w-6 text-primary" aria-hidden="true" />
@@ -1472,7 +1474,8 @@ function CalendarPage(): JSX.Element {
           }}
         />
       )}
-    </div>
+      </div>
+    </PullToRefresh>
   );
 }
 

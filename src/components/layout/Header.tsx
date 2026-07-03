@@ -15,6 +15,8 @@ export function Header() {
   const profile = useAuthStore((s) => s.profile);
   const { isAdmin } = usePermissions();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // P0a: kazara dokunuşla çıkış olmasın → onay iste (signOut mantığı değişmez).
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
 
   return (
     <>
@@ -49,7 +51,7 @@ export function Header() {
               </span>
               <button
                 type="button"
-                onClick={handleSignOut}
+                onClick={() => setConfirmSignOut(true)}
                 className="inline-flex items-center justify-center rounded-md bg-muted px-3 h-11 text-xs font-medium text-foreground"
                 aria-label="Çıkış yap"
               >
@@ -62,6 +64,48 @@ export function Header() {
 
       {profile && (
         <NavDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} isAdmin={isAdmin} />
+      )}
+
+      {/* P0a: Çıkış onay sayfası — kazara dokunuşu engeller */}
+      {confirmSignOut && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="signout-title"
+          className="fixed inset-0 z-[2147483600] flex items-end bg-black/45"
+          onClick={() => setConfirmSignOut(false)}
+        >
+          <div
+            className="w-full rounded-t-2xl bg-background p-4 pb-safe"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="signout-title" className="text-base font-semibold text-foreground">
+              Çıkış yap
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Çıkış yapmak istediğinize emin misiniz?
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmSignOut(false)}
+                className="h-11 flex-1 rounded-xl border border-border bg-background text-sm font-medium text-foreground hover:bg-muted"
+              >
+                Vazgeç
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmSignOut(false);
+                  handleSignOut();
+                }}
+                className="h-11 flex-1 rounded-xl bg-red-600 text-sm font-semibold text-white hover:bg-red-700"
+              >
+                Çıkış
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

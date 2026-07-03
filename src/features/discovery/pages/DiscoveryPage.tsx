@@ -37,6 +37,7 @@ import {
   type BasketStopSource,
 } from '@features/routes/store/routeBasketStore';
 import FieldAddClinicModal from '@features/discovery/components/FieldAddClinicModal';
+import { PullToRefresh } from '@components/ui/PullToRefresh';
 
 interface Origin {
   lat: number;
@@ -360,8 +361,10 @@ function DiscoveryPage(): JSX.Element {
   }, [data, searchQuery, origin, isDistrictMode, radiusKm, globalSearchData]);
 
   return (
-    <div className="p-4 space-y-4">
-      {/* Header */}
+    <PullToRefresh onRefresh={() => refetch()}>
+      {/* P0b: FAB (🐞) son klinik kartının butonlarını örtmesin → alt boşluk (pb-24). */}
+      <div className="p-4 pb-24 space-y-4">
+        {/* Header */}
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold flex items-center gap-2">
           <Search className="h-6 w-6" aria-hidden="true" />
@@ -682,7 +685,8 @@ function DiscoveryPage(): JSX.Element {
           }}
         />
       )}
-    </div>
+      </div>
+    </PullToRefresh>
   );
 }
 
