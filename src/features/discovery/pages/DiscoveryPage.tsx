@@ -522,7 +522,8 @@ function DiscoveryPage(): JSX.Element {
         </div>
       )}
 
-      {showSpinner && (
+      {/* İlk yüklemede skeleton gösterilir; bu kutu yalnız arka-plan refetch'te (isFetching, isLoading değil) çıkar → çift-loading önlenir. */}
+      {showSpinner && !isLoading && (
         <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-3 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           <span>Aranıyor...</span>
@@ -578,6 +579,27 @@ function DiscoveryPage(): JSX.Element {
       {/* Arama yapıldı ama sonuç yok (origin olmadan arama dahil) */}
       {globalSearchEnabled && filteredData.length === 0 && !showSpinner && !isSearchLoading && (
         <p className="text-sm text-muted-foreground">"{searchQuery}" için sonuç yok.</p>
+      )}
+
+      {/* Skeleton — yalnız ilk yüklemede (isLoading), arka-plan refetch/pull-to-refresh
+          sırasında gösterilmez. Boş ekran yerine kart-şekilli placeholder'lar. */}
+      {isLoading && (
+        <div className="space-y-3" aria-hidden="true">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+              <div className="animate-pulse space-y-3">
+                <div className="h-5 w-2/3 rounded bg-muted" />
+                <div className="h-4 w-full rounded bg-muted" />
+                <div className="h-4 w-1/2 rounded bg-muted" />
+                <div className="flex gap-2 pt-1">
+                  <div className="h-11 w-28 rounded-xl bg-muted" />
+                  <div className="h-11 w-28 rounded-xl bg-muted" />
+                  <div className="ml-auto h-11 w-20 rounded-xl bg-muted" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Results — origin olmasa bile arama sonuçları gösterilir (SC-4) */}

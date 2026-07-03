@@ -7,7 +7,6 @@
  */
 
 import {
-  Phone,
   MessageCircle,
   MapPin,
   Star,
@@ -78,7 +77,6 @@ function ClinicCard({
 
   const waPhoneSource = phone ?? whatsapp;
   const waHref = waLink(waPhoneSource);
-  const hasPhone = Boolean(phone);
   const showAdd = typeof onAdd === 'function';
   const directionsHref =
     typeof lat === 'number' && typeof lng === 'number'
@@ -149,27 +147,6 @@ function ClinicCard({
 
       {/* Actions — dar ekranda taşmasın diye sar (Ekle butonu karttan çıkıyordu) */}
       <div className="mt-3 flex flex-wrap gap-2">
-        {hasPhone ? (
-          <a
-            href={`tel:${phone}`}
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-background px-3 min-h-tap-min h-11 text-sm font-medium hover:bg-muted"
-            aria-label="Ara"
-          >
-            <Phone className="h-4 w-4" aria-hidden="true" />
-            Ara
-          </a>
-        ) : (
-          <button
-            type="button"
-            disabled
-            aria-disabled="true"
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-background px-3 min-h-tap-min h-11 text-sm font-medium opacity-50 cursor-not-allowed"
-          >
-            <Phone className="h-4 w-4" aria-hidden="true" />
-            Ara
-          </button>
-        )}
-
         {waHref ? (
           <a
             href={waHref}

@@ -181,17 +181,30 @@ export function OfflineBanner() {
       <div className="flex items-center justify-center gap-2">
         {isOnline ? (
           <>
-            <CloudUpload className="h-4 w-4" />
-            <span>{pending} işlem senkronize ediliyor...</span>
+            <CloudUpload className="h-4 w-4 shrink-0" />
+            {/* Bekleyen sayısı belirgin rozet — saha temsilcisi "N bekliyor" görsün. */}
+            {hasPending ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/25 px-2 py-0.5 text-xs font-bold">
+                {pending} bekliyor
+              </span>
+            ) : null}
+            <span>senkronize ediliyor…</span>
           </>
         ) : (
           <>
-            <WifiOff className="h-4 w-4" />
-            <span>
+            <WifiOff className="h-4 w-4 shrink-0" />
+            <span className="flex items-center gap-1">
               Çevrim dışısınız
-              {hasPending
-                ? ` — ${pending} işlem bağlantı geldiğinde gönderilecek`
-                : ' — değişiklikler bağlantı geldiğinde gönderilecek'}
+              {hasPending ? (
+                <>
+                  <span className="mx-0.5 inline-flex items-center gap-1 rounded-full bg-white/25 px-2 py-0.5 text-xs font-bold">
+                    {pending} bekliyor
+                  </span>
+                  — bağlantı gelince gönderilecek
+                </>
+              ) : (
+                ' — değişiklikler bağlantı geldiğinde gönderilecek'
+              )}
             </span>
           </>
         )}

@@ -52,4 +52,13 @@
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
   }
+  /* Yatay kaydırılan çip satırları için scrollbar'ı gizle (momentum scroll korunur). */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }

@@ -953,12 +953,8 @@ function CalendarPage(): JSX.Element {
         ))}
       </div>
 
-      {loading && (
-        <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-3 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          Yükleniyor…
-        </div>
-      )}
+      {/* İlk yükleme: ajanda kartı şeklinde iskelet (arka-plan refetch'te gösterilmez). */}
+      {loading && <AgendaSkeleton />}
 
       {/* ----- AJANDA GÖRÜNÜMÜ ----- */}
       {view === 'agenda' && (
@@ -984,7 +980,8 @@ function CalendarPage(): JSX.Element {
             )}
           </div>
 
-          <div className="grid grid-cols-4 gap-1.5">
+          {/* Zaman filtresi — tek satır yatay kaydırma (sarmalanmaz) */}
+          <div className="-mx-4 flex flex-nowrap gap-1.5 overflow-x-auto px-4 no-scrollbar">
             {(
               [
                 ['recent', 'Yaklaşan'],
@@ -997,7 +994,7 @@ function CalendarPage(): JSX.Element {
                 key={k}
                 type="button"
                 onClick={() => setFilter(k)}
-                className={`h-9 rounded-lg border px-2 text-xs font-medium ${
+                className={`h-9 shrink-0 whitespace-nowrap rounded-lg border px-3 text-xs font-medium ${
                   filter === k
                     ? k === 'overdue'
                       ? 'border-red-500 bg-red-500 text-white'
@@ -1012,12 +1009,12 @@ function CalendarPage(): JSX.Element {
             ))}
           </div>
 
-          {/* Tip filtre çipleri — Günlük Plan */}
-          <div className="flex flex-wrap gap-1.5">
+          {/* Tip filtre çipleri — Günlük Plan · tek satır yatay kaydırma */}
+          <div className="-mx-4 flex flex-nowrap gap-1.5 overflow-x-auto px-4 no-scrollbar">
             <button
               type="button"
               onClick={() => setTypeFilter(new Set())}
-              className={`h-7 rounded-full border px-3 text-xs font-medium transition-colors ${
+              className={`h-7 shrink-0 whitespace-nowrap rounded-full border px-3 text-xs font-medium transition-colors ${
                 typeFilter.size === 0
                   ? 'border-primary bg-primary text-primary-foreground'
                   : 'border-border bg-background text-muted-foreground hover:bg-muted'
@@ -1041,7 +1038,7 @@ function CalendarPage(): JSX.Element {
                       return next;
                     });
                   }}
-                  className={`inline-flex h-7 items-center gap-1 rounded-full border px-3 text-xs font-medium transition-colors ${
+                  className={`inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-3 text-xs font-medium transition-colors ${
                     active
                       ? `border-transparent bg-primary text-primary-foreground`
                       : 'border-border bg-background text-muted-foreground hover:bg-muted'
@@ -1055,10 +1052,22 @@ function CalendarPage(): JSX.Element {
           </div>
 
           {!loading && grouped.length === 0 && (
-            <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
-              {searchTerm.trim()
-                ? `"${searchTerm.trim()}" için sonuç bulunamadı.`
-                : 'Bu filtrede takvim kaydı yok. "+ Ekle" ile manuel randevu/tahsilat/tanıtım ekleyebilir veya ziyaret formundan otomatik oluşturabilirsin.'}
+            <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+              <p>
+                {searchTerm.trim()
+                  ? `"${searchTerm.trim()}" için sonuç bulunamadı.`
+                  : 'Bu filtrede takvim kaydı yok. "+ Ekle" ile manuel randevu/tahsilat/tanıtım ekleyebilir veya ziyaret formundan otomatik oluşturabilirsin.'}
+              </p>
+              {!searchTerm.trim() && (
+                <button
+                  type="button"
+                  onClick={() => setShowAdd(true)}
+                  className="inline-flex h-11 items-center gap-1.5 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  Ekle
+                </button>
+              )}
             </div>
           )}
 
@@ -1479,6 +1488,44 @@ function CalendarPage(): JSX.Element {
   );
 }
 
+// ---- İlk-yükleme iskeleti (ajanda kartı şeklini taklit eder, pulse) ----
+function AgendaSkeleton(): JSX.Element {
+  return (
+    <div className="space-y-5" aria-hidden="true">
+      {[0, 1].map((g) => (
+        <div key={g} className="space-y-2">
+          {/* Gün başlığı */}
+          <div className="h-4 w-32 animate-pulse rounded bg-muted" />
+          <ul className="space-y-2">
+            {[0, 1, 2].map((c) => (
+              <li key={c} className="rounded-2xl border border-border bg-card p-3">
+                <div className="flex items-start gap-3">
+                  {/* Sol: saat + ikon */}
+                  <div className="flex min-w-[38px] flex-col items-center gap-1 pt-0.5">
+                    <div className="h-3 w-8 animate-pulse rounded bg-muted" />
+                    <div className="h-4 w-4 animate-pulse rounded-full bg-muted" />
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    {/* Rozet + başlık */}
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-4 w-16 animate-pulse rounded-full bg-muted" />
+                      <div className="h-4 w-40 animate-pulse rounded bg-muted" />
+                    </div>
+                    {/* Klinik satırı */}
+                    <div className="h-3 w-28 animate-pulse rounded bg-muted" />
+                    {/* Not satırı */}
+                    <div className="h-3 w-3/4 animate-pulse rounded bg-muted" />
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ---- Ajanda kartı (ajanda + ay-gün listesi paylaşır) ----
 function AgendaCard({
   it,
@@ -1499,6 +1546,16 @@ function AgendaCard({
 }): JSX.Element {
   const meta = typeMeta(it.type);
   const done = it.status === 'done';
+  // Durum-şeridi (sol kenar): AYNI resolved/overdue mantığı (Gecikti rozetiyle tutarlı).
+  // Gecikti = randevu + çözülmemiş + geçmiş vade → kırmızı. Çözülmüş/görüşüldü
+  // (done VEYA resolved VEYA tamamlanmış ziyaret) → yeşil. Diğer/yaklaşan → nötr mavi.
+  const isOverdue = it.kind === 'reminder' && !it.resolved && new Date(it.at) < new Date();
+  const isResolved = done || Boolean(it.resolved) || it.kind === 'visit';
+  const stripClass = isResolved
+    ? 'border-l-4 border-l-green-500'
+    : isOverdue
+      ? 'border-l-4 border-l-red-500'
+      : 'border-l-4 border-l-blue-400';
   const phone = clinic?.phone ? clinic.phone.replace(/[^\d+]/g, '') : null;
   const waPhone = phone ? phone.replace(/^0/, '90').replace(/^\+/, '') : null;
 
@@ -1508,7 +1565,7 @@ function AgendaCard({
   return (
     <li
       id={`reminder-${it.id}`}
-      className={`rounded-2xl border border-border bg-card p-3 ${done ? 'opacity-60' : ''} ${highlighted ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+      className={`rounded-2xl border border-border bg-card p-3 ${stripClass} ${done ? 'opacity-60' : ''} ${highlighted ? 'ring-2 ring-primary ring-offset-2' : ''}`}
     >
       <div
         className={`flex items-start gap-3 ${it.kind === 'reminder' ? 'cursor-pointer' : ''}`}
