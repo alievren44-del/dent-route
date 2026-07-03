@@ -9,6 +9,7 @@
 import { create } from 'zustand';
 import { AuthClient } from './AuthClient';
 import type { AuthSession, SahaProfile } from './types';
+import { setRememberMe, clearRememberMe, isRememberMeDisabled } from '@/lib/authStorage';
 
 interface AuthStoreState {
   session: AuthSession | null;
@@ -18,7 +19,7 @@ interface AuthStoreState {
 
   // Actions
   initialize(client?: AuthClient): Promise<void>;
-  signIn(email: string, password: string, client?: AuthClient): Promise<void>;
+  signIn(email: string, password: string, remember?: boolean, client?: AuthClient): Promise<void>;
   signOut(client?: AuthClient): Promise<void>;
   acceptKvkk(version: string, client?: AuthClient): Promise<void>;
   refreshProfile(client?: AuthClient): Promise<void>;
@@ -88,6 +89,17 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
         return;
       }
 
+      // "Beni hatırla" KAPALI seçilmişse (kullanıcı açıkça istedi) soğuk başlatmada
+      // oturumu kapat → tekrar giriş iste. Varsayılan (flag yok) = hatırla, atma.
+      if (await isRememberMeDisabled()) {
+        await authClient.signOut().catch(() => {
+          /* yutulur */
+        });
+        await clearRememberMe();
+        set({ session: null, profile: null, loading: false });
+        return;
+      }
+
       // Server-side validate — eski/silinmiş session row varsa otomatik signOut.
       // Supabase ES256 JWT'lerinde session_id DB lookup gerek; lookup fail =
       // 401 "Session from session_id claim does not exist".
@@ -145,13 +157,15 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
     }
   },
 
-  async signIn(email, password, client) {
+  async signIn(email, password, remember = true, client) {
     const authClient = getClient(client);
     set({ loading: true, error: null });
     try {
       const session = await authClient.signInWithEmail(email, password);
       const profile = await authClient.fetchProfile(session.userId);
       cacheProfile(profile);
+      // "Beni hatırla" tercihini kalıcı yaz (varsayılan: hatırla).
+      await setRememberMe(remember);
       set({ session, profile, loading: false });
     } catch (err) {
       set({
@@ -172,6 +186,8 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
     } catch {
       /* yutulur */
     }
+    // Açık çıkış → hatırlama tercihini sıfırla (sonraki giriş varsayılan: hatırla).
+    await clearRememberMe();
     set({ session: null, profile: null, error: null });
   },
 

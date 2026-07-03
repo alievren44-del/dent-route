@@ -27,6 +27,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showFirstSetup, setShowFirstSetup] = useState(false);
   const locationHint = (location.state as { hint?: string } | null)?.hint ?? null;
@@ -53,7 +54,7 @@ export default function LoginPage() {
     setSubmitting(true);
     void useAuthStore
       .getState()
-      .signIn(email.trim(), password)
+      .signIn(email.trim(), password, rememberMe)
       .catch(() => {
         // Hata authStore.error'a yazıldı.
       })
@@ -93,6 +94,16 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-3 text-base text-foreground focus:border-primary focus:outline-none"
           />
+        </label>
+
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+          <input
+            type="checkbox"
+            checked={rememberMe}
+            onChange={(e) => setRememberMe(e.target.checked)}
+            className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+          />
+          <span>Beni hatırla</span>
         </label>
 
         {locationHint && (

@@ -123,9 +123,19 @@ let _processing: Promise<{ success: number; failed: number }> | null = null;
 
 export function processQueue(): Promise<{ success: number; failed: number }> {
   if (_processing) return _processing;
-  _processing = _processQueueInner().finally(() => {
-    _processing = null;
-  });
+  _processing = _processQueueInner()
+    .then((res) => {
+      // Başarılı flush sonrası açık ekranlara haber ver → react-query cache'i sunucu
+      // gerçeğiyle tazelensin (optimistik offline satırlar gerçek kayıtla değişir,
+      // reconnect-refetch flicker'ı önlenir). Additive event; mevcut akışları etkilemez.
+      if (res.success > 0 && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('saha-sync-completed', { detail: res }));
+      }
+      return res;
+    })
+    .finally(() => {
+      _processing = null;
+    });
   return _processing;
 }
 
@@ -218,9 +228,15 @@ async function executeOp(op: OfflineOp): Promise<void> {
     case 'reminder.create': {
       // Takvim manuel ekleme offline iken kuyruğa alınır → online'da insert edilir.
       // saha_reminders types.ts'de yok → untyped client (getTypedClient .from() reddeder).
+      // İDEMPOTENT: payload kararlı bir client id (uuid PK) taşır → upsert onConflict 'id'
+      // ignoreDuplicates ile replay (sunucuda commit + yanıt öncesi ağ koptu → retry) çift
+      // kayıt oluşturmaz. Eski (id'siz) kuyruk kayıtları için idempotencyKey'i id'ye düşür
+      // (o da uuid) — böylece onlar da deterministik id ile idempotent replay olur.
+      const payload = { ...(op.payload as Record<string, unknown>) };
+      if (!payload.id) payload.id = op.idempotencyKey;
       const { error } = await getSupabaseClient()
         .from('saha_reminders')
-        .insert(op.payload as never);
+        .upsert(payload as never, { onConflict: 'id', ignoreDuplicates: true });
       if (error) throw error;
       return;
     }

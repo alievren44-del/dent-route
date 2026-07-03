@@ -13,6 +13,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../types/database.types';
 import { getEnv } from '@config/env';
 import { pushDebug } from '@/lib/debugLog';
+import { getAuthStorage } from '@/lib/authStorage';
 
 let cachedClient: SupabaseClient | null = null;
 
@@ -39,6 +40,10 @@ export function getSupabaseClient(): SupabaseClient {
   migrateLegacyAuthKey();
 
   const env = getEnv();
+  // Native (Capacitor) → @capacitor/preferences durable storage (WebView
+  // localStorage soğuk başlatmada evict olabilir → her açılışta re-login sorunu).
+  // Web → undefined = supabase varsayılan localStorage (SSO subdomain paylaşımı korunur).
+  const authStorage = getAuthStorage();
   cachedClient = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
     auth: {
       persistSession: true,
@@ -47,6 +52,7 @@ export function getSupabaseClient(): SupabaseClient {
       // 3 app (Parla Web, Parla App, Saha Nav) ortak SSO key.
       // *.parladisdeposu.com subdomain'leri arası login paylaşır.
       storageKey: 'parla-shared-auth',
+      ...(authStorage ? { storage: authStorage } : {}),
     },
     global: {
       headers: {

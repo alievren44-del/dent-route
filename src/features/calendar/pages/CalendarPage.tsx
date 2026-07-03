@@ -43,6 +43,7 @@ import {
   ReminderDetailSheet,
   type ReminderDetailItem,
 } from '@features/calendar/components/ReminderDetailSheet';
+import { InlineOrderSheet } from '@features/orders/components/InlineOrderSheet';
 import { getSupabaseClient, getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 import { usePermissions } from '@core/auth/usePermissions';
@@ -134,7 +135,18 @@ interface AgendaItem {
   outcome?: string | null;
   completionNote?: string | null;
   sourceRef?: string | null;
+  // Bu öğe "Gecikti" kovasından çıktı mı? (durum çözülmüş VEYA aynı kliniğe
+  // vaktinde/sonra tamamlanmış ziyaret = görüşüldü yapılmış). Tek doğru kaynak.
+  resolved?: boolean;
 }
+
+// TEK DOĞRU KAYNAK (single source of truth): bir hatırlatmayı "Gecikti"
+// kovasından çıkaran çözülmüş durumlar. Randevu tamamlandı VEYA iptal edildiyse
+// artık gecikmiş sayılmaz. (Ayrıca görüşüldü/ziyaret derivasyonu allItems'ta.)
+const RESOLVED_REMINDER_STATUSES: ReadonlySet<ReminderRow['status']> = new Set([
+  'done',
+  'cancelled',
+]);
 
 const OUTCOME_LABEL: Record<string, string> = {
   met: 'Görüşüldü',
@@ -187,6 +199,27 @@ function sevenDaysAgoISO(): string {
   d.setDate(d.getDate() - 7);
   d.setHours(0, 0, 0, 0);
   return d.toISOString();
+}
+
+// Optimistik ekleme için: yeni bir reminder, verilen filtre penceresine (sunucu
+// sorgusuyla aynı sınırlar) düşüyor mu? Düşmüyorsa cache'e enjekte etmeyiz
+// (aksi halde 'Geçmiş' modunda gelecek randevu yanlış görünürdü → refetch temizler).
+function reminderPassesFilter(r: ReminderRow, filter: FilterMode): boolean {
+  if (r.status === 'cancelled') return false; // sunucu .neq('status','cancelled')
+  const due = new Date(r.due_at).getTime();
+  switch (filter) {
+    case 'upcoming':
+      return due >= new Date(startOfTodayISO()).getTime();
+    case 'recent':
+      return due >= new Date(sevenDaysAgoISO()).getTime();
+    case 'past':
+      return due < new Date(startOfTodayISO()).getTime();
+    case 'overdue':
+      return due < Date.now() && r.status === 'open';
+    case 'all':
+    default:
+      return true;
+  }
 }
 
 // Thin wrappers so callers stay unchanged; logic lives in src/lib/datetime.ts.
@@ -268,6 +301,9 @@ function CalendarPage(): JSX.Element {
   const [followUpInit, setFollowUpInit] = useState<ReminderInitial | null>(null);
   // H4: mevcut reminder'ı düzenlemek için. null = yeni ekleme.
   const [editReminder, setEditReminder] = useState<ReminderEditData | null>(null);
+  // "Sipariş Alındı" tamamlandığında ürün+fiyat girişi için inline sipariş sheet'i.
+  // Klinik ön-seçili; cari createOrder içinde otomatik (idempotent) açılır.
+  const [orderForClinic, setOrderForClinic] = useState<{ id: string; name: string } | null>(null);
 
   // ?reminder=<id> → scroll + highlight (state sadece; effect allItems'tan sonra)
   const [searchParams] = useSearchParams();
@@ -485,6 +521,27 @@ function CalendarPage(): JSX.Element {
   // Tüm ajanda öğeleri (gruplanmamış, ham)
   const allItems = useMemo<AgendaItem[]>(() => {
     const items: AgendaItem[] = [];
+    // Klinik başına tamamlanmış ziyaretlerin gün-anahtarları (YYYY-MM-DD).
+    // "Bugün gidildi = görüşüldü" bilgisi ayrı saha_visits kaydında durur; randevu
+    // satırının status'u hâlâ 'open' kalır. Bu harita ile randevuyu ziyaretten
+    // türeterek çözülmüş sayarız (aksi halde gidilse de 'Gecikti' kalıyordu).
+    const visitDaysByAccount = new Map<string, Set<string>>();
+    for (const v of visits) {
+      if (!v.account_id) continue;
+      const set = visitDaysByAccount.get(v.account_id) ?? new Set<string>();
+      set.add(dayKey(v.check_in_at));
+      visitDaysByAccount.set(v.account_id, set);
+    }
+    const reminderResolved = (r: ReminderRow): boolean => {
+      if (RESOLVED_REMINDER_STATUSES.has(r.status)) return true;
+      if (!r.account_id) return false;
+      // Aynı kliniğe randevu gününde VEYA sonrasında tamamlanmış ziyaret var mı?
+      const dueDay = dayKey(r.due_at);
+      const visitDays = visitDaysByAccount.get(r.account_id);
+      if (!visitDays) return false;
+      for (const vDay of visitDays) if (vDay >= dueDay) return true; // YYYY-MM-DD lexik sıralı
+      return false;
+    };
     for (const r of reminders) {
       items.push({
         kind: 'reminder',
@@ -501,6 +558,7 @@ function CalendarPage(): JSX.Element {
         outcome: r.outcome,
         completionNote: r.completion_note,
         sourceRef: r.source_ref,
+        resolved: reminderResolved(r),
       });
     }
     for (const v of visits) {
@@ -538,6 +596,17 @@ function CalendarPage(): JSX.Element {
       clearTimeout(clear);
     };
   }, [focusReminderId, dataQuery.isLoading, allItems]);
+
+  // Offline kuyruğu (reminder.create / visit.create) bağlantı gelince flush edilince
+  // takvimi sunucu gerçeğiyle tazele → optimistik offline satırlar gerçek kayıtla
+  // reconcile olur (aynı id ile upsert → çift yok), reconnect-refetch flicker'ı önlenir.
+  useEffect(() => {
+    const onSynced = (): void => {
+      void queryClient.invalidateQueries({ queryKey: ['calendar'] });
+    };
+    window.addEventListener('saha-sync-completed', onSynced);
+    return () => window.removeEventListener('saha-sync-completed', onSynced);
+  }, [queryClient]);
 
   // Arama filtresi — klinik adı veya nota göre (boşsa tüm öğeler)
   // H6: tanıtım hatırlatmaları ajanda listesinden gizlenir; byDay (ay görünümü) etkilenmez.
@@ -1213,17 +1282,45 @@ function CalendarPage(): JSX.Element {
             setFollowUpInit(null);
             setEditReminder(null);
           }}
-          onAdded={(assignedRepId) => {
+          onAdded={(assignedRepId, created) => {
             setShowAdd(false);
             setFollowUpInit(null);
             setEditReminder(null);
+            const reassign = Boolean(assignedRepId && assignedRepId !== selfId);
             // Başka plasiyere atandıysa admin'in görünümünü o plasiyere geçir →
             // atanan kayıt anında görünür (aksi halde 'gözükmüyor' algısı).
-            if (assignedRepId && assignedRepId !== selfId) {
-              setRepFilter(assignedRepId);
+            if (reassign) {
+              setRepFilter(assignedRepId!);
               setView('agenda');
               setFilter('recent');
               setSelectedDay(null);
+            }
+            // PERF: optimistik ekleme — yeni kaydı hedef takvimin cache'ine ANINDA
+            // enjekte et; tam refetch'i beklemeden ekrana düşer. Arka plandaki
+            // invalidate (aşağıda) sunucu sonucuyla id üzerinden reconcile eder
+            // (dedupe: aynı id'yi bir daha eklemeyiz, refetch tüm diziyi değiştirir).
+            if (created) {
+              const seedRepId = created.rep_id;
+              const seedFilter: FilterMode = reassign
+                ? 'recent'
+                : view === 'month'
+                  ? 'all'
+                  : filter;
+              if (reminderPassesFilter(created, seedFilter)) {
+                queryClient.setQueryData<{ reminders: ReminderRow[]; visits: VisitRow[] }>(
+                  ['calendar', seedRepId, seedFilter],
+                  (prev) => {
+                    const base = prev ?? { reminders: [], visits: [] };
+                    if (base.reminders.some((r) => r.id === created.id)) return base;
+                    return {
+                      reminders: [...base.reminders, created].sort(
+                        (a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime(),
+                      ),
+                      visits: base.visits,
+                    };
+                  },
+                );
+              }
             }
             void queryClient.invalidateQueries({ queryKey: ['calendar'] });
             void syncReminderNotifications();
@@ -1264,6 +1361,12 @@ function CalendarPage(): JSX.Element {
           }}
           onComplete={(id, outcome, note, potential) => {
             void completeReminder(id, outcome, note, potential);
+            // "Sipariş Alındı" → aynı ekranda ürün+fiyat girişi. Ayrı "Yeni Sipariş"
+            // sayfasına gitmeye gerek yok; cari createOrder içinde otomatik açılır.
+            if (outcome === 'order_taken' && selectedItem?.accountId) {
+              const acct = nameMap[selectedItem.accountId];
+              setOrderForClinic({ id: selectedItem.accountId, name: acct?.name ?? 'Klinik' });
+            }
             setSelectedItem(null);
           }}
           onReopen={(id) => {
@@ -1356,6 +1459,19 @@ function CalendarPage(): JSX.Element {
           }}
         />
       )}
+
+      {/* "Sipariş Alındı" sonrası inline sipariş girişi — ürün+fiyat aynı ekranda,
+          cari createOrder içinde otomatik (idempotent) açılır. */}
+      {orderForClinic && (
+        <InlineOrderSheet
+          customerId={orderForClinic.id}
+          customerName={orderForClinic.name}
+          onClose={() => setOrderForClinic(null)}
+          onCreated={() => {
+            void queryClient.invalidateQueries({ queryKey: ['calendar'] });
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1416,7 +1532,9 @@ function AgendaCard({
               {meta.label}
             </span>
             <span className="min-w-0 truncate">{it.title}</span>
-            {it.kind === 'reminder' && it.status === 'open' && new Date(it.at) < new Date() && (
+            {/* Gecikti = geçmiş vade + ÇÖZÜLMEMİŞ. resolved: durum done/cancelled VEYA
+                aynı kliniğe görüşüldü/ziyaret yapılmış (allItems'ta türetilir). */}
+            {it.kind === 'reminder' && !it.resolved && new Date(it.at) < new Date() && (
               <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold bg-red-100 text-red-700">
                 Gecikti
               </span>
@@ -1601,7 +1719,7 @@ function AddReminderModal({
   initial?: ReminderInitial;
   editReminder?: ReminderEditData; // H4: dolu ise düzenleme modu
   onClose: () => void;
-  onAdded: (assignedRepId?: string) => void;
+  onAdded: (assignedRepId?: string, created?: ReminderRow) => void;
 }): JSX.Element {
   const isEdit = Boolean(editReminder);
   // Hedef plasiyer (kimin takvimine). Admin başka plasiyere atayabilir → assigned_by=self.
@@ -1779,49 +1897,92 @@ function AddReminderModal({
 
     const isAssignment = targetRep !== selfId;
 
-    // B2 — Offline: kuyruğa al, online olunca insert edilir.
-    if (!navigator.onLine) {
-      await enqueueOp('reminder.create', {
-        rep_id: targetRep,
-        created_by: selfId,
-        assigned_by: isAssignment ? selfId : null,
-        account_id: clinic?.id ?? null,
-        type,
-        title: finalTitle,
-        note: note.trim() || null,
-        due_at: due.toISOString(),
-        status: 'open',
-        recurrence,
-        source_ref: initial?.sourceId ? `followup:${initial.sourceId}` : null,
-      });
+    // Kararlı client id (uuid) — offline kuyruk kaydının PK'sı olur. executeOp upsert
+    // onConflict 'id' ile replay idempotent olur; ayrıca optimistik satırın id'si sync
+    // sonrası sunucu id'siyle BİREBİR aynı olduğundan refetch çift göstermez. Aynı id
+    // idempotencyKey olarak da kullanılır (çift-enqueue guard).
+    const clientId =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    // Tek nesne: hem DB payload'u hem optimistik ReminderRow (offline'da ajandaya düşer).
+    const reminderPayload: ReminderRow & { created_by: string } = {
+      id: clientId,
+      rep_id: targetRep,
+      created_by: selfId,
+      assigned_by: isAssignment ? selfId : null,
+      account_id: clinic?.id ?? null,
+      visit_id: null,
+      type,
+      title: finalTitle,
+      note: note.trim() || null,
+      due_at: due.toISOString(),
+      status: 'open',
+      recurrence,
+      outcome: null,
+      completion_note: null,
+      source_ref: initial?.sourceId ? `followup:${initial.sourceId}` : null,
+    };
+
+    // B2 — Offline (veya online iken ağ hatası): kuyruğa al + optimistik olarak ANINDA
+    // ajandaya düşür. Bağlantı gelince initSyncQueue flush → upsert (idempotent).
+    async function enqueueReminderOffline(): Promise<void> {
+      await enqueueOp(
+        'reminder.create',
+        reminderPayload as unknown as Record<string, unknown>,
+        clientId,
+      );
       setSaving(false);
       if (attachments.length > 0) toast.warning('Çevrimdışı: ekler kaydedilmedi.');
       else toast.success('Çevrimdışı: bağlantı gelince kaydedilecek.');
-      onAdded(isAssignment ? targetRep : undefined);
+      // Optimistik: onAdded'e tam satır geçir → cache'e anında enjekte (offline'da bile görünür).
+      onAdded(isAssignment ? targetRep : undefined, reminderPayload);
+    }
+
+    if (!navigator.onLine) {
+      await enqueueReminderOffline();
       return;
     }
 
     const sb = getSupabaseClient();
-    const { data: inserted, error } = await sb
-      .from('saha_reminders')
-      .insert({
-        rep_id: targetRep,
-        created_by: selfId,
-        assigned_by: isAssignment ? selfId : null,
-        account_id: clinic?.id ?? null,
-        type,
-        title: finalTitle,
-        note: note.trim() || null,
-        due_at: due.toISOString(),
-        status: 'open',
-        recurrence,
-        source_ref: initial?.sourceId ? `followup:${initial.sourceId}` : null,
-      })
-      .select('id')
-      .single();
-    if (error) {
+    let inserted: ReminderRow | null = null;
+    try {
+      const res = await sb
+        .from('saha_reminders')
+        .insert({
+          rep_id: targetRep,
+          created_by: selfId,
+          assigned_by: isAssignment ? selfId : null,
+          account_id: clinic?.id ?? null,
+          type,
+          title: finalTitle,
+          note: note.trim() || null,
+          due_at: due.toISOString(),
+          status: 'open',
+          recurrence,
+          source_ref: initial?.sourceId ? `followup:${initial.sourceId}` : null,
+        })
+        // Tam satırı geri al → optimistik cache-insert için (id yerine tüm kolonlar).
+        .select(
+          'id, rep_id, account_id, visit_id, type, title, note, due_at, status, assigned_by, recurrence, outcome, completion_note, source_ref',
+        )
+        .single();
+      if (res.error) {
+        setSaving(false);
+        toast.error(`Eklenemedi: ${res.error.message}`);
+        return;
+      }
+      inserted = res.data as ReminderRow;
+    } catch (err) {
+      // Ağ hatası (fetch throw) → sessizce çevrimdışı kuyruğa düş: stuck-spinner + veri
+      // kaybını önle (visit.create/order.create ile aynı desen).
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!navigator.onLine || /fetch|network/i.test(msg)) {
+        await enqueueReminderOffline();
+        return;
+      }
       setSaving(false);
-      toast.error(`Eklenemedi: ${error.message}`);
+      toast.error('Eklenemedi: beklenmeyen hata.');
       return;
     }
 
@@ -1868,7 +2029,7 @@ function AddReminderModal({
     } else {
       toast.success(isAssignment ? 'Plasiyere atandı' : 'Takvime eklendi');
     }
-    onAdded(isAssignment ? targetRep : undefined);
+    onAdded(isAssignment ? targetRep : undefined, inserted ? (inserted as ReminderRow) : undefined);
   }
 
   return (
