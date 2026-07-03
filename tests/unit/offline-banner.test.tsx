@@ -100,7 +100,8 @@ describe('OfflineBanner', () => {
   it('pending > 0 (online) → sarı/mavi senkron banneri ve adet gösterir', async () => {
     listPending.mockResolvedValue([makeOp({ status: 'pending' }), makeOp({ id: 2, status: 'pending' })]);
     render(<OfflineBanner />);
-    expect(await screen.findByText(/2 işlem senkronize ediliyor/)).toBeInTheDocument();
+    expect(await screen.findByText('2 bekliyor')).toBeInTheDocument();
+    expect(screen.getByText(/senkronize ediliyor/)).toBeInTheDocument();
   });
 
   it('failed > 0 → KIRMIZI rozet "N gönderilemedi" + "Tekrar Dene" butonu', async () => {
@@ -157,6 +158,7 @@ describe('OfflineBanner', () => {
     listPending.mockResolvedValue([makeOp({ id: 1, status: 'pending' })]);
     render(<OfflineBanner />);
     expect(await screen.findByText(/Çevrim dışısınız/)).toBeInTheDocument();
-    expect(screen.getByText(/1 işlem bağlantı geldiğinde gönderilecek/)).toBeInTheDocument();
+    expect(screen.getByText('1 bekliyor')).toBeInTheDocument();
+    expect(screen.getByText(/bağlantı gelince gönderilecek/)).toBeInTheDocument();
   });
 });

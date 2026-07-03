@@ -194,16 +194,16 @@ export function OfflineBanner() {
           <>
             <WifiOff className="h-4 w-4 shrink-0" />
             <span className="flex items-center gap-1">
-              Çevrim dışısınız
+              <span>Çevrim dışısınız</span>
               {hasPending ? (
                 <>
                   <span className="mx-0.5 inline-flex items-center gap-1 rounded-full bg-white/25 px-2 py-0.5 text-xs font-bold">
                     {pending} bekliyor
                   </span>
-                  — bağlantı gelince gönderilecek
+                  <span>— bağlantı gelince gönderilecek</span>
                 </>
               ) : (
-                ' — değişiklikler bağlantı geldiğinde gönderilecek'
+                <span> — değişiklikler bağlantı geldiğinde gönderilecek</span>
               )}
             </span>
           </>
