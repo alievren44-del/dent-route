@@ -19,7 +19,6 @@ import {
   MapPinned,
   UserCog,
   ScrollText,
-  ClipboardCheck,
   Wallet,
   Receipt,
   CreditCard,
@@ -158,7 +157,8 @@ async function fetchDashboard(sinceIso: string): Promise<DashboardData> {
   const sinceDate = sinceIso.slice(0, 10);
 
   const [reps, visits, mileage, orders, cariler, odemeler] = await Promise.all([
-    supabase.from('profiles').select('id, ad_soyad, email, role').ilike('role', '%REP%'),
+    // Sahada çalışan admin'ler (eda/ali) de plasiyer-seçim/KPI'da görünsün — REP + ADMIN.
+    supabase.from('profiles').select('id, ad_soyad, email, role').or('role.ilike.%REP%,role.ilike.%ADMIN%'),
     supabase.from('saha_visits').select('id, rep_id').gte('check_in_at', sinceIso),
     supabase.from('saha_mileage_logs').select('profile_id, distance_km').gte('log_date', sinceDate),
     supabase
@@ -442,11 +442,8 @@ export default function DashboardPage() {
               label="Audit Log"
               icon={<ScrollText className="h-4 w-4" />}
             />
-            <AdminLink
-              to="/orders/approval"
-              label="Sipariş Onay"
-              icon={<ClipboardCheck className="h-4 w-4" />}
-            />
+            {/* "Sipariş Onay" tile kaldırıldı: ekip tümü admin/rep → oto-onay
+                (approvalRules ADMIN/REP=Infinity), onay-akışı kullanılmıyor. */}
             <AdminLink to="/invoicing/cari" label="Cariler" icon={<Wallet className="h-4 w-4" />} />
             <AdminLink
               to="/invoicing/fatura/yeni"

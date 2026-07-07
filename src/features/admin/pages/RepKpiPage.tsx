@@ -87,7 +87,8 @@ async function fetchKpi(ym: string): Promise<KpiData> {
   const { startIso, endIso, startDate, endDate } = monthRange(ym);
 
   const [reps, visits, orders, odemeler, samples, routes, targets] = await Promise.all([
-    supabase.from('profiles').select('id, ad_soyad, email, role').ilike('role', '%REP%'),
+    // Sahada çalışan admin'ler de KPI/plasiyer-listesinde görünsün — REP + ADMIN.
+    supabase.from('profiles').select('id, ad_soyad, email, role').or('role.ilike.%REP%,role.ilike.%ADMIN%'),
     supabase
       .from('saha_visits')
       .select('rep_id')

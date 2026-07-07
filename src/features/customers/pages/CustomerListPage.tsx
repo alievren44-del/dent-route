@@ -405,7 +405,8 @@ async function fetchReps(): Promise<RepOption[]> {
   const { data, error } = await supabase
     .from('profiles')
     .select('id, ad_soyad, email, role')
-    .ilike('role', '%REP%');
+    // Sahada çalışan admin'ler de müşteri-atama plasiyer-listesinde görünsün.
+    .or('role.ilike.%REP%,role.ilike.%ADMIN%');
   if (error) {
     console.warn('reps fetch failed:', error.message);
     return [];

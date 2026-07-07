@@ -39,7 +39,8 @@ async function fetchReps(): Promise<RepRow[]> {
   const { data, error } = await supabase
     .from('profiles')
     .select('id, ad_soyad, email, role, region')
-    .ilike('role', '%REP%');
+    // Sahada çalışan admin'ler de bölge-atamada görünsün — REP + ADMIN.
+    .or('role.ilike.%REP%,role.ilike.%ADMIN%');
   if (error) throw error;
   return (data ?? ([] as RepRow[])).sort((a, b) =>
     (a.ad_soyad ?? a.email ?? '').localeCompare(b.ad_soyad ?? b.email ?? '', 'tr'),
