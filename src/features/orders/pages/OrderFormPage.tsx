@@ -30,7 +30,7 @@ import { getTypedClient } from '@lib/supabase';
 import { invalidateOrderDomain } from '@lib/queryKeys';
 import type { Json } from '@/types/database.types';
 import { useAuthStore } from '@core/auth/authStore';
-import type { NewOrderItem, Product } from '@core/adapters/types';
+import type { NewOrderItem, Product, ProductVariant } from '@core/adapters/types';
 import { needsApproval, nextApproverRole, thresholdFor } from '@features/orders/lib/approvalRules';
 import { enqueueOp } from '@core/offline/syncQueue';
 
@@ -39,6 +39,10 @@ const adapter = new SupabaseCRMAdapter();
 interface CartItem extends NewOrderItem {
   productName: string;
   unitPriceSnapshot: number;
+  /** Seçilen varyantın sku'su (varsa) — Sepet etiketinde gösterilir. */
+  variantSku?: string;
+  /** Kısa varyant etiketi ("SKU 801 · ISO 220 · 0,15") — Sepet satırında ürün adı altında. */
+  variantLabel?: string;
 }
 
 interface TemplateLine {
@@ -55,10 +59,12 @@ interface OrderTemplate {
 }
 
 interface CustomerOption {
+  /** 'clinic' → saha_clinics kaydı; 'cari' → saha_cariler (muhasebe cari) kaydı. */
+  kind: 'clinic' | 'cari';
   id: string;
-  /** Görünen ad (klinik adı). */
+  /** Görünen ad (klinik adı / cari fatura ünvanı). */
   name: string;
-  /** Alt satır — adres / şehir. */
+  /** Alt satır — klinikte adres/şehir, caride cari_kodu. */
   subtitle: string | null;
 }
 
@@ -68,6 +74,32 @@ function formatTL(n: number): string {
     currency: 'TRY',
     maximumFractionDigits: 2,
   });
+}
+
+/** Sepet satır anahtarı — aynı ürünün farklı varyantları ayrı satır olsun diye. */
+function lineKey(productId: string, variantId?: string): string {
+  return `${productId}::${variantId ?? ''}`;
+}
+
+/**
+ * Kısa varyant etiketi: sku + öne çıkan öznitelikler (iso / tipSize / grit / packaging),
+ * yalnız dolu olanlar kompakt biçimde. Örn: "SKU 801 · ISO 220 · 0,15".
+ */
+function variantLabel(v: ProductVariant): string {
+  const a = v.attributes ?? {};
+  const pick = (k: string): string | undefined => {
+    const val = a[k];
+    return val == null || val === '' ? undefined : String(val);
+  };
+  const iso = pick('iso');
+  const parts = [
+    v.sku ? `SKU ${v.sku}` : undefined,
+    iso ? `ISO ${iso}` : undefined,
+    pick('tipSize'),
+    pick('grit'),
+    pick('packaging'),
+  ].filter(Boolean);
+  return parts.join(' · ') || 'Varyant';
 }
 
 function useDebounced<T>(value: T, ms: number): T {
@@ -88,6 +120,9 @@ function OrderFormPage(): JSX.Element {
   const userRole = String(profile?.role ?? 'USER').toUpperCase();
 
   const [customerId, setCustomerId] = useState<string>(initialCustomerId);
+  // Seçilen müşterinin türü — 'cari' ise submit'te adapter'a cariId geçilir.
+  // Başlangıç/legacy (initialCustomerId) klinik/profil yolu 'clinic' say.
+  const [customerKind, setCustomerKind] = useState<'clinic' | 'cari'>('clinic');
   const [customerLabel, setCustomerLabel] = useState<string>('');
   const [customerSearch, setCustomerSearch] = useState<string>('');
   const [customerPickerOpen, setCustomerPickerOpen] = useState<boolean>(false);
@@ -96,6 +131,8 @@ function OrderFormPage(): JSX.Element {
   const [notes, setNotes] = useState<string>('');
   const [productSearch, setProductSearch] = useState<string>('');
   const [productListOpen, setProductListOpen] = useState<boolean>(false);
+  // Çok-varyantlı ürün seçilince açılan varyant seçici (inline expansion).
+  const [variantPickFor, setVariantPickFor] = useState<Product | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -155,9 +192,40 @@ function OrderFormPage(): JSX.Element {
         address: string | null;
       }>;
       return rows.map((r) => ({
+        kind: 'clinic' as const,
         id: r.id,
         name: r.name ?? 'İsimsiz klinik',
         subtitle: r.address,
+      }));
+    },
+  });
+
+  // Müşteri arama — saha_cariler (muhasebe carileri) üzerinde fatura_unvani/cari_kodu ile.
+  // RLS carileri temsilcinin kendine kısıtlar (bypass yok). Klinik-siz cariler için
+  // sipariş açmayı mümkün kılar — RPC orders.user_id'yi cari.profile_id'den çözer.
+  const { data: cariOptions, isFetching: cariSearching } = useQuery({
+    queryKey: ['order-form-cari-search', debouncedCustomerSearch],
+    enabled: customerPickerOpen && debouncedCustomerSearch.trim().length >= 2,
+    queryFn: async (): Promise<CustomerOption[]> => {
+      const supabase = getTypedClient();
+      const term = `%${debouncedCustomerSearch}%`;
+      const { data, error: err } = await supabase
+        .from('saha_cariler')
+        .select('id, cari_kodu, fatura_unvani, profile_id')
+        .or(`fatura_unvani.ilike.${term},cari_kodu.ilike.${term}`)
+        .limit(10);
+      if (err) throw err;
+      const rows = (data ?? []) as Array<{
+        id: string;
+        cari_kodu: string | null;
+        fatura_unvani: string | null;
+        profile_id: string | null;
+      }>;
+      return rows.map((r) => ({
+        kind: 'cari' as const,
+        id: r.id,
+        name: r.fatura_unvani ?? r.cari_kodu ?? 'İsimsiz cari',
+        subtitle: r.cari_kodu,
       }));
     },
   });
@@ -175,7 +243,15 @@ function OrderFormPage(): JSX.Element {
       cart.map((c) => ({
         productId: c.productId,
         quantity: c.quantity,
-        ...(c.unitPriceOverride !== undefined ? { unitPriceOverride: c.unitPriceOverride } : {}),
+        ...(c.variantId ? { variantId: c.variantId } : {}),
+        // quoteOrder varyant fiyatını product_id'den çözemez (base/sale price döner) →
+        // varyant seçili satırda görsel toplam için varyant fiyatını override geçir.
+        // (createOrder bu override'ı KASITEN atar; sunucu variant_id'den yeniden çözer.)
+        ...(c.unitPriceOverride !== undefined
+          ? { unitPriceOverride: c.unitPriceOverride }
+          : c.variantId
+            ? { unitPriceOverride: c.unitPriceSnapshot }
+            : {}),
       })),
     [cart],
   );
@@ -241,9 +317,29 @@ function OrderFormPage(): JSX.Element {
     );
   }
 
-  function addToCart(p: Product): void {
+  /**
+   * Ürün satırına/+ butonuna dokununca: 2+ varyant varsa varyant seçici aç,
+   * 1 varyant varsa onu otomatik seç, varyantsız üründe eski davranış.
+   */
+  function handleProductPick(p: Product): void {
+    const variants = p.variants ?? [];
+    if (variants.length >= 2) {
+      setVariantPickFor(p);
+      setProductListOpen(false);
+    } else {
+      // Tam 1 varyant → dialogsuz otomatik seç; varyantsız → variant=undefined.
+      addToCart(p, variants[0]);
+    }
+  }
+
+  function addToCart(p: Product, variant?: ProductVariant): void {
+    const variantId = variant?.id;
+    // Varyant seçiliyse birim fiyat varyant fiyatı (görsel); değilse ürün base fiyatı.
+    const unitPrice = variant != null ? variant.priceTry : (p.basePrice ?? 0);
+    const label = variant != null ? variantLabel(variant) : undefined;
     setCart((prev) => {
-      const idx = prev.findIndex((it) => it.productId === p.id);
+      // Aynı ürün+varyant → miktar artır; farklı varyant → ayrı satır.
+      const idx = prev.findIndex((it) => it.productId === p.id && it.variantId === variantId);
       if (idx >= 0) {
         const next = [...prev];
         const existing = next[idx]!;
@@ -255,33 +351,41 @@ function OrderFormPage(): JSX.Element {
         {
           productId: p.id,
           quantity: 1,
+          ...(variantId ? { variantId } : {}),
           productName: p.name,
-          unitPriceSnapshot: p.basePrice ?? 0,
+          unitPriceSnapshot: unitPrice,
+          ...(variant?.sku ? { variantSku: variant.sku } : {}),
+          ...(label ? { variantLabel: label } : {}),
         },
       ];
     });
     setProductSearch('');
     setProductListOpen(false);
+    setVariantPickFor(null);
   }
 
-  function updateQty(productId: string, delta: number): void {
+  function updateQty(key: string, delta: number): void {
     setCart((prev) => {
       const next = prev
         .map((it) =>
-          it.productId === productId ? { ...it, quantity: Math.max(0, it.quantity + delta) } : it,
+          lineKey(it.productId, it.variantId) === key
+            ? { ...it, quantity: Math.max(0, it.quantity + delta) }
+            : it,
         )
         .filter((it) => it.quantity > 0);
       return next;
     });
   }
 
-  function removeItem(productId: string): void {
-    setCart((prev) => prev.filter((it) => it.productId !== productId));
+  function removeItem(key: string): void {
+    setCart((prev) => prev.filter((it) => lineKey(it.productId, it.variantId) !== key));
   }
 
   function pickCustomer(c: CustomerOption): void {
     setCustomerId(c.id);
-    setCustomerLabel(c.name);
+    setCustomerKind(c.kind);
+    // Cari chip'inde fatura ünvanı + cari kodu birlikte gösterilir.
+    setCustomerLabel(c.kind === 'cari' && c.subtitle ? `${c.name} · ${c.subtitle}` : c.name);
     setCustomerPickerOpen(false);
     setCustomerSearch('');
   }
@@ -309,10 +413,14 @@ function OrderFormPage(): JSX.Element {
     const offlinePayload: Record<string, unknown> = {
       idempotency_key: idempotencyKey,
       customer_id: customerId,
+      // Cari seçimiyse cari_id taşı — syncQueue replay adapter.createOrder'a cariId geçer.
+      cari_id: customerKind === 'cari' ? customerId : null,
       notes: notes.trim() || null,
       items: cart.map((c) => ({
         productId: c.productId,
         quantity: c.quantity,
+        // Varyant seçimi replay'de kaybolmasın → syncQueue order.create bunu adapter'a taşır.
+        ...(c.variantId ? { variantId: c.variantId } : {}),
         unitPriceSnapshot: c.unitPriceSnapshot,
         ...(c.unitPriceOverride !== undefined ? { unitPriceOverride: c.unitPriceOverride } : {}),
       })),
@@ -329,8 +437,11 @@ function OrderFormPage(): JSX.Element {
         await enqueueOp('order.create', offlinePayload, idempotencyKey);
         toast.success('Sipariş kaydedildi — bağlantı geldiğinde gönderilecek');
         navigate('/orders/history');
-      } catch {
-        setError('Sipariş çevrim dışı kuyruğa eklenemedi.');
+      } catch (err) {
+        // P8/T4: hatayı yutma — kök-nedeni logla + kullanıcıya mesajı göster.
+        console.error('[OrderForm] offline enqueue başarısız:', err);
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(`Sipariş çevrim dışı kuyruğa eklenemedi: ${msg}`);
       } finally {
         setSubmitting(false);
       }
@@ -342,10 +453,14 @@ function OrderFormPage(): JSX.Element {
       const items: NewOrderItem[] = cart.map((c) => ({
         productId: c.productId,
         quantity: c.quantity,
+        // Varyant → sunucu fiyat/sku/attribute'ları variant_id'den çözer (RPC v2).
+        ...(c.variantId ? { variantId: c.variantId } : {}),
         ...(c.unitPriceOverride !== undefined ? { unitPriceOverride: c.unitPriceOverride } : {}),
       }));
       const created = await adapter.createOrder({
         customerId,
+        // Cari seçimiyse cariId geç → adapter clinic_id yerine cari_id gönderir.
+        ...(customerKind === 'cari' ? { cariId: customerId } : {}),
         items,
         notes: notes.trim() || undefined,
         idempotencyKey,
@@ -433,11 +548,16 @@ function OrderFormPage(): JSX.Element {
           toast.success('Bağlantı hatası — sipariş kaydedildi, bağlantı geldiğinde gönderilecek');
           navigate('/orders/history');
           return;
-        } catch {
-          setError('Sipariş çevrim dışı kuyruğa eklenemedi.');
+        } catch (enqErr) {
+          // P8/T4: kuyruğa alma da başarısızsa hatayı yutma — logla + göster.
+          console.error('[OrderForm] network-fallback enqueue başarısız:', enqErr);
+          const enqMsg = enqErr instanceof Error ? enqErr.message : String(enqErr);
+          setError(`Sipariş çevrim dışı kuyruğa eklenemedi: ${enqMsg}`);
           return;
         }
       }
+      // P8/T4: sunucu/doğrulama hatası — kök-nedeni logla, mesajı UI'da göster.
+      console.error('[OrderForm] sipariş oluşturulamadı:', err);
       setError(msg || 'Sipariş oluşturulamadı.');
     } finally {
       setSubmitting(false);
@@ -473,6 +593,7 @@ function OrderFormPage(): JSX.Element {
                 type="button"
                 onClick={() => {
                   setCustomerId('');
+                  setCustomerKind('clinic');
                   setCustomerLabel('');
                   setCustomerPickerOpen(true);
                 }}
@@ -499,11 +620,19 @@ function OrderFormPage(): JSX.Element {
               </div>
               {customerPickerOpen && debouncedCustomerSearch.trim().length >= 2 && (
                 <div className="mt-1 rounded-lg border border-border bg-card shadow-lg max-h-72 overflow-y-auto">
-                  {customerSearching && (
+                  {(customerSearching || cariSearching) && (
                     <p className="px-3 py-2 text-xs text-muted-foreground">Aranıyor…</p>
                   )}
-                  {!customerSearching && (customerOptions ?? []).length === 0 && (
-                    <p className="px-3 py-2 text-xs text-muted-foreground">Sonuç yok.</p>
+                  {!customerSearching &&
+                    !cariSearching &&
+                    (customerOptions ?? []).length === 0 &&
+                    (cariOptions ?? []).length === 0 && (
+                      <p className="px-3 py-2 text-xs text-muted-foreground">Sonuç yok.</p>
+                    )}
+                  {(customerOptions ?? []).length > 0 && (
+                    <p className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Klinikler
+                    </p>
                   )}
                   {(customerOptions ?? []).map((c) => (
                     <button
@@ -515,6 +644,26 @@ function OrderFormPage(): JSX.Element {
                       <p className="text-sm font-medium text-foreground truncate">{c.name}</p>
                       {c.subtitle && (
                         <p className="text-xs text-muted-foreground truncate">{c.subtitle}</p>
+                      )}
+                    </button>
+                  ))}
+                  {(cariOptions ?? []).length > 0 && (
+                    <p className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Cariler
+                    </p>
+                  )}
+                  {(cariOptions ?? []).map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => pickCustomer(c)}
+                      className="w-full text-left px-3 py-2.5 min-h-tap-min hover:bg-muted/60 border-b border-border last:border-b-0"
+                    >
+                      <p className="text-sm font-medium text-foreground truncate">{c.name}</p>
+                      {c.subtitle && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          Cari · {c.subtitle}
+                        </p>
                       )}
                     </button>
                   ))}
@@ -595,7 +744,52 @@ function OrderFormPage(): JSX.Element {
                 </button>
               )}
             </div>
-            {productListOpen && debouncedProductSearch.trim().length >= 2 && (
+            {/* Varyant seçici — 2+ varyantlı ürün seçilince arama sonuçlarının yerine geçer. */}
+            {variantPickFor && (
+              <div className="mt-1 rounded-lg border border-border bg-card shadow-lg max-h-80 overflow-y-auto">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/40 sticky top-0">
+                  <span className="text-sm font-medium text-foreground truncate">
+                    {variantPickFor.name} — varyant seç
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVariantPickFor(null);
+                      setProductListOpen(true);
+                    }}
+                    className="text-xs text-primary font-medium shrink-0 ml-2 px-2 py-1 min-h-tap-min"
+                  >
+                    ← Geri
+                  </button>
+                </div>
+                {(variantPickFor.variants ?? []).map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => addToCart(variantPickFor, v)}
+                    className="w-full text-left px-3 py-2.5 min-h-tap-min hover:bg-muted/60 border-b border-border last:border-b-0 flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {variantLabel(v)}
+                      </p>
+                      {v.stockQuantity != null && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          Stok: {v.stockQuantity}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-sm font-semibold text-foreground">
+                        {formatTL(v.priceTry)}
+                      </span>
+                      <Plus className="h-4 w-4 text-primary" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {!variantPickFor && productListOpen && debouncedProductSearch.trim().length >= 2 && (
               <div className="mt-1 rounded-lg border border-border bg-card shadow-lg max-h-80 overflow-y-auto">
                 {productSearching && (
                   <p className="px-3 py-2 text-xs text-muted-foreground">Aranıyor…</p>
@@ -603,27 +797,33 @@ function OrderFormPage(): JSX.Element {
                 {!productSearching && (productOptions ?? []).length === 0 && (
                   <p className="px-3 py-2 text-xs text-muted-foreground">Sonuç yok.</p>
                 )}
-                {(productOptions ?? []).map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => addToCart(p)}
-                    className="w-full text-left px-3 py-2.5 min-h-tap-min hover:bg-muted/60 border-b border-border last:border-b-0 flex items-center justify-between gap-3"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-foreground truncate">{p.name}</p>
-                      {p.sku && (
-                        <p className="text-xs text-muted-foreground truncate">SKU: {p.sku}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-sm font-semibold text-foreground">
-                        {formatTL(p.basePrice ?? 0)}
-                      </span>
-                      <Plus className="h-4 w-4 text-primary" />
-                    </div>
-                  </button>
-                ))}
+                {(productOptions ?? []).map((p) => {
+                  const variantCount = p.variants?.length ?? 0;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handleProductPick(p)}
+                      className="w-full text-left px-3 py-2.5 min-h-tap-min hover:bg-muted/60 border-b border-border last:border-b-0 flex items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-foreground truncate">{p.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {p.sku ? `SKU: ${p.sku}` : ''}
+                          {variantCount >= 2
+                            ? `${p.sku ? ' · ' : ''}${variantCount} varyant ›`
+                            : ''}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-sm font-semibold text-foreground">
+                          {formatTL(p.basePrice ?? 0)}
+                        </span>
+                        <Plus className="h-4 w-4 text-primary" />
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -639,18 +839,28 @@ function OrderFormPage(): JSX.Element {
           ) : (
             <div className="space-y-2">
               {cart.map((it) => {
-                const quoted = quote?.items.find((q) => q.productId === it.productId);
+                const key = lineKey(it.productId, it.variantId);
+                const quoted = quote?.items.find(
+                  (q) => q.productId === it.productId && q.variantId === it.variantId,
+                );
                 const unitPrice = quoted?.unitPrice ?? it.unitPriceSnapshot;
                 const lineTotal = quoted?.lineTotal ?? unitPrice * it.quantity;
                 return (
-                  <div key={it.productId} className="p-3 rounded-lg border border-border bg-card">
+                  <div key={key} className="p-3 rounded-lg border border-border bg-card">
                     <div className="flex items-start justify-between gap-2 mb-2">
-                      <p className="text-sm font-medium text-foreground flex-1 min-w-0 truncate">
-                        {it.productName}
-                      </p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {it.productName}
+                        </p>
+                        {it.variantLabel && (
+                          <p className="text-xs text-muted-foreground truncate">
+                            {it.variantLabel}
+                          </p>
+                        )}
+                      </div>
                       <button
                         type="button"
-                        onClick={() => removeItem(it.productId)}
+                        onClick={() => removeItem(key)}
                         className="p-1.5 -m-1.5 rounded-full hover:bg-muted text-red-600 min-h-tap-min min-w-tap-min flex items-center justify-center"
                         aria-label="Sil"
                       >
@@ -661,7 +871,7 @@ function OrderFormPage(): JSX.Element {
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => updateQty(it.productId, -1)}
+                          onClick={() => updateQty(key, -1)}
                           className="h-9 w-9 rounded-full border border-border flex items-center justify-center hover:bg-muted min-h-tap-min min-w-tap-min"
                           aria-label="Azalt"
                         >
@@ -672,7 +882,7 @@ function OrderFormPage(): JSX.Element {
                         </span>
                         <button
                           type="button"
-                          onClick={() => updateQty(it.productId, 1)}
+                          onClick={() => updateQty(key, 1)}
                           className="h-9 w-9 rounded-full border border-border flex items-center justify-center hover:bg-muted min-h-tap-min min-w-tap-min"
                           aria-label="Arttır"
                         >

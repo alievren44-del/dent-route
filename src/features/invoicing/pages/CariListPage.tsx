@@ -15,9 +15,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, X, Filter, Check, AlertTriangle } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { getTypedClient } from '@lib/supabase';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
+import { enqueueOp } from '@core/offline/syncQueue';
 
 interface CariListRow {
   id: string;
@@ -395,6 +397,47 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
   const [profilePickerOpen, setProfilePickerOpen] = useState<boolean>(!initialProfileId);
   const debouncedSearch = useDebounced(profileSearch, 300);
 
+  // Kayıtlı müşteri (profiles) eşleştirme — opsiyonel. Klinik-kaynağı (saha_clinics)
+  // aramasından AYRI: bu, cari'yi app'e kayıtlı bir HEKİM profiline (ve dolayısıyla
+  // customer_accounts bakiyesine) bağlar (saha_link_cari_to_profile). RLS profiles'ta
+  // SELECT'i kendi satır / admin / atanmış rep (rep_assignments) ile sınırlar → rep az
+  // sonuç görebilir; bu KABUL EDİLEBİLİR (RLS aşılmaz).
+  const [linkProfileId, setLinkProfileId] = useState<string | null>(null);
+  const [linkProfileLabel, setLinkProfileLabel] = useState<string>('');
+  const [linkProfileSearch, setLinkProfileSearch] = useState<string>('');
+  const debouncedLinkSearch = useDebounced(linkProfileSearch, 300);
+
+  const { data: linkProfileOptions, isFetching: linkProfileSearching } = useQuery({
+    queryKey: ['cari-new-link-profile-search', debouncedLinkSearch],
+    enabled: !linkProfileId && debouncedLinkSearch.trim().length >= 2,
+    queryFn: async (): Promise<
+      Array<{ id: string; label: string; sub: string | null }>
+    > => {
+      const supabase = getTypedClient();
+      const term = `%${debouncedLinkSearch.trim()}%`;
+      const { data, error: err } = await supabase
+        .from('profiles')
+        .select('id, ad_soyad, email, klinik_adi, telefon, tax_number')
+        .or(`ad_soyad.ilike.${term},email.ilike.${term},klinik_adi.ilike.${term}`)
+        .limit(10);
+      if (err) throw err;
+      return (
+        (data ?? []) as Array<{
+          id: string;
+          ad_soyad: string | null;
+          email: string | null;
+          klinik_adi: string | null;
+          telefon: string | null;
+          tax_number: string | null;
+        }>
+      ).map((p) => ({
+        id: p.id,
+        label: p.ad_soyad?.trim() || p.klinik_adi?.trim() || p.email || p.id.slice(0, 8),
+        sub: p.email ?? p.klinik_adi ?? p.telefon ?? null,
+      }));
+    },
+  });
+
   const [faturaUnvani, setFaturaUnvani] = useState('');
   const [vergiNo, setVergiNo] = useState('');
   const [vergiDairesi, setVergiDairesi] = useState('');
@@ -512,6 +555,45 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
     },
   });
 
+  // saha_cariler insert objesi — online mutation ile offline enqueue AYNI kaynaktan
+  // türetilir (drift önler). id online'da DB default (gen_random_uuid) ile dolar;
+  // offline'da client-üretimli uuid gömülür (idempotent replay için).
+  function buildCariInsert(): Record<string, unknown> {
+    return {
+      cari_kodu: '',
+      clinic_id: profileId,
+      fatura_unvani: faturaUnvani.trim(),
+      vergi_no: vergiNo.trim() || null,
+      vergi_dairesi: vergiDairesi.trim() || null,
+      fatura_adresi: faturaAdresi.trim() || null,
+      il: il.trim() || null,
+      ilce: ilce.trim() || null,
+      iban: iban.trim() || null,
+      banka_adi: bankaAdi.trim() || null,
+      odeme_vadesi_gun: odemeVadesiGun,
+      kredi_limiti: krediLimiti,
+      sales_rep_id: salesRepId || null,
+    };
+  }
+
+  // #P9: Cari'yi çevrimdışı kuyruğa al. Client-üretimli uuid `id` → replay'de aynı
+  // pk ile insert unique_violation (23505) tetikler → syncQueue idempotent başarı sayar.
+  // link_profile_id varsa replay saha_link_cari_to_profile'ı da çağırır (idempotent RPC).
+  async function enqueueCariOffline(): Promise<void> {
+    const cariId =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    await enqueueOp(
+      'cari.create',
+      { ...buildCariInsert(), id: cariId, link_profile_id: linkProfileId },
+      cariId,
+    );
+    toast.success('Cari çevrimdışı kaydedildi — bağlantı geldiğinde gönderilecek');
+    void queryClient.invalidateQueries({ queryKey: ['cariler'] });
+    onClose();
+  }
+
   const mutation = useMutation({
     mutationFn: async () => {
       const supabase = getTypedClient();
@@ -533,25 +615,32 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
       }
       const { data, error: err } = await supabase
         .from('saha_cariler')
-        .insert({
-          cari_kodu: '',
-          clinic_id: profileId,
-          fatura_unvani: faturaUnvani.trim(),
-          vergi_no: vergiNo.trim() || null,
-          vergi_dairesi: vergiDairesi.trim() || null,
-          fatura_adresi: faturaAdresi.trim() || null,
-          il: il.trim() || null,
-          ilce: ilce.trim() || null,
-          iban: iban.trim() || null,
-          banka_adi: bankaAdi.trim() || null,
-          odeme_vadesi_gun: odemeVadesiGun,
-          kredi_limiti: krediLimiti,
-          sales_rep_id: salesRepId || null,
-        })
+        .insert(buildCariInsert() as never)
         .select('id')
         .single();
       if (err) throw err;
-      return data as { id: string };
+      const created = data as { id: string };
+
+      // Opsiyonel: cari'yi kayıtlı bir profile bağla. Link BAŞARISIZ olsa da cari
+      // oluşturuldu → GERİ ALINMAZ; yalnız uyarı toast gösterilir (spec T2).
+      if (linkProfileId) {
+        type UntypedRpc = {
+          rpc(
+            fn: string,
+            args: Record<string, unknown>,
+          ): Promise<{ error: { message: string } | null }>;
+        };
+        const { error: linkErr } = await (supabase as unknown as UntypedRpc).rpc(
+          'saha_link_cari_to_profile',
+          { p_cari_id: created.id, p_profile_id: linkProfileId },
+        );
+        if (linkErr) {
+          toast.warning(
+            `Cari oluşturuldu ancak müşteri eşleştirilemedi: ${linkErr.message}`,
+          );
+        }
+      }
+      return created;
     },
     onSuccess: (row) => {
       void queryClient.invalidateQueries({ queryKey: ['cariler'] });
@@ -559,7 +648,24 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
       navigate(`/invoicing/cari/${row.id}`);
     },
     onError: (err: unknown) => {
-      setError(err instanceof Error ? err.message : 'Cari oluşturulamadı.');
+      // #P9: ağ-sınıflı hata → offline kuyruğa düş (OrderFormPage ile aynı desen).
+      const msg = err instanceof Error ? err.message : String(err);
+      const isNetworkError =
+        !navigator.onLine ||
+        msg.includes('fetch') ||
+        msg.includes('network') ||
+        msg.includes('Failed to fetch') ||
+        msg.includes('NetworkError');
+      if (isNetworkError) {
+        void enqueueCariOffline().catch((e: unknown) => {
+          console.error('[CariList] network-fallback enqueue başarısız:', e);
+          setError(
+            `Cari çevrim dışı kuyruğa eklenemedi: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        });
+        return;
+      }
+      setError(msg || 'Cari oluşturulamadı.');
     },
   });
 
@@ -567,6 +673,16 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
     setError(null);
     if (!faturaUnvani.trim()) {
       setError('Fatura unvanı zorunludur.');
+      return;
+    }
+    // #P9: çevrimdışıysa doğrudan kuyruğa al (online insert denemeden).
+    if (!navigator.onLine) {
+      void enqueueCariOffline().catch((e: unknown) => {
+        console.error('[CariList] offline enqueue başarısız:', e);
+        setError(
+          `Cari çevrim dışı kuyruğa eklenemedi: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      });
       return;
     }
     mutation.mutate();
@@ -653,6 +769,68 @@ function NewCariModal({ initialProfileId, onClose }: NewCariModalProps): JSX.Ele
                         <p className="text-sm font-medium truncate">
                           {p.klinik_adi ?? p.ad_soyad ?? p.email ?? p.id}
                         </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* Kayıtlı müşteri eşleştir (opsiyonel) — cari'yi app profiline bağlar */}
+          <section>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+              Kayıtlı müşteri eşleştir (opsiyonel)
+            </label>
+            {linkProfileId ? (
+              <div className="flex items-center justify-between gap-2 p-2 rounded-lg border border-border bg-card">
+                <p className="text-sm truncate">{linkProfileLabel}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLinkProfileId(null);
+                    setLinkProfileLabel('');
+                    setLinkProfileSearch('');
+                  }}
+                  className="text-xs text-primary px-2 py-1 min-h-tap-min"
+                >
+                  Kaldır
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-card">
+                  <Search className="h-4 w-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={linkProfileSearch}
+                    onChange={(e) => setLinkProfileSearch(e.target.value)}
+                    placeholder="Ad / e-posta / klinik ara (min 2)…"
+                    className="flex-1 bg-transparent text-sm outline-none"
+                  />
+                </div>
+                {debouncedLinkSearch.trim().length >= 2 && (
+                  <div className="mt-1 rounded-lg border border-border bg-card shadow-lg max-h-60 overflow-y-auto">
+                    {linkProfileSearching && (
+                      <p className="px-3 py-2 text-xs text-muted-foreground">Aranıyor…</p>
+                    )}
+                    {!linkProfileSearching && (linkProfileOptions ?? []).length === 0 && (
+                      <p className="px-3 py-2 text-xs text-muted-foreground">Sonuç yok.</p>
+                    )}
+                    {(linkProfileOptions ?? []).map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          setLinkProfileId(p.id);
+                          setLinkProfileLabel(p.label);
+                        }}
+                        className="w-full text-left px-3 py-2 min-h-tap-min hover:bg-muted/60 border-b border-border last:border-b-0"
+                      >
+                        <p className="text-sm font-medium truncate">{p.label}</p>
+                        {p.sub && (
+                          <p className="text-xs text-muted-foreground truncate">{p.sub}</p>
+                        )}
                       </button>
                     ))}
                   </div>

@@ -203,9 +203,15 @@ async function executeOp(op: OfflineOp): Promise<void> {
       const adapter = new SupabaseCRMAdapter();
       await adapter.createOrder({
         customerId: p['customer_id'] as string,
+        // Doğrudan cari seçimi offline kuyruğa alındıysa cari_id taşınır → cariId geç
+        // (adapter clinic_id yerine cari_id gönderir). Klinik/legacy siparişte null.
+        ...(p['cari_id'] ? { cariId: p['cari_id'] as string } : {}),
         items: ((p['items'] as Array<Record<string, unknown>>) ?? []).map((it) => ({
           productId: it['productId'] as string,
           quantity: it['quantity'] as number,
+          // Varyant seçimi offline kuyruğa alındıysa taşı → adapter variant_id gönderir,
+          // RPC v2 fiyat/sku/attribute'ları varyanttan çözer (aksi hâlde varyant kaybolur).
+          ...(it['variantId'] ? { variantId: it['variantId'] as string } : {}),
           ...(it['unitPriceOverride'] !== undefined
             ? { unitPriceOverride: it['unitPriceOverride'] as number }
             : {}),
@@ -237,6 +243,49 @@ async function executeOp(op: OfflineOp): Promise<void> {
       const { error } = await getSupabaseClient()
         .from('saha_reminders')
         .upsert(payload as never, { onConflict: 'id', ignoreDuplicates: true });
+      if (error) throw error;
+      return;
+    }
+    case 'cari.create': {
+      // #P9: Offline oluşturulan cari. Payload = CariListPage insert objesi +
+      // opsiyonel link_profile_id. saha_cariler'de idempotency kolonu YOK →
+      // client-side üretilmiş uuid `id` payload'a gömülür; replay aynı id ile
+      // insert edince pk unique_violation (23505) tetikler → BAŞARI sayılır
+      // (kayıt zaten var, çift-insert yok). Bağlama (link_profile_id) idempotent
+      // RPC olduğundan replay'de tekrar çağrılması sorunsuz.
+      const { link_profile_id: linkProfileId, ...insertRow } = op.payload as {
+        link_profile_id?: string | null;
+      } & Record<string, unknown>;
+      const { error } = await supabase.from('saha_cariler').insert(insertRow as never);
+      // 23505 = unique_violation (pk id çakışması) → replay idempotent, başarı say.
+      if (error && (error as { code?: string }).code !== '23505') throw error;
+
+      if (linkProfileId) {
+        type UntypedRpc = {
+          rpc(
+            fn: string,
+            args: Record<string, unknown>,
+          ): Promise<{ error: { message: string } | null }>;
+        };
+        const cariId = (insertRow as { id?: string }).id;
+        if (cariId) {
+          const { error: linkErr } = await (supabase as unknown as UntypedRpc).rpc(
+            'saha_link_cari_to_profile',
+            { p_cari_id: cariId, p_profile_id: linkProfileId },
+          );
+          // "cari zaten başka bir profile bağlı" gibi kalıcı-hata dışında link RPC
+          // idempotenttir; hata varsa op retry/failed akışına düşer.
+          if (linkErr) throw new Error(linkErr.message);
+        }
+      }
+      return;
+    }
+    case 'clinic.create': {
+      // #P9: Offline oluşturulan klinik. Payload = FieldAddClinicModal upsert objesi.
+      // upsert onConflict 'google_place_id' zaten idempotent → replay çift-insert yapmaz.
+      const { error } = await supabase
+        .from('saha_clinics')
+        .upsert(op.payload as never, { onConflict: 'google_place_id' });
       if (error) throw error;
       return;
     }
