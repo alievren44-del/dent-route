@@ -308,7 +308,7 @@ function PaymentFormPage(): JSX.Element {
             aciklama: aciklama.trim() || null,
             created_by: uid,
           }))
-          .filter((r) => (r.tutar as number) > 0);
+          .filter((r) => (r.tutar) > 0);
       };
 
       // Çevrim dışıysa doğrudan kuyruğa al (OrderFormPage offline deseni). Online yol

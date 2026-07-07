@@ -2089,7 +2089,7 @@ function AddReminderModal({
     } else {
       toast.success(isAssignment ? 'Plasiyere atandı' : 'Takvime eklendi');
     }
-    onAdded(isAssignment ? targetRep : undefined, inserted ? (inserted as ReminderRow) : undefined);
+    onAdded(isAssignment ? targetRep : undefined, inserted ? (inserted) : undefined);
   }
 
   return (

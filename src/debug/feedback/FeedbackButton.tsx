@@ -147,6 +147,7 @@ export function FeedbackButton({ app, appVersion, getUser, supabase, toast }: Fe
               </button>
             </div>
             <textarea
+              // eslint-disable-next-line jsx-a11y/no-autofocus -- debug aracı, kasıtlı odak
               autoFocus
               value={desc}
               onChange={(e) => setDesc(e.target.value)}
@@ -186,7 +187,9 @@ export function FeedbackButton({ app, appVersion, getUser, supabase, toast }: Fe
               </button>
               <button
                 type="button"
-                onClick={handleSave}
+                onClick={() => {
+                  void handleSave();
+                }}
                 disabled={busy || !desc.trim()}
                 style={{
                   flex: 2,

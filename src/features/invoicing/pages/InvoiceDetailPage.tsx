@@ -446,7 +446,9 @@ function InvoiceDetailPage(): JSX.Element {
           </button>
           <button
             type="button"
-            onClick={handleShare}
+            onClick={() => {
+              void handleShare();
+            }}
             className="px-3 py-2.5 rounded-lg border border-border text-sm font-medium flex items-center justify-center gap-1.5 min-h-tap-min"
           >
             <Share2 className="h-4 w-4" />

@@ -32,7 +32,7 @@ export function FeedbackReportsList({
     setItems(await listReports());
   }, []);
   useEffect(() => {
-    refresh();
+    void refresh();
   }, [refresh]);
 
   const fmt = (ts: number) => new Date(ts).toLocaleString('tr-TR');
@@ -76,7 +76,9 @@ export function FeedbackReportsList({
           <div style={{ display: 'flex', gap: 10 }}>
             <button
               type="button"
-              onClick={() => retryUploads(supabase).then(refresh)}
+              onClick={() => {
+                void retryUploads(supabase).then(refresh);
+              }}
               style={btn()}
               aria-label="Upload retry"
             >
@@ -122,17 +124,27 @@ export function FeedbackReportsList({
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
                   type="button"
-                  onClick={async () => setDetail(await getReport(it.id))}
+                  onClick={() => {
+                    void (async () => setDetail(await getReport(it.id)))();
+                  }}
                   style={btn('#2563eb')}
                 >
                   Gör
                 </button>
-                <button type="button" onClick={() => shareReport(it.id)} style={btn('#0891b2')}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void shareReport(it.id);
+                  }}
+                  style={btn('#0891b2')}
+                >
                   Paylaş
                 </button>
                 <button
                   type="button"
-                  onClick={() => deleteReport(it.id).then(refresh)}
+                  onClick={() => {
+                    void deleteReport(it.id).then(refresh);
+                  }}
                   style={btn('#dc2626')}
                 >
                   Sil

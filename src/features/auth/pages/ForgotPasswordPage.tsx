@@ -65,7 +65,12 @@ export default function ForgotPasswordPage() {
             </Link>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form
+            onSubmit={(e) => {
+              void handleSubmit(e);
+            }}
+            className="space-y-5"
+          >
             <p className="text-sm text-muted-foreground">
               Hesabınıza ait e-posta adresini girin, size bir sıfırlama bağlantısı gönderelim.
             </p>

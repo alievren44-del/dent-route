@@ -255,7 +255,7 @@ async function executeOp(op: OfflineOp): Promise<void> {
       // ignoreDuplicates ile replay (sunucuda commit + yanıt öncesi ağ koptu → retry) çift
       // kayıt oluşturmaz. Eski (id'siz) kuyruk kayıtları için idempotencyKey'i id'ye düşür
       // (o da uuid) — böylece onlar da deterministik id ile idempotent replay olur.
-      const payload = { ...(op.payload as Record<string, unknown>) };
+      const payload = { ...(op.payload) };
       if (!payload.id) payload.id = op.idempotencyKey;
       const { error } = await getSupabaseClient()
         .from('saha_reminders')
