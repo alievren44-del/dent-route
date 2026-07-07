@@ -29,12 +29,29 @@ function registerBackgroundSync(): void {
     });
 }
 
-function generateUUID(): string {
+export function generateUUID(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID();
   }
   // Fallback for envs without crypto.randomUUID
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * Yazma (insert) hatası ağ/bağlantı kaynaklı mı? OrderFormPage'deki offline-fallback
+ * desenini ortak bir yardımcıya taşır: mesaj ağ-hatası işaretleri taşıyorsa veya
+ * cihaz offline ise true → çağıran kaydı kuyruğa alır (veri kaybı yerine).
+ */
+export function isNetworkWriteError(err: unknown): boolean {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    msg.includes('fetch') ||
+    msg.includes('network') ||
+    msg.includes('Failed to fetch') ||
+    msg.includes('NetworkError') ||
+    msg.includes('Load failed')
+  );
 }
 
 /**
@@ -287,6 +304,45 @@ async function executeOp(op: OfflineOp): Promise<void> {
         .from('saha_clinics')
         .upsert(op.payload as never, { onConflict: 'google_place_id' });
       if (error) throw error;
+      return;
+    }
+    case 'collection.create': {
+      // Offline tahsilat (CollectionListPage). Payload = rep_collections insert objesi +
+      // client-üretilmiş uuid `id`. rep_collections'ta idempotency kolonu YOK → replay aynı
+      // id ile insert edince pk unique_violation (23505) tetikler → BAŞARI sayılır (çift yok).
+      const { error } = await supabase.from('rep_collections').insert(op.payload as never);
+      if (error && (error as { code?: string }).code !== '23505') throw error;
+      return;
+    }
+    case 'task.create': {
+      // Offline görev (TaskListPage). Payload = rep_tasks insert objesi + client-üretilmiş
+      // uuid `id`. rep_tasks'ta idempotency kolonu YOK → replay aynı id ile pk 23505 →
+      // başarı say (çift-insert yok).
+      const { error } = await supabase.from('rep_tasks').insert(op.payload as never);
+      if (error && (error as { code?: string }).code !== '23505') throw error;
+      return;
+    }
+    case 'payment.create': {
+      // Offline ödeme (PaymentFormPage). Payload = { cekSenet?: satır, odemeler: satır[] }.
+      // Tüm satırlar client-üretilmiş uuid `id` taşır; saha_odemeler/saha_cek_senetler'de
+      // idempotency kolonu yok → replay pk 23505'te başarı say. Çek/senet varsa ÖNCE
+      // eklenir (saha_odemeler.cek_senet_id FK'sini karşılasın), sonra ödeme satırları.
+      const p = op.payload as {
+        cekSenet?: Record<string, unknown> | null;
+        odemeler: Array<Record<string, unknown>>;
+      };
+      if (p.cekSenet) {
+        const { error: csErr } = await supabase
+          .from('saha_cek_senetler')
+          .insert(p.cekSenet as never);
+        if (csErr && (csErr as { code?: string }).code !== '23505') throw csErr;
+      }
+      // Satır-satır insert: kısmi başarı sonrası retry'de yalnız eksik satırlar 23505 yer,
+      // her biri bağımsız idempotent kalır (toplu insert'te tek 23505 tüm batch'i düşürürdü).
+      for (const row of p.odemeler ?? []) {
+        const { error } = await supabase.from('saha_odemeler').insert(row as never);
+        if (error && (error as { code?: string }).code !== '23505') throw error;
+      }
       return;
     }
   }

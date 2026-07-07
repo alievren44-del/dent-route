@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 
 import { getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
+import { enqueueOp, generateUUID, isNetworkWriteError } from '@core/offline/syncQueue';
 import QueryErrorState from '@components/common/QueryErrorState';
 import {
   type RepCollection,
@@ -164,12 +165,14 @@ export default function CollectionListPage() {
   const clientNames = namesQuery.data ?? {};
 
   const create = useMutation({
-    mutationFn: async (data: FormState) => {
+    mutationFn: async (data: FormState): Promise<{ offline: boolean }> => {
       const supabase = getTypedClient();
       // Typed-client guard: rep_id NOT NULL — session yoksa insert malformed satır
       // yazardı (undefined → boş). Oturum yoksa erken hata ver.
       if (!userId) throw new Error('Oturum bulunamadı — tekrar giriş yapın.');
-      const { error } = await supabase.from('rep_collections').insert({
+      // Client-üretilmiş uuid `id` → offline replay pk 23505'te idempotent (çift-insert yok).
+      const row = {
+        id: generateUUID(),
         rep_id: userId,
         client_id: data.client_id.trim(),
         amount: Number(data.amount),
@@ -178,15 +181,33 @@ export default function CollectionListPage() {
         due_date: data.method === 'CHECK' && data.due_date ? data.due_date : null,
         reference_no: data.reference_no.trim() || null,
         status: 'PENDING' as const,
-      });
-      if (error) throw error;
+      };
+      // Çevrim dışıysa doğrudan kuyruğa al (OrderFormPage offline deseni).
+      if (!navigator.onLine) {
+        await enqueueOp('collection.create', row, row.id);
+        return { offline: true };
+      }
+      try {
+        const { error } = await supabase.from('rep_collections').insert(row);
+        if (error) throw error;
+        return { offline: false };
+      } catch (err) {
+        // Ağ/bağlantı hatası → kuyruğa al (veri kaybetme).
+        if (isNetworkWriteError(err)) {
+          await enqueueOp('collection.create', row, row.id);
+          return { offline: true };
+        }
+        throw err;
+      }
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       void queryClient.invalidateQueries({ queryKey: ['rep-collections'] });
       setShowForm(false);
       setForm(INITIAL_FORM);
       setClientSearch('');
-      toast.success('Tahsilat kaydedildi');
+      toast.success(
+        res.offline ? 'Çevrimdışı kaydedildi — bağlantı gelince gönderilecek' : 'Tahsilat kaydedildi',
+      );
     },
     onError: (e: Error) => toast.error('Hata: ' + e.message),
   });

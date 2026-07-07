@@ -25,6 +25,7 @@ import { toast } from 'sonner';
 
 import { getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
+import { enqueueOp, generateUUID, isNetworkWriteError } from '@core/offline/syncQueue';
 import {
   type RepTask,
   type RepTaskStatus,
@@ -104,9 +105,11 @@ export default function TaskListPage() {
   });
 
   const create = useMutation({
-    mutationFn: async (data: FormState) => {
+    mutationFn: async (data: FormState): Promise<{ offline: boolean }> => {
       const supabase = getTypedClient();
-      const { error } = await supabase.from('rep_tasks').insert({
+      // Client-üretilmiş uuid `id` → offline replay pk 23505'te idempotent (çift-insert yok).
+      const row = {
+        id: generateUUID(),
         rep_id: userId!,
         title: data.title.trim(),
         description: data.description.trim() || null,
@@ -115,16 +118,33 @@ export default function TaskListPage() {
         scheduled_date: date,
         scheduled_time: data.scheduled_time || null,
         notes: data.notes.trim() || null,
-        status: 'pending',
+        status: 'pending' as const,
         created_by: userId,
-      });
-      if (error) throw error;
+      };
+      // Çevrim dışıysa doğrudan kuyruğa al (OrderFormPage offline deseni).
+      if (!navigator.onLine) {
+        await enqueueOp('task.create', row, row.id);
+        return { offline: true };
+      }
+      try {
+        const { error } = await supabase.from('rep_tasks').insert(row);
+        if (error) throw error;
+        return { offline: false };
+      } catch (err) {
+        if (isNetworkWriteError(err)) {
+          await enqueueOp('task.create', row, row.id);
+          return { offline: true };
+        }
+        throw err;
+      }
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       void queryClient.invalidateQueries({ queryKey: ['rep-tasks'] });
       setShowForm(false);
       setForm(INITIAL_FORM);
-      toast.success('Görev eklendi');
+      toast.success(
+        res.offline ? 'Çevrimdışı kaydedildi — bağlantı gelince gönderilecek' : 'Görev eklendi',
+      );
     },
     onError: (e: Error) => toast.error('Hata: ' + e.message),
   });

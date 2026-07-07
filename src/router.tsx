@@ -5,6 +5,8 @@ import { AppShell } from '@components/layout/AppShell';
 import { ProtectedRoute } from '@components/layout/ProtectedRoute';
 
 const LoginPage = lazy(() => import('@features/auth/pages/LoginPage'));
+const ForgotPasswordPage = lazy(() => import('@features/auth/pages/ForgotPasswordPage'));
+const SettingsPage = lazy(() => import('@features/settings/pages/SettingsPage'));
 const KvkkConsentPage = lazy(() => import('@features/auth/pages/KvkkConsentPage'));
 const FirstAdminPage = lazy(() => import('@features/auth/pages/FirstAdminPage'));
 const MapPage = lazy(() => import('@features/map/pages/MapPage'));
@@ -75,6 +77,7 @@ export function AppRouter() {
       <Routes>
         {/* Auth ekranları — shell DIŞINDA */}
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/onboarding/kvkk" element={<KvkkConsentPage />} />
         <Route path="/apk" element={<DownloadAPKPage />} />
         <Route path="/indir" element={<DownloadAPKPage />} />
@@ -423,6 +426,18 @@ export function AppRouter() {
             <ProtectedRoute>
               <AppShell>
                 <NotificationsPage />
+              </AppShell>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Ayarlar (tüm roller) */}
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <AppShell>
+                <SettingsPage />
               </AppShell>
             </ProtectedRoute>
           }

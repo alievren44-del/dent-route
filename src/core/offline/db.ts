@@ -10,7 +10,10 @@ export interface OfflineOp {
     | 'visit.update'
     | 'reminder.create'
     | 'cari.create'
-    | 'clinic.create';
+    | 'clinic.create'
+    | 'collection.create'
+    | 'payment.create'
+    | 'task.create';
   payload: Record<string, unknown>;
   /** UUID — replay'de duplicate önler; orders için Supabase idempotency_key olarak da kullanılır. */
   idempotencyKey: string;

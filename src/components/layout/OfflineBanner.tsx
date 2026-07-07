@@ -22,6 +22,9 @@ const OP_LABEL: Record<OfflineOp['opType'], string> = {
   'reminder.create': 'Hatırlatma',
   'cari.create': 'Cari',
   'clinic.create': 'Klinik',
+  'collection.create': 'Tahsilat',
+  'payment.create': 'Ödeme',
+  'task.create': 'Görev',
 };
 
 /**
