@@ -20,6 +20,8 @@ const OP_LABEL: Record<OfflineOp['opType'], string> = {
   'order.create': 'Sipariş',
   'route.complete': 'Rota tamamlama',
   'reminder.create': 'Hatırlatma',
+  'cari.create': 'Cari',
+  'clinic.create': 'Klinik',
 };
 
 /**

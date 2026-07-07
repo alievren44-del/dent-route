@@ -21,6 +21,7 @@ import { Building2, MapPin, Phone, X } from 'lucide-react';
 import { getTypedClient } from '@/lib/supabase';
 import { mapboxReverseGeocode } from '@/lib/mapboxGeocode';
 import { getProvince, getDistrict } from '@/data/tr-locations/geo-helpers';
+import { enqueueOp } from '@/core/offline/syncQueue';
 
 /** FNV-1a 32-bit — aynı name+lat+lng her zaman aynı hash → çift ekleme önlemi */
 function simpleHash(s: string): string {
@@ -68,8 +69,45 @@ export default function FieldAddClinicModal({
       toast.error('Klinik adı gerekli');
       return;
     }
+
+    const trimmedName = name.trim();
+    // Stabil hash → aynı ad+koord çift eklenmez (upsert onConflict google_place_id)
+    const hash = simpleHash(`${trimmedName}|${lat.toFixed(6)}|${lng.toFixed(6)}`);
+    const placeId = `manual_field_${hash}`;
+    const nowIso = new Date().toISOString();
+
+    // #P9: Çevrimdışı → hard-block YERİNE kuyruğa al. Reverse-geocode ağ gerektirir
+    // (offline çalışmaz) → il/ilçe null bırakılır; upsert objesi onConflict
+    // google_place_id ile idempotent olduğundan replay güvenli. placeId idempotency
+    // anahtarı = aynı klinik ikinci kez kuyruğa girmez.
     if (!navigator.onLine) {
-      toast.error('İnternet gerekli');
+      setSaving(true);
+      try {
+        await enqueueOp(
+          'clinic.create',
+          {
+            google_place_id: placeId,
+            name: trimmedName,
+            lat,
+            lng,
+            phone: phone.trim() || null,
+            vertical_key: verticalKey,
+            sources: ['manual'],
+            province_slug: null,
+            district_slug: null,
+            raw_payload: { source: 'manual_field', added_at: nowIso, reverse: null },
+          },
+          placeId,
+        );
+        toast.success('Çevrimdışı kaydedildi, bağlantıda gönderilecek');
+        setName('');
+        setPhone('');
+        onClose();
+      } catch (e) {
+        toast.error(`Kaydedilemedi: ${(e as Error).message}`);
+      } finally {
+        setSaving(false);
+      }
       return;
     }
 
@@ -91,12 +129,6 @@ export default function FieldAddClinicModal({
           }
         }
       }
-
-      const trimmedName = name.trim();
-      // Stabil hash → aynı ad+koord çift eklenmez (upsert onConflict google_place_id)
-      const hash = simpleHash(`${trimmedName}|${lat.toFixed(6)}|${lng.toFixed(6)}`);
-      const placeId = `manual_field_${hash}`;
-      const nowIso = new Date().toISOString();
 
       const supabase = getTypedClient();
       const { data, error } = await supabase

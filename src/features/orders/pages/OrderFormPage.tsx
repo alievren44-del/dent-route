@@ -329,8 +329,11 @@ function OrderFormPage(): JSX.Element {
         await enqueueOp('order.create', offlinePayload, idempotencyKey);
         toast.success('Sipariş kaydedildi — bağlantı geldiğinde gönderilecek');
         navigate('/orders/history');
-      } catch {
-        setError('Sipariş çevrim dışı kuyruğa eklenemedi.');
+      } catch (err) {
+        // P8/T4: hatayı yutma — kök-nedeni logla + kullanıcıya mesajı göster.
+        console.error('[OrderForm] offline enqueue başarısız:', err);
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(`Sipariş çevrim dışı kuyruğa eklenemedi: ${msg}`);
       } finally {
         setSubmitting(false);
       }
@@ -433,11 +436,16 @@ function OrderFormPage(): JSX.Element {
           toast.success('Bağlantı hatası — sipariş kaydedildi, bağlantı geldiğinde gönderilecek');
           navigate('/orders/history');
           return;
-        } catch {
-          setError('Sipariş çevrim dışı kuyruğa eklenemedi.');
+        } catch (enqErr) {
+          // P8/T4: kuyruğa alma da başarısızsa hatayı yutma — logla + göster.
+          console.error('[OrderForm] network-fallback enqueue başarısız:', enqErr);
+          const enqMsg = enqErr instanceof Error ? enqErr.message : String(enqErr);
+          setError(`Sipariş çevrim dışı kuyruğa eklenemedi: ${enqMsg}`);
           return;
         }
       }
+      // P8/T4: sunucu/doğrulama hatası — kök-nedeni logla, mesajı UI'da göster.
+      console.error('[OrderForm] sipariş oluşturulamadı:', err);
       setError(msg || 'Sipariş oluşturulamadı.');
     } finally {
       setSubmitting(false);

@@ -535,170 +535,90 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
   }
 
   async createOrder(order: NewOrder): Promise<Order> {
-    const { data: userData } = await this.supabase.auth.getUser();
-    const salesRepId = userData.user?.id;
-
-    // Idempotency check — orders.idempotency_key kolonu var (20260605000001).
-    if (order.idempotencyKey) {
-      const { data: existing } = await this.supabase
-        .from('orders')
-        .select('id')
-        .eq('idempotency_key', order.idempotencyKey)
-        .maybeSingle();
-      if (existing?.id) {
-        return this.getOrder(existing.id);
-      }
-    }
-
-    // Fiyat + meta snapshot — v_saha_products tek kaynak (quoteOrder ile aynı mantık).
-    // Eskiden sadece unitPriceOverride'a bakılıyordu; sepetten override gelmediği için
-    // fiyatlar 0 yazılıyordu. Artık fiyat/vergi DB'den çekilir.
-    const productIds = order.items.map((it) => it.productId);
-    const { data: productRows } = await this.supabase
-      .from('v_saha_products')
-      .select('id, name, sku, base_price, sale_price, tax_rate')
-      .in('id', productIds);
-    const priceMap = new Map<
-      string,
-      { name: string | null; sku: string | null; price: number; taxRate: number }
-    >(
-      (
-        (productRows ?? []) as Array<{
-          id: string;
-          name: string | null;
-          sku: string | null;
-          base_price: number | string | null;
-          sale_price: number | string | null;
-          tax_rate: number | string | null;
-        }>
-      ).map((p) => {
-        // tax_rate DB'de yüzde (ör. 10.00). Null → %10 varsayılan (dental standart).
-        const taxPct = p.tax_rate != null ? Number(p.tax_rate) : 10;
-        return [
-          p.id,
-          {
-            name: p.name,
-            sku: p.sku,
-            price: Number(p.sale_price ?? p.base_price ?? 0),
-            taxRate: Number.isFinite(taxPct) ? taxPct / 100 : 0.1,
-          },
-        ] as const;
-      }),
-    );
-
-    // Tutarları hesapla (server-side doğrulama Parla'da).
-    // L1: invoiceCalc.ts ile AYNI yuvarlama disiplini (sum-of-rounds) — satır-başına
-    // round2, subtotal/vatTotal birikimi round2. Eskiden subtotal ham float birikiyor,
-    // grandTotal hiç yuvarlanmıyordu → sipariş↔fatura kuruş sapması + float artefaktı
-    // (0.30000000000000004) payload'a giriyordu.
-    const round2 = (n: number) => Math.round(n * 100) / 100;
-    let subtotal = 0;
-    let vatTotal = 0;
-    const lineItems = order.items.map((it) => {
-      const meta = priceMap.get(it.productId);
-      const unitPrice = it.unitPriceOverride ?? meta?.price ?? 0;
-      const lineTotal = round2(unitPrice * it.quantity);
-      subtotal = round2(subtotal + lineTotal);
-      vatTotal = round2(vatTotal + lineTotal * (meta?.taxRate ?? 0.1));
-      return {
-        ...it,
-        unitPrice,
-        lineTotal,
-        sku: meta?.sku ?? '-',
-        productName: meta?.name ?? 'Ürün',
-      };
-    });
-    const grandTotal = round2(subtotal + vatTotal);
+    // P1/P4/P6/P7 — sipariş oluşturma TEK sunucu-otoriteli RPC ile (saha_create_order_tx).
+    // Fiyat v_saha_products'tan, KDV %10, durum ROLE'e göre, order_number ve
+    // orders+order_items INSERT'i hepsi TEK transaction içinde SUNUCUDA yapılır.
+    // Client artık fiyat/durum/order_number GÖNDERMEZ (manipülasyon kapısı kapalı,
+    // yarı-yazılmış sipariş yok). Idempotency: aynı idempotency_key ile ikinci çağrı
+    // yeni insert yapmadan mevcut siparişi döndürür (reused:true) → client-side
+    // idempotency ön-kontrolü kaldırıldı (RPC içinde ele alınıyor).
 
     // Müşteri kimliği iki dünyadan gelebilir:
-    //  - saha_clinics (3116 prospect) → cari find-or-create, sipariş cariye+kliniğe bağlanır.
+    //  - saha_clinics (prospect) → RPC klinikten cari'yi find-or-create eder.
     //  - profiles (eski ziyaret/müşteri-detay akışları) → legacy user_id.
-    const { data: clinicRow } = await this.supabase
+    // Hangisi olduğunu ayırt etmek için klinik kaydını kontrol et; RPC'ye doğru
+    // parametreyi (clinic_id | user_id) geçir. (Cari find-or-create pre-RPC çağrısı
+    // kaldırıldı — saha_create_order_tx içinde yapılıyor.)
+    const { data: clinicRow, error: clinicErr } = await this.supabase
       .from('saha_clinics')
       .select('id')
       .eq('id', order.customerId)
       .maybeSingle();
-
-    let clinicId: string | null = null;
-    let cariId: string | null = null;
-    let userId: string | null = order.customerId;
-
-    if (clinicRow?.id) {
-      clinicId = clinicRow.id;
-      userId = null;
-      const { data: resolvedCari, error: cariErr } = await this.supabase.rpc(
-        'saha_get_or_create_cari_for_clinic',
-        { p_clinic_id: clinicId },
-      );
-      if (cariErr || !resolvedCari) {
-        throw new AdapterError('UNKNOWN', cariErr?.message ?? 'cari oluşturulamadı', {
-          originalError: cariErr,
-        });
-      }
-      cariId = resolvedCari;
-    }
-
-    // order_number DB şemasında NOT NULL required. Trigger yoksa timestamp tabanlı
-    // benzersiz kod üret; DB trigger varsa override eder.
-    // Date.now() tek başına eşzamanlı iki sipariş aynı ms'de çakışabilir (UNIQUE ihlali)
-    // → rastgele sonek ile çakışma olasılığı ihmal edilebilir seviyeye iner.
-    const rand =
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID().slice(0, 8)
-        : Math.random().toString(36).slice(2, 10);
-    const orderNumber = `SAH-${Date.now()}-${rand}`;
-    const { data: newOrder, error: insErr } = await this.supabase
-      .from('orders')
-      .insert({
-        order_number: orderNumber,
-        user_id: userId,
-        cari_id: cariId,
-        clinic_id: clinicId,
-        sales_rep_id: salesRepId,
-        // Onay gereken sipariş doğrudan approval_pending oluşturulur — eski
-        // "önce pending INSERT, sonra ikinci UPDATE" race penceresini kapatır.
-        status: order.requiresApproval ? 'approval_pending' : 'pending',
-        subtotal,
-        vat_amount: vatTotal,
-        total: grandTotal,
-        total_amount: grandTotal,
-        notes: order.notes ?? null,
-        idempotency_key: order.idempotencyKey ?? null,
-      })
-      .select('id')
-      .single();
-
-    if (insErr || !newOrder) {
-      throw new AdapterError('UNKNOWN', insErr?.message ?? 'order insert failed', {
-        originalError: insErr,
+    if (clinicErr) {
+      // P5/T3: eskiden bu hata sessizce yutulup legacy user_id yoluna düşülüyordu.
+      throw new AdapterError('UNKNOWN', `müşteri türü çözülemedi: ${clinicErr.message}`, {
+        originalError: clinicErr,
       });
     }
 
-    // order_items — sku/product_name/fiyat snapshot lineItems'tan (yukarıda v_saha_products'tan çekildi).
-    const itemsPayload = lineItems.map((it) => ({
-      order_id: newOrder.id,
-      product_id: it.productId,
-      sku: it.sku,
-      product_name: it.productName,
-      quantity: it.quantity,
-      unit_price: it.unitPrice,
-      line_total: it.lineTotal,
-    }));
-    const { error: itemsErr } = await this.supabase.from('order_items').insert(itemsPayload);
-    if (itemsErr) {
-      // M2: kalemler eklenemezse önce oluşturulan orders satırını best-effort geri al.
-      // Aksi halde 0 kalemli "hayalet" sipariş DB'de kalır → onay listesinde tutarları
-      // dolu ama kalemsiz görünür, rapor tutarlarını şişirir. (Tek transaction/RPC ideal;
-      // bu best-effort telafi mevcut iki-adımlı yapıyı bozmadan orphan'ı önler.)
-      await this.supabase.from('orders').delete().eq('id', newOrder.id);
-      throw new AdapterError(
-        'UNKNOWN',
-        `Sipariş kalemleri eklenemedi (sipariş geri alındı): ${itemsErr.message}`,
-        { originalError: itemsErr },
-      );
+    const payload: {
+      idempotency_key: string;
+      notes?: string;
+      clinic_id?: string;
+      user_id?: string;
+      items: Array<{ product_id: string; quantity: number }>;
+    } = {
+      idempotency_key: order.idempotencyKey,
+      // Sunucu fiyatı çözer → yalnız product_id + quantity gönderilir (unitPriceOverride
+      // KASITEN atlanır; client fiyatına güvenilmez).
+      items: order.items.map((it) => ({ product_id: it.productId, quantity: it.quantity })),
+    };
+    if (order.notes) payload.notes = order.notes;
+    if (clinicRow?.id) {
+      payload.clinic_id = order.customerId;
+    } else {
+      payload.user_id = order.customerId;
     }
 
-    return this.getOrder(newOrder.id);
+    // Yeni RPC henüz üretilmiş tiplerde yok → untyped rpc escape (OrderApprovalPage
+    // saha_notify_rep ile aynı desen).
+    type UntypedRpc = {
+      rpc(
+        fn: string,
+        args: Record<string, unknown>,
+      ): Promise<{ data: unknown; error: { message: string } | null }>;
+    };
+    const { data: rpcResult, error: rpcErr } = await (
+      this.supabase as unknown as UntypedRpc
+    ).rpc('saha_create_order_tx', { p_payload: payload });
+
+    if (rpcErr) {
+      // Postgres Türkçe mesajı UI'ya taşınır ('fiyat çözülemedi: …', 'yetki yok',
+      // 'idempotency_key zorunlu' vb.) — VITE UI bunu doğrudan gösterebilsin.
+      throw new AdapterError('UNKNOWN', rpcErr.message ?? 'sipariş oluşturulamadı', {
+        originalError: rpcErr,
+      });
+    }
+
+    const result = rpcResult as {
+      order_id: string;
+      order_number: string | null;
+      status: string | null;
+      total?: number | null;
+      reused: boolean;
+    } | null;
+    if (!result?.order_id) {
+      throw new AdapterError('UNKNOWN', 'sipariş oluşturuldu ama kimlik dönmedi', {
+        originalError: rpcResult,
+      });
+    }
+
+    // Dönüş sözleşmesi (Order) değişmedi: tam sipariş (kalemler + SUNUCU fiyatları)
+    // getOrder ile authoritative okunur. reused:true olsa da mevcut sipariş okunur
+    // (callers created.id / externalId / totalAmount bekler). requiresApproval artık
+    // yalnız UI ipucudur; gerçek durum sunucuda (result.status) belirlenir, client'a
+    // bağlı değildir.
+    return this.getOrder(result.order_id);
   }
 
   async quoteOrder(items: NewOrderItem[], _customerId: string): Promise<OrderQuote> {
