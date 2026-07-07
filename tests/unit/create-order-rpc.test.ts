@@ -166,6 +166,43 @@ describe('createOrder → saha_create_order_tx RPC', () => {
     expect(payload.items).toEqual([{ product_id: 'prod-1', quantity: 3 }]);
   });
 
+  it('variantId verilen kalem p_payload.items[].variant_id taşır; verilmeyen kalemde alan yok', async () => {
+    const { client, rpcCalls } = makeMockClient({
+      clinicResult: { data: { id: 'clinic-1' }, error: null },
+      orderResult: { data: ORDER_ROW, error: null },
+      rpcResult: {
+        data: {
+          order_id: 'order-uuid-1',
+          order_number: 'SAH-20260707120000-abc123',
+          status: 'pending',
+          total: 110,
+          reused: false,
+        },
+        error: null,
+      },
+    });
+    const adapter = new SupabaseCRMAdapter({ client: client as never });
+
+    await adapter.createOrder({
+      customerId: 'clinic-1',
+      idempotencyKey: 'idem-variant-1',
+      items: [
+        { productId: 'prod-1', quantity: 2, variantId: 'variant-abc' },
+        { productId: 'prod-2', quantity: 1 },
+      ],
+    });
+
+    const call = rpcCalls.find((c) => c.fn === 'saha_create_order_tx');
+    expect(call).toBeDefined();
+    const payload = call!.args.p_payload as Record<string, unknown>;
+    const items = payload.items as Array<Record<string, unknown>>;
+    // Varyantlı kalem: variant_id (TEXT) present, product_id/quantity ile birlikte.
+    expect(items[0]).toEqual({ product_id: 'prod-1', quantity: 2, variant_id: 'variant-abc' });
+    // Varyantsız kalem: variant_id alanı hiç gönderilmez (undefined/absent).
+    expect(items[1]).toEqual({ product_id: 'prod-2', quantity: 1 });
+    expect(items[1]).not.toHaveProperty('variant_id');
+  });
+
   it('reused:true yanıtında da tam Order (getOrder) döndürür', async () => {
     const { client } = makeMockClient({
       clinicResult: { data: { id: 'clinic-1' }, error: null },

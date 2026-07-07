@@ -29,6 +29,7 @@ import type {
   OrderStatus,
   Page,
   Product,
+  ProductVariant,
   QuotedItem,
   SearchOptions,
 } from '../types';
@@ -549,12 +550,17 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       clinic_id?: string;
       user_id?: string;
       cari_id?: string;
-      items: Array<{ product_id: string; quantity: number }>;
+      items: Array<{ product_id: string; quantity: number; variant_id?: string }>;
     } = {
       idempotency_key: order.idempotencyKey,
-      // Sunucu fiyatı çözer → yalnız product_id + quantity gönderilir (unitPriceOverride
-      // KASITEN atlanır; client fiyatına güvenilmez).
-      items: order.items.map((it) => ({ product_id: it.productId, quantity: it.quantity })),
+      // Sunucu fiyatı çözer → yalnız product_id + quantity (+ opsiyonel variant_id)
+      // gönderilir (unitPriceOverride KASITEN atlanır; client fiyatına güvenilmez).
+      // variant_id verilirse RPC v2 fiyat/sku/attribute'ları o varyanttan çözer.
+      items: order.items.map((it) => ({
+        product_id: it.productId,
+        quantity: it.quantity,
+        ...(it.variantId ? { variant_id: it.variantId } : {}),
+      })),
     };
     if (order.notes) payload.notes = order.notes;
 
@@ -787,10 +793,13 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
   }
 
   async searchProducts(query: string, limit?: number): Promise<Product[]> {
+    // product_variants (jsonb) eklendi → sipariş ekranı varyant seçici için gerekli.
+    // Varyant fiyat/sku/attribute'ları UI'da gösterilir; sunucu-otoriteli fiyat
+    // createOrder RPC'sinde variant_id'den yeniden çözülür (client fiyatına güvenilmez).
     const { data, error } = await this.supabase
       .from('v_saha_products')
       .select(
-        'id, sku, name, description, category_id, base_price, sale_price, currency, stock_quantity, is_active, main_image',
+        'id, sku, name, description, category_id, base_price, sale_price, currency, stock_quantity, is_active, main_image, product_variants',
       )
       .eq('is_active', true)
       .ilike('name', `%${query}%`)
@@ -814,22 +823,27 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       stock_quantity: number | null;
       is_active: boolean | null;
       main_image: string | null;
+      product_variants: unknown;
     };
     return (data ?? [])
       .filter((r: ProductRow) => r.id != null)
-      .map((r: ProductRow) => ({
-        id: r.id ?? '',
-        sku: r.sku ?? undefined,
-        name: r.name ?? '',
-        description: r.description ?? undefined,
-        category: r.category_id ?? undefined,
-        unit: 'adet',
-        basePrice: r.sale_price != null ? Number(r.sale_price) : Number(r.base_price ?? 0),
-        currency: r.currency ?? 'TRY',
-        stockQuantity: r.stock_quantity ?? undefined,
-        isActive: Boolean(r.is_active),
-        imageUrl: r.main_image ?? undefined,
-      }));
+      .map((r: ProductRow) => {
+        const variants = mapProductVariants(r.product_variants);
+        return {
+          id: r.id ?? '',
+          sku: r.sku ?? undefined,
+          name: r.name ?? '',
+          description: r.description ?? undefined,
+          category: r.category_id ?? undefined,
+          unit: 'adet',
+          basePrice: r.sale_price != null ? Number(r.sale_price) : Number(r.base_price ?? 0),
+          currency: r.currency ?? 'TRY',
+          stockQuantity: r.stock_quantity ?? undefined,
+          isActive: Boolean(r.is_active),
+          imageUrl: r.main_image ?? undefined,
+          ...(variants.length > 0 ? { variants } : {}),
+        };
+      });
   }
 
   // ─── Campaigns ────────────────────────────────────────
@@ -906,6 +920,29 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       });
     }
   }
+}
+
+// ─── v_saha_products.product_variants (jsonb) → ProductVariant[] ─────────
+// Ham jsonb kalemi: { id, sku, price_try, attributes:{iso,grit,shaft,tipSize,
+// packaging,piecesPerPackage,…}, stock_quantity }. id'siz kalem atlanır.
+function mapProductVariants(raw: unknown): ProductVariant[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ProductVariant[] = [];
+  for (const v of raw) {
+    const o = (v ?? {}) as Record<string, unknown>;
+    if (o.id == null) continue;
+    out.push({
+      id: String(o.id),
+      ...(o.sku != null ? { sku: String(o.sku) } : {}),
+      priceTry: Number(o.price_try ?? 0),
+      ...(o.stock_quantity != null ? { stockQuantity: Number(o.stock_quantity) } : {}),
+      attributes:
+        o.attributes != null && typeof o.attributes === 'object'
+          ? (o.attributes as Record<string, unknown>)
+          : {},
+    });
+  }
+  return out;
 }
 
 // ─── campaigns → Campaign mapping ───────────────────────

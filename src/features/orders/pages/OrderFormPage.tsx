@@ -30,7 +30,7 @@ import { getTypedClient } from '@lib/supabase';
 import { invalidateOrderDomain } from '@lib/queryKeys';
 import type { Json } from '@/types/database.types';
 import { useAuthStore } from '@core/auth/authStore';
-import type { NewOrderItem, Product } from '@core/adapters/types';
+import type { NewOrderItem, Product, ProductVariant } from '@core/adapters/types';
 import { needsApproval, nextApproverRole, thresholdFor } from '@features/orders/lib/approvalRules';
 import { enqueueOp } from '@core/offline/syncQueue';
 
@@ -39,6 +39,10 @@ const adapter = new SupabaseCRMAdapter();
 interface CartItem extends NewOrderItem {
   productName: string;
   unitPriceSnapshot: number;
+  /** Seçilen varyantın sku'su (varsa) — Sepet etiketinde gösterilir. */
+  variantSku?: string;
+  /** Kısa varyant etiketi ("SKU 801 · ISO 220 · 0,15") — Sepet satırında ürün adı altında. */
+  variantLabel?: string;
 }
 
 interface TemplateLine {
@@ -72,6 +76,32 @@ function formatTL(n: number): string {
   });
 }
 
+/** Sepet satır anahtarı — aynı ürünün farklı varyantları ayrı satır olsun diye. */
+function lineKey(productId: string, variantId?: string): string {
+  return `${productId}::${variantId ?? ''}`;
+}
+
+/**
+ * Kısa varyant etiketi: sku + öne çıkan öznitelikler (iso / tipSize / grit / packaging),
+ * yalnız dolu olanlar kompakt biçimde. Örn: "SKU 801 · ISO 220 · 0,15".
+ */
+function variantLabel(v: ProductVariant): string {
+  const a = v.attributes ?? {};
+  const pick = (k: string): string | undefined => {
+    const val = a[k];
+    return val == null || val === '' ? undefined : String(val);
+  };
+  const iso = pick('iso');
+  const parts = [
+    v.sku ? `SKU ${v.sku}` : undefined,
+    iso ? `ISO ${iso}` : undefined,
+    pick('tipSize'),
+    pick('grit'),
+    pick('packaging'),
+  ].filter(Boolean);
+  return parts.join(' · ') || 'Varyant';
+}
+
 function useDebounced<T>(value: T, ms: number): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -101,6 +131,8 @@ function OrderFormPage(): JSX.Element {
   const [notes, setNotes] = useState<string>('');
   const [productSearch, setProductSearch] = useState<string>('');
   const [productListOpen, setProductListOpen] = useState<boolean>(false);
+  // Çok-varyantlı ürün seçilince açılan varyant seçici (inline expansion).
+  const [variantPickFor, setVariantPickFor] = useState<Product | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -211,7 +243,15 @@ function OrderFormPage(): JSX.Element {
       cart.map((c) => ({
         productId: c.productId,
         quantity: c.quantity,
-        ...(c.unitPriceOverride !== undefined ? { unitPriceOverride: c.unitPriceOverride } : {}),
+        ...(c.variantId ? { variantId: c.variantId } : {}),
+        // quoteOrder varyant fiyatını product_id'den çözemez (base/sale price döner) →
+        // varyant seçili satırda görsel toplam için varyant fiyatını override geçir.
+        // (createOrder bu override'ı KASITEN atar; sunucu variant_id'den yeniden çözer.)
+        ...(c.unitPriceOverride !== undefined
+          ? { unitPriceOverride: c.unitPriceOverride }
+          : c.variantId
+            ? { unitPriceOverride: c.unitPriceSnapshot }
+            : {}),
       })),
     [cart],
   );
@@ -277,9 +317,29 @@ function OrderFormPage(): JSX.Element {
     );
   }
 
-  function addToCart(p: Product): void {
+  /**
+   * Ürün satırına/+ butonuna dokununca: 2+ varyant varsa varyant seçici aç,
+   * 1 varyant varsa onu otomatik seç, varyantsız üründe eski davranış.
+   */
+  function handleProductPick(p: Product): void {
+    const variants = p.variants ?? [];
+    if (variants.length >= 2) {
+      setVariantPickFor(p);
+      setProductListOpen(false);
+    } else {
+      // Tam 1 varyant → dialogsuz otomatik seç; varyantsız → variant=undefined.
+      addToCart(p, variants[0]);
+    }
+  }
+
+  function addToCart(p: Product, variant?: ProductVariant): void {
+    const variantId = variant?.id;
+    // Varyant seçiliyse birim fiyat varyant fiyatı (görsel); değilse ürün base fiyatı.
+    const unitPrice = variant != null ? variant.priceTry : (p.basePrice ?? 0);
+    const label = variant != null ? variantLabel(variant) : undefined;
     setCart((prev) => {
-      const idx = prev.findIndex((it) => it.productId === p.id);
+      // Aynı ürün+varyant → miktar artır; farklı varyant → ayrı satır.
+      const idx = prev.findIndex((it) => it.productId === p.id && it.variantId === variantId);
       if (idx >= 0) {
         const next = [...prev];
         const existing = next[idx]!;
@@ -291,28 +351,34 @@ function OrderFormPage(): JSX.Element {
         {
           productId: p.id,
           quantity: 1,
+          ...(variantId ? { variantId } : {}),
           productName: p.name,
-          unitPriceSnapshot: p.basePrice ?? 0,
+          unitPriceSnapshot: unitPrice,
+          ...(variant?.sku ? { variantSku: variant.sku } : {}),
+          ...(label ? { variantLabel: label } : {}),
         },
       ];
     });
     setProductSearch('');
     setProductListOpen(false);
+    setVariantPickFor(null);
   }
 
-  function updateQty(productId: string, delta: number): void {
+  function updateQty(key: string, delta: number): void {
     setCart((prev) => {
       const next = prev
         .map((it) =>
-          it.productId === productId ? { ...it, quantity: Math.max(0, it.quantity + delta) } : it,
+          lineKey(it.productId, it.variantId) === key
+            ? { ...it, quantity: Math.max(0, it.quantity + delta) }
+            : it,
         )
         .filter((it) => it.quantity > 0);
       return next;
     });
   }
 
-  function removeItem(productId: string): void {
-    setCart((prev) => prev.filter((it) => it.productId !== productId));
+  function removeItem(key: string): void {
+    setCart((prev) => prev.filter((it) => lineKey(it.productId, it.variantId) !== key));
   }
 
   function pickCustomer(c: CustomerOption): void {
@@ -353,6 +419,8 @@ function OrderFormPage(): JSX.Element {
       items: cart.map((c) => ({
         productId: c.productId,
         quantity: c.quantity,
+        // Varyant seçimi replay'de kaybolmasın → syncQueue order.create bunu adapter'a taşır.
+        ...(c.variantId ? { variantId: c.variantId } : {}),
         unitPriceSnapshot: c.unitPriceSnapshot,
         ...(c.unitPriceOverride !== undefined ? { unitPriceOverride: c.unitPriceOverride } : {}),
       })),
@@ -385,6 +453,8 @@ function OrderFormPage(): JSX.Element {
       const items: NewOrderItem[] = cart.map((c) => ({
         productId: c.productId,
         quantity: c.quantity,
+        // Varyant → sunucu fiyat/sku/attribute'ları variant_id'den çözer (RPC v2).
+        ...(c.variantId ? { variantId: c.variantId } : {}),
         ...(c.unitPriceOverride !== undefined ? { unitPriceOverride: c.unitPriceOverride } : {}),
       }));
       const created = await adapter.createOrder({
@@ -674,7 +744,52 @@ function OrderFormPage(): JSX.Element {
                 </button>
               )}
             </div>
-            {productListOpen && debouncedProductSearch.trim().length >= 2 && (
+            {/* Varyant seçici — 2+ varyantlı ürün seçilince arama sonuçlarının yerine geçer. */}
+            {variantPickFor && (
+              <div className="mt-1 rounded-lg border border-border bg-card shadow-lg max-h-80 overflow-y-auto">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/40 sticky top-0">
+                  <span className="text-sm font-medium text-foreground truncate">
+                    {variantPickFor.name} — varyant seç
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVariantPickFor(null);
+                      setProductListOpen(true);
+                    }}
+                    className="text-xs text-primary font-medium shrink-0 ml-2 px-2 py-1 min-h-tap-min"
+                  >
+                    ← Geri
+                  </button>
+                </div>
+                {(variantPickFor.variants ?? []).map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => addToCart(variantPickFor, v)}
+                    className="w-full text-left px-3 py-2.5 min-h-tap-min hover:bg-muted/60 border-b border-border last:border-b-0 flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {variantLabel(v)}
+                      </p>
+                      {v.stockQuantity != null && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          Stok: {v.stockQuantity}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-sm font-semibold text-foreground">
+                        {formatTL(v.priceTry)}
+                      </span>
+                      <Plus className="h-4 w-4 text-primary" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {!variantPickFor && productListOpen && debouncedProductSearch.trim().length >= 2 && (
               <div className="mt-1 rounded-lg border border-border bg-card shadow-lg max-h-80 overflow-y-auto">
                 {productSearching && (
                   <p className="px-3 py-2 text-xs text-muted-foreground">Aranıyor…</p>
@@ -682,27 +797,33 @@ function OrderFormPage(): JSX.Element {
                 {!productSearching && (productOptions ?? []).length === 0 && (
                   <p className="px-3 py-2 text-xs text-muted-foreground">Sonuç yok.</p>
                 )}
-                {(productOptions ?? []).map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => addToCart(p)}
-                    className="w-full text-left px-3 py-2.5 min-h-tap-min hover:bg-muted/60 border-b border-border last:border-b-0 flex items-center justify-between gap-3"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-foreground truncate">{p.name}</p>
-                      {p.sku && (
-                        <p className="text-xs text-muted-foreground truncate">SKU: {p.sku}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-sm font-semibold text-foreground">
-                        {formatTL(p.basePrice ?? 0)}
-                      </span>
-                      <Plus className="h-4 w-4 text-primary" />
-                    </div>
-                  </button>
-                ))}
+                {(productOptions ?? []).map((p) => {
+                  const variantCount = p.variants?.length ?? 0;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => handleProductPick(p)}
+                      className="w-full text-left px-3 py-2.5 min-h-tap-min hover:bg-muted/60 border-b border-border last:border-b-0 flex items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-foreground truncate">{p.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {p.sku ? `SKU: ${p.sku}` : ''}
+                          {variantCount >= 2
+                            ? `${p.sku ? ' · ' : ''}${variantCount} varyant ›`
+                            : ''}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-sm font-semibold text-foreground">
+                          {formatTL(p.basePrice ?? 0)}
+                        </span>
+                        <Plus className="h-4 w-4 text-primary" />
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -718,18 +839,28 @@ function OrderFormPage(): JSX.Element {
           ) : (
             <div className="space-y-2">
               {cart.map((it) => {
-                const quoted = quote?.items.find((q) => q.productId === it.productId);
+                const key = lineKey(it.productId, it.variantId);
+                const quoted = quote?.items.find(
+                  (q) => q.productId === it.productId && q.variantId === it.variantId,
+                );
                 const unitPrice = quoted?.unitPrice ?? it.unitPriceSnapshot;
                 const lineTotal = quoted?.lineTotal ?? unitPrice * it.quantity;
                 return (
-                  <div key={it.productId} className="p-3 rounded-lg border border-border bg-card">
+                  <div key={key} className="p-3 rounded-lg border border-border bg-card">
                     <div className="flex items-start justify-between gap-2 mb-2">
-                      <p className="text-sm font-medium text-foreground flex-1 min-w-0 truncate">
-                        {it.productName}
-                      </p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {it.productName}
+                        </p>
+                        {it.variantLabel && (
+                          <p className="text-xs text-muted-foreground truncate">
+                            {it.variantLabel}
+                          </p>
+                        )}
+                      </div>
                       <button
                         type="button"
-                        onClick={() => removeItem(it.productId)}
+                        onClick={() => removeItem(key)}
                         className="p-1.5 -m-1.5 rounded-full hover:bg-muted text-red-600 min-h-tap-min min-w-tap-min flex items-center justify-center"
                         aria-label="Sil"
                       >
@@ -740,7 +871,7 @@ function OrderFormPage(): JSX.Element {
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => updateQty(it.productId, -1)}
+                          onClick={() => updateQty(key, -1)}
                           className="h-9 w-9 rounded-full border border-border flex items-center justify-center hover:bg-muted min-h-tap-min min-w-tap-min"
                           aria-label="Azalt"
                         >
@@ -751,7 +882,7 @@ function OrderFormPage(): JSX.Element {
                         </span>
                         <button
                           type="button"
-                          onClick={() => updateQty(it.productId, 1)}
+                          onClick={() => updateQty(key, 1)}
                           className="h-9 w-9 rounded-full border border-border flex items-center justify-center hover:bg-muted min-h-tap-min min-w-tap-min"
                           aria-label="Arttır"
                         >

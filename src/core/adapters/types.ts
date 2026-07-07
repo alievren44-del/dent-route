@@ -68,6 +68,20 @@ export interface NewCustomer {
 
 // ─── Product ──────────────────────────────────────────────────
 
+/**
+ * Ürün varyantı (v_saha_products.product_variants jsonb → domain).
+ * saha_create_order_tx v2 varyantı `id` (TEXT) ile çözer; fiyat/sku/öznitelikleri
+ * SUNUCUDA v_saha_products'tan okur — client priceTry yalnız görsel quote içindir.
+ */
+export interface ProductVariant {
+  id: string;
+  sku?: string;
+  priceTry: number;
+  stockQuantity?: number;
+  /** iso / grit / shaft / tipSize / packaging / piecesPerPackage … (serbest jsonb). */
+  attributes: Record<string, unknown>;
+}
+
 export interface Product {
   id: string;
   externalId?: string;
@@ -82,6 +96,8 @@ export interface Product {
   stockQuantity?: number;
   isActive: boolean;
   imageUrl?: string;
+  /** Varyantlı ürünlerde seçilebilir varyantlar; varyantsız üründe boş/tanımsız. */
+  variants?: ProductVariant[];
 }
 
 // ─── Balance ──────────────────────────────────────────────────
@@ -135,6 +151,12 @@ export interface Order {
 export interface NewOrderItem {
   productId: string;
   quantity: number;
+  /**
+   * Seçilen ürün varyantı (v_saha_products.product_variants[].id, TEXT). Verildiğinde
+   * saha_create_order_tx fiyat/sku/attribute'ları bu varyanttan çözer + order_items'a
+   * variant_id/selected_options yazar. Varyantsız kalemde tanımsız.
+   */
+  variantId?: string;
   unitPriceOverride?: number;
   notes?: string;
 }

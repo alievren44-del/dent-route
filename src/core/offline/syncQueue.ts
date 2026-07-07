@@ -209,6 +209,9 @@ async function executeOp(op: OfflineOp): Promise<void> {
         items: ((p['items'] as Array<Record<string, unknown>>) ?? []).map((it) => ({
           productId: it['productId'] as string,
           quantity: it['quantity'] as number,
+          // Varyant seçimi offline kuyruğa alındıysa taşı → adapter variant_id gönderir,
+          // RPC v2 fiyat/sku/attribute'ları varyanttan çözer (aksi hâlde varyant kaybolur).
+          ...(it['variantId'] ? { variantId: it['variantId'] as string } : {}),
           ...(it['unitPriceOverride'] !== undefined
             ? { unitPriceOverride: it['unitPriceOverride'] as number }
             : {}),
