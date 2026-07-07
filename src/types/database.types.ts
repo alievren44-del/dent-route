@@ -4664,6 +4664,7 @@ export type Database = {
           custom_fields: Json;
           distance_to_account_m: number | null;
           id: string;
+          idempotency_key: string | null;
           met_person: string | null;
           next_visit_date: string | null;
           notes: string | null;
@@ -4685,6 +4686,7 @@ export type Database = {
           custom_fields?: Json;
           distance_to_account_m?: number | null;
           id?: string;
+          idempotency_key?: string | null;
           met_person?: string | null;
           next_visit_date?: string | null;
           notes?: string | null;
@@ -4706,6 +4708,7 @@ export type Database = {
           custom_fields?: Json;
           distance_to_account_m?: number | null;
           id?: string;
+          idempotency_key?: string | null;
           met_person?: string | null;
           next_visit_date?: string | null;
           notes?: string | null;

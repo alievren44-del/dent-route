@@ -155,24 +155,19 @@ function CheckInPage(): JSX.Element {
       }
 
       // 2) profiles fallback (DOCTOR / Parla mevcut müşterileri).
+      // NOT: profiles tablosunda lat/lng KOLONU YOK (koordinat yalnız saha_clinics'te,
+      // yukarıda ele alındı). Önceki `.select(...lat, lng)` her zaman 400 verip
+      // kolonsuz-fallback'e düşüyordu (gereksiz round-trip). Doğrudan kolonsuz select
+      // + lat/lng=null. profiles'a ileride geo eklenirse schema-drift guard uyarır.
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, klinik_adi, ad_soyad, email, city, lat, lng')
+        .select('id, klinik_adi, ad_soyad, email, city')
         .eq('id', id)
         .maybeSingle();
-      if (error) {
-        // lat/lng kolonu yoksa kolonsuz select fallback.
-        const fallback = await supabase
-          .from('profiles')
-          .select('id, klinik_adi, ad_soyad, email, city')
-          .eq('id', id)
-          .maybeSingle();
-        if (fallback.error) throw fallback.error;
-        const row = fallback.data as Omit<AccountRow, 'lat' | 'lng'> | null;
-        if (!row) return null;
-        return { ...row, lat: null, lng: null };
-      }
-      return (data ?? null) as AccountRow | null;
+      if (error) throw error;
+      const row = data as Omit<AccountRow, 'lat' | 'lng'> | null;
+      if (!row) return null;
+      return { ...row, lat: null, lng: null };
     },
   });
 
