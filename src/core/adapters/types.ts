@@ -141,6 +141,12 @@ export interface NewOrderItem {
 
 export interface NewOrder {
   customerId: string;
+  /**
+   * Doğrudan cari seçimi (klinik-siz cari). Verildiğinde sipariş bu cari üzerinden
+   * oluşturulur — clinic_id/user_id gönderilmez (clinic_id XOR cari_id). customerId
+   * yalnızca UI/quote için taşınır; cariId varsa müşteri-türü çözümü atlanır.
+   */
+  cariId?: string;
   items: NewOrderItem[];
   notes?: string;
   idempotencyKey: string;

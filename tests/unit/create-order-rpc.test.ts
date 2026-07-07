@@ -132,6 +132,40 @@ describe('createOrder → saha_create_order_tx RPC', () => {
     expect(payload.clinic_id).toBeUndefined();
   });
 
+  it('cariId verilirse p_payload cari_id taşır, clinic_id/user_id GÖNDERMEZ (klinik çözümü atlanır)', async () => {
+    const { client, rpcCalls } = makeMockClient({
+      // clinicResult verilse de cariId yolu klinik lookup'ını atlamalı.
+      clinicResult: { data: { id: 'clinic-should-be-ignored' }, error: null },
+      orderResult: { data: ORDER_ROW, error: null },
+      rpcResult: {
+        data: {
+          order_id: 'order-uuid-1',
+          order_number: 'SAH-20260707120000-abc123',
+          status: 'pending',
+          total: 110,
+          reused: false,
+        },
+        error: null,
+      },
+    });
+    const adapter = new SupabaseCRMAdapter({ client: client as never });
+
+    await adapter.createOrder({
+      customerId: 'cari-uuid-9',
+      cariId: 'cari-uuid-9',
+      idempotencyKey: 'idem-cari-1',
+      items: [{ productId: 'prod-1', quantity: 3 }],
+    });
+
+    const call = rpcCalls.find((c) => c.fn === 'saha_create_order_tx');
+    expect(call).toBeDefined();
+    const payload = call!.args.p_payload as Record<string, unknown>;
+    expect(payload.cari_id).toBe('cari-uuid-9');
+    expect(payload).not.toHaveProperty('clinic_id');
+    expect(payload).not.toHaveProperty('user_id');
+    expect(payload.items).toEqual([{ product_id: 'prod-1', quantity: 3 }]);
+  });
+
   it('reused:true yanıtında da tam Order (getOrder) döndürür', async () => {
     const { client } = makeMockClient({
       clinicResult: { data: { id: 'clinic-1' }, error: null },

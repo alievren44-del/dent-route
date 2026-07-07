@@ -203,6 +203,9 @@ async function executeOp(op: OfflineOp): Promise<void> {
       const adapter = new SupabaseCRMAdapter();
       await adapter.createOrder({
         customerId: p['customer_id'] as string,
+        // Doğrudan cari seçimi offline kuyruğa alındıysa cari_id taşınır → cariId geç
+        // (adapter clinic_id yerine cari_id gönderir). Klinik/legacy siparişte null.
+        ...(p['cari_id'] ? { cariId: p['cari_id'] as string } : {}),
         items: ((p['items'] as Array<Record<string, unknown>>) ?? []).map((it) => ({
           productId: it['productId'] as string,
           quantity: it['quantity'] as number,

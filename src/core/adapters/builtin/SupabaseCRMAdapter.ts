@@ -543,29 +543,12 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
     // yeni insert yapmadan mevcut siparişi döndürür (reused:true) → client-side
     // idempotency ön-kontrolü kaldırıldı (RPC içinde ele alınıyor).
 
-    // Müşteri kimliği iki dünyadan gelebilir:
-    //  - saha_clinics (prospect) → RPC klinikten cari'yi find-or-create eder.
-    //  - profiles (eski ziyaret/müşteri-detay akışları) → legacy user_id.
-    // Hangisi olduğunu ayırt etmek için klinik kaydını kontrol et; RPC'ye doğru
-    // parametreyi (clinic_id | user_id) geçir. (Cari find-or-create pre-RPC çağrısı
-    // kaldırıldı — saha_create_order_tx içinde yapılıyor.)
-    const { data: clinicRow, error: clinicErr } = await this.supabase
-      .from('saha_clinics')
-      .select('id')
-      .eq('id', order.customerId)
-      .maybeSingle();
-    if (clinicErr) {
-      // P5/T3: eskiden bu hata sessizce yutulup legacy user_id yoluna düşülüyordu.
-      throw new AdapterError('UNKNOWN', `müşteri türü çözülemedi: ${clinicErr.message}`, {
-        originalError: clinicErr,
-      });
-    }
-
     const payload: {
       idempotency_key: string;
       notes?: string;
       clinic_id?: string;
       user_id?: string;
+      cari_id?: string;
       items: Array<{ product_id: string; quantity: number }>;
     } = {
       idempotency_key: order.idempotencyKey,
@@ -574,10 +557,34 @@ export class SupabaseCRMAdapter implements ICRMAdapter {
       items: order.items.map((it) => ({ product_id: it.productId, quantity: it.quantity })),
     };
     if (order.notes) payload.notes = order.notes;
-    if (clinicRow?.id) {
-      payload.clinic_id = order.customerId;
+
+    // Müşteri kimliği üç dünyadan gelebilir:
+    //  - cariId (doğrudan cari seçimi) → cari_id, klinik-türü çözümü atlanır.
+    //    RPC orders.user_id'yi saha_cariler.profile_id'den çözer (clinic_id XOR cari_id).
+    //  - saha_clinics (prospect) → RPC klinikten cari'yi find-or-create eder.
+    //  - profiles (eski ziyaret/müşteri-detay akışları) → legacy user_id.
+    if (order.cariId) {
+      payload.cari_id = order.cariId;
     } else {
-      payload.user_id = order.customerId;
+      // Klinik vs legacy profil ayrımı için klinik kaydını kontrol et; RPC'ye doğru
+      // parametreyi (clinic_id | user_id) geçir. (Cari find-or-create pre-RPC çağrısı
+      // kaldırıldı — saha_create_order_tx içinde yapılıyor.)
+      const { data: clinicRow, error: clinicErr } = await this.supabase
+        .from('saha_clinics')
+        .select('id')
+        .eq('id', order.customerId)
+        .maybeSingle();
+      if (clinicErr) {
+        // P5/T3: eskiden bu hata sessizce yutulup legacy user_id yoluna düşülüyordu.
+        throw new AdapterError('UNKNOWN', `müşteri türü çözülemedi: ${clinicErr.message}`, {
+          originalError: clinicErr,
+        });
+      }
+      if (clinicRow?.id) {
+        payload.clinic_id = order.customerId;
+      } else {
+        payload.user_id = order.customerId;
+      }
     }
 
     // Yeni RPC henüz üretilmiş tiplerde yok → untyped rpc escape (OrderApprovalPage

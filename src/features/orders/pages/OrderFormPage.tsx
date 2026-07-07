@@ -55,10 +55,12 @@ interface OrderTemplate {
 }
 
 interface CustomerOption {
+  /** 'clinic' → saha_clinics kaydı; 'cari' → saha_cariler (muhasebe cari) kaydı. */
+  kind: 'clinic' | 'cari';
   id: string;
-  /** Görünen ad (klinik adı). */
+  /** Görünen ad (klinik adı / cari fatura ünvanı). */
   name: string;
-  /** Alt satır — adres / şehir. */
+  /** Alt satır — klinikte adres/şehir, caride cari_kodu. */
   subtitle: string | null;
 }
 
@@ -88,6 +90,9 @@ function OrderFormPage(): JSX.Element {
   const userRole = String(profile?.role ?? 'USER').toUpperCase();
 
   const [customerId, setCustomerId] = useState<string>(initialCustomerId);
+  // Seçilen müşterinin türü — 'cari' ise submit'te adapter'a cariId geçilir.
+  // Başlangıç/legacy (initialCustomerId) klinik/profil yolu 'clinic' say.
+  const [customerKind, setCustomerKind] = useState<'clinic' | 'cari'>('clinic');
   const [customerLabel, setCustomerLabel] = useState<string>('');
   const [customerSearch, setCustomerSearch] = useState<string>('');
   const [customerPickerOpen, setCustomerPickerOpen] = useState<boolean>(false);
@@ -155,9 +160,40 @@ function OrderFormPage(): JSX.Element {
         address: string | null;
       }>;
       return rows.map((r) => ({
+        kind: 'clinic' as const,
         id: r.id,
         name: r.name ?? 'İsimsiz klinik',
         subtitle: r.address,
+      }));
+    },
+  });
+
+  // Müşteri arama — saha_cariler (muhasebe carileri) üzerinde fatura_unvani/cari_kodu ile.
+  // RLS carileri temsilcinin kendine kısıtlar (bypass yok). Klinik-siz cariler için
+  // sipariş açmayı mümkün kılar — RPC orders.user_id'yi cari.profile_id'den çözer.
+  const { data: cariOptions, isFetching: cariSearching } = useQuery({
+    queryKey: ['order-form-cari-search', debouncedCustomerSearch],
+    enabled: customerPickerOpen && debouncedCustomerSearch.trim().length >= 2,
+    queryFn: async (): Promise<CustomerOption[]> => {
+      const supabase = getTypedClient();
+      const term = `%${debouncedCustomerSearch}%`;
+      const { data, error: err } = await supabase
+        .from('saha_cariler')
+        .select('id, cari_kodu, fatura_unvani, profile_id')
+        .or(`fatura_unvani.ilike.${term},cari_kodu.ilike.${term}`)
+        .limit(10);
+      if (err) throw err;
+      const rows = (data ?? []) as Array<{
+        id: string;
+        cari_kodu: string | null;
+        fatura_unvani: string | null;
+        profile_id: string | null;
+      }>;
+      return rows.map((r) => ({
+        kind: 'cari' as const,
+        id: r.id,
+        name: r.fatura_unvani ?? r.cari_kodu ?? 'İsimsiz cari',
+        subtitle: r.cari_kodu,
       }));
     },
   });
@@ -281,7 +317,9 @@ function OrderFormPage(): JSX.Element {
 
   function pickCustomer(c: CustomerOption): void {
     setCustomerId(c.id);
-    setCustomerLabel(c.name);
+    setCustomerKind(c.kind);
+    // Cari chip'inde fatura ünvanı + cari kodu birlikte gösterilir.
+    setCustomerLabel(c.kind === 'cari' && c.subtitle ? `${c.name} · ${c.subtitle}` : c.name);
     setCustomerPickerOpen(false);
     setCustomerSearch('');
   }
@@ -309,6 +347,8 @@ function OrderFormPage(): JSX.Element {
     const offlinePayload: Record<string, unknown> = {
       idempotency_key: idempotencyKey,
       customer_id: customerId,
+      // Cari seçimiyse cari_id taşı — syncQueue replay adapter.createOrder'a cariId geçer.
+      cari_id: customerKind === 'cari' ? customerId : null,
       notes: notes.trim() || null,
       items: cart.map((c) => ({
         productId: c.productId,
@@ -349,6 +389,8 @@ function OrderFormPage(): JSX.Element {
       }));
       const created = await adapter.createOrder({
         customerId,
+        // Cari seçimiyse cariId geç → adapter clinic_id yerine cari_id gönderir.
+        ...(customerKind === 'cari' ? { cariId: customerId } : {}),
         items,
         notes: notes.trim() || undefined,
         idempotencyKey,
@@ -481,6 +523,7 @@ function OrderFormPage(): JSX.Element {
                 type="button"
                 onClick={() => {
                   setCustomerId('');
+                  setCustomerKind('clinic');
                   setCustomerLabel('');
                   setCustomerPickerOpen(true);
                 }}
@@ -507,11 +550,19 @@ function OrderFormPage(): JSX.Element {
               </div>
               {customerPickerOpen && debouncedCustomerSearch.trim().length >= 2 && (
                 <div className="mt-1 rounded-lg border border-border bg-card shadow-lg max-h-72 overflow-y-auto">
-                  {customerSearching && (
+                  {(customerSearching || cariSearching) && (
                     <p className="px-3 py-2 text-xs text-muted-foreground">Aranıyor…</p>
                   )}
-                  {!customerSearching && (customerOptions ?? []).length === 0 && (
-                    <p className="px-3 py-2 text-xs text-muted-foreground">Sonuç yok.</p>
+                  {!customerSearching &&
+                    !cariSearching &&
+                    (customerOptions ?? []).length === 0 &&
+                    (cariOptions ?? []).length === 0 && (
+                      <p className="px-3 py-2 text-xs text-muted-foreground">Sonuç yok.</p>
+                    )}
+                  {(customerOptions ?? []).length > 0 && (
+                    <p className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Klinikler
+                    </p>
                   )}
                   {(customerOptions ?? []).map((c) => (
                     <button
@@ -523,6 +574,26 @@ function OrderFormPage(): JSX.Element {
                       <p className="text-sm font-medium text-foreground truncate">{c.name}</p>
                       {c.subtitle && (
                         <p className="text-xs text-muted-foreground truncate">{c.subtitle}</p>
+                      )}
+                    </button>
+                  ))}
+                  {(cariOptions ?? []).length > 0 && (
+                    <p className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Cariler
+                    </p>
+                  )}
+                  {(cariOptions ?? []).map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => pickCustomer(c)}
+                      className="w-full text-left px-3 py-2.5 min-h-tap-min hover:bg-muted/60 border-b border-border last:border-b-0"
+                    >
+                      <p className="text-sm font-medium text-foreground truncate">{c.name}</p>
+                      {c.subtitle && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          Cari · {c.subtitle}
+                        </p>
                       )}
                     </button>
                   ))}
