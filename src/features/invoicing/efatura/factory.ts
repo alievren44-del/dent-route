@@ -3,7 +3,7 @@
  *
  * Config'teki `einvoice.provider` değerine göre uygun EInvoiceProvider'ı
  * oluşturur. Tek source of truth — başka yerde provider constructor'ı
- * çağrılmaz. (src/core/adapters/factory.ts ile aynı stil.)
+ * çağrılmaz.
  *
  * Yeni entegratör eklemek = bir yeni dosya (örn. parasutProvider.ts) +
  * buraya bir case. Canlı entegratörler BLOKE: dış API anahtarları + mali

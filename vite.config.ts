@@ -65,6 +65,19 @@ export default defineConfig({
       reporter: ['text', 'html'],
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/**/*.d.ts', 'src/**/*.test.{ts,tsx}', 'src/main.tsx'],
+      // Regresyon-tabanı (ratchet): 2026-07-07 ölçülen baseline'ın (Stmt 5.8 /
+      // Branch 53 / Func 26 / Lines 5.8, `include` tüm-repo olduğu için düşük)
+      // GÜVENLİ ALTI. Bugün geçer; kapsama DÜŞERSE `test:coverage` fail eder.
+      // Testler arttıkça eşikler yukarı çekilir. CI `test` step'i --coverage
+      // KULLANMAZ → yalnız manuel `test:coverage`'ı bağlar. NOT: coverage
+      // çalıştırmak için @vitest/coverage-v8@1.6.1 + @bcoe/v8-coverage devDep
+      // gerekir (repoda yok — kurulunca ölçüm/eşik aktif).
+      thresholds: {
+        statements: 5,
+        branches: 45,
+        functions: 20,
+        lines: 5,
+      },
     },
   },
 });
