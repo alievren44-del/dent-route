@@ -68,10 +68,10 @@ function extractSelects(code: string): Array<{ table: string; select: string }> 
   const anyFrom = [...code.matchAll(/\bfrom\(/g)];
   for (let i = 0; i < anyFrom.length; i++) {
     const fromM = anyFrom[i]!;
-    const at = fromM.index!;
+    const at = fromM.index;
     const spanStart = at + fromM[0].length;
     const spanEnd =
-      i + 1 < anyFrom.length ? anyFrom[i + 1]!.index! : Math.min(code.length, spanStart + 600);
+      i + 1 < anyFrom.length ? anyFrom[i + 1]!.index : Math.min(code.length, spanStart + 600);
     const lit = /^from\(\s*['"]([a-z_][a-z0-9_]*)['"](?:\s+as\s+[a-z]+)?\s*\)/.exec(
       code.slice(at, at + 80),
     );
@@ -132,10 +132,10 @@ function forEachFromSpan(
   const anyFrom = [...code.matchAll(/\bfrom\(/g)];
   for (let i = 0; i < anyFrom.length; i++) {
     const fromM = anyFrom[i]!;
-    const at = fromM.index!;
+    const at = fromM.index;
     const spanStart = at + fromM[0].length;
     const spanEnd =
-      i + 1 < anyFrom.length ? anyFrom[i + 1]!.index! : Math.min(code.length, spanStart + 1200);
+      i + 1 < anyFrom.length ? anyFrom[i + 1]!.index : Math.min(code.length, spanStart + 1200);
     const lit = /^from\(\s*['"]([a-z_][a-z0-9_]*)['"](?:\s+as\s+[a-z]+)?\s*\)/.exec(
       code.slice(at, at + 80),
     );
