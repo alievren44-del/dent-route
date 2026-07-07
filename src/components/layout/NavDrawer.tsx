@@ -42,6 +42,7 @@ import {
   ClipboardList,
   CalendarDays,
   Megaphone,
+  Settings,
 } from 'lucide-react';
 import { useRouteBasket } from '@features/routes/store/routeBasketStore';
 import { usePermissionCached } from '@core/auth/usePermissions';
@@ -88,6 +89,7 @@ const SECTIONS: NavSection[] = [
       { to: '/tahsilatlar', label: 'Tahsilatlar', Icon: Banknote },
       { to: '/samples', label: 'Numune', Icon: Gift },
       { to: '/notifications', label: 'Bildirimler', Icon: Bell },
+      { to: '/settings', label: 'Ayarlar', Icon: Settings },
     ],
   },
   {

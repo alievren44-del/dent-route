@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Menu } from 'lucide-react';
+import { Menu, Settings } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAuthStore } from '@core/auth/authStore';
 import { usePermissions } from '@core/auth/usePermissions';
 import { loadSahaConfig } from '@config/loadConfig';
@@ -49,6 +50,13 @@ export function Header() {
               <span className="hidden text-xs text-muted-foreground sm:inline">
                 {profile.fullName ?? profile.email}
               </span>
+              <Link
+                to="/settings"
+                aria-label="Ayarlar"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-md text-foreground hover:bg-muted"
+              >
+                <Settings className="h-5 w-5" />
+              </Link>
               <button
                 type="button"
                 onClick={() => setConfirmSignOut(true)}

@@ -21,10 +21,12 @@ import {
   Edit2,
   Save,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { getTypedClient } from '@lib/supabase';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
 import { generateExtractPdfHtml, openInvoicePrintWindow } from '@features/invoicing/pdf/invoicePdf';
+import QueryErrorState from '@components/common/QueryErrorState';
 
 type TabKey = 'faturalar' | 'odemeler' | 'cek_senet' | 'ekstre' | 'bilgiler';
 
@@ -123,7 +125,13 @@ function CariDetailPage(): JSX.Element {
   const { id } = useParams<{ id: string }>();
   const [activeTab, setActiveTab] = useState<TabKey>('faturalar');
 
-  const { data: cari, isLoading } = useQuery({
+  const {
+    data: cari,
+    isLoading,
+    isError: cariIsError,
+    error: cariError,
+    refetch: refetchCari,
+  } = useQuery({
     queryKey: ['cari-detail', id],
     enabled: !!id,
     // Finansal veriler: düzenleme/iptal sonrası daima taze (persisted cache + 60s
@@ -142,7 +150,12 @@ function CariDetailPage(): JSX.Element {
     },
   });
 
-  const { data: faturalar } = useQuery({
+  const {
+    data: faturalar,
+    isError: faturalarIsError,
+    error: faturalarError,
+    refetch: refetchFaturalar,
+  } = useQuery({
     queryKey: ['cari-faturalar', id],
     enabled: !!id,
     staleTime: 0,
@@ -160,7 +173,12 @@ function CariDetailPage(): JSX.Element {
     },
   });
 
-  const { data: odemeler } = useQuery({
+  const {
+    data: odemeler,
+    isError: odemelerIsError,
+    error: odemelerError,
+    refetch: refetchOdemeler,
+  } = useQuery({
     queryKey: ['cari-odemeler', id],
     enabled: !!id,
     staleTime: 0,
@@ -177,7 +195,12 @@ function CariDetailPage(): JSX.Element {
     },
   });
 
-  const { data: cekSenetler } = useQuery({
+  const {
+    data: cekSenetler,
+    isError: cekSenetlerIsError,
+    error: cekSenetlerError,
+    refetch: refetchCekSenetler,
+  } = useQuery({
     queryKey: ['cari-cek-senet', id],
     enabled: !!id,
     staleTime: 0,
@@ -209,6 +232,17 @@ function CariDetailPage(): JSX.Element {
 
   if (isLoading) {
     return <div className="p-6 text-center text-muted-foreground">Yükleniyor…</div>;
+  }
+
+  if (cariIsError) {
+    return (
+      <div className="p-4">
+        <QueryErrorState
+          message={cariError instanceof Error ? cariError.message : undefined}
+          onRetry={() => void refetchCari()}
+        />
+      </div>
+    );
   }
 
   if (!cari) {
@@ -251,7 +285,19 @@ function CariDetailPage(): JSX.Element {
       </div>
 
       {/* Bakiye banner */}
-      <div className="px-4 py-4">
+      <div className="px-4 py-4 space-y-2">
+        {/* KRİTİK: bakiye faturalar sorgusundan hesaplanır — o sorgu hata verirse
+            bakiye yalnız açılış bakiyesini yansıtır ve sessizce yanlış görünür. */}
+        {faturalarIsError && (
+          <QueryErrorState
+            message={
+              faturalarError instanceof Error
+                ? `Faturalar yüklenemedi, bakiye eksik olabilir — ${faturalarError.message}`
+                : 'Faturalar yüklenemedi, bakiye eksik olabilir.'
+            }
+            onRetry={() => void refetchFaturalar()}
+          />
+        )}
         <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
           <p className="text-xs text-muted-foreground">Bakiye</p>
           <p
@@ -308,12 +354,33 @@ function CariDetailPage(): JSX.Element {
       </div>
 
       <div className="flex-1 px-4 py-3">
-        {activeTab === 'faturalar' && <FaturalarTab cariId={cari.id} faturalar={faturalar ?? []} />}
+        {activeTab === 'faturalar' && (
+          <FaturalarTab
+            cariId={cari.id}
+            faturalar={faturalar ?? []}
+            isError={faturalarIsError}
+            error={faturalarError}
+            onRetry={() => void refetchFaturalar()}
+          />
+        )}
         {activeTab === 'odemeler' && (
-          <OdemelerTab cariId={cari.id} odemeler={odemeler ?? []} faturalar={faturalar ?? []} />
+          <OdemelerTab
+            cariId={cari.id}
+            odemeler={odemeler ?? []}
+            faturalar={faturalar ?? []}
+            isError={odemelerIsError}
+            error={odemelerError}
+            onRetry={() => void refetchOdemeler()}
+          />
         )}
         {activeTab === 'cek_senet' && (
-          <CekSenetTab cariId={cari.id} cekSenetler={cekSenetler ?? []} />
+          <CekSenetTab
+            cariId={cari.id}
+            cekSenetler={cekSenetler ?? []}
+            isError={cekSenetlerIsError}
+            error={cekSenetlerError}
+            onRetry={() => void refetchCekSenetler()}
+          />
         )}
         {activeTab === 'ekstre' && (
           <EkstreTab cari={cari} faturalar={faturalar ?? []} odemeler={odemeler ?? []} />
@@ -330,9 +397,15 @@ function CariDetailPage(): JSX.Element {
 function FaturalarTab({
   cariId,
   faturalar,
+  isError,
+  error,
+  onRetry,
 }: {
   cariId: string;
   faturalar: FaturaRow[];
+  isError?: boolean;
+  error?: unknown;
+  onRetry?: () => void;
 }): JSX.Element {
   return (
     <div className="space-y-2">
@@ -343,7 +416,13 @@ function FaturalarTab({
         <Plus className="h-4 w-4" />
         Yeni Fatura
       </Link>
-      {faturalar.length === 0 && (
+      {isError && (
+        <QueryErrorState
+          message={error instanceof Error ? error.message : undefined}
+          onRetry={onRetry}
+        />
+      )}
+      {!isError && faturalar.length === 0 && (
         <p className="text-center text-sm text-muted-foreground py-6">Fatura yok.</p>
       )}
       {faturalar.map((f) => (
@@ -390,10 +469,16 @@ function FaturalarTab({
 function OdemelerTab({
   cariId,
   odemeler,
+  isError,
+  error,
+  onRetry,
 }: {
   cariId: string;
   odemeler: OdemeRow[];
   faturalar: FaturaRow[];
+  isError?: boolean;
+  error?: unknown;
+  onRetry?: () => void;
 }): JSX.Element {
   return (
     <div className="space-y-2">
@@ -404,7 +489,13 @@ function OdemelerTab({
         <Plus className="h-4 w-4" />
         Yeni Ödeme
       </Link>
-      {odemeler.length === 0 && (
+      {isError && (
+        <QueryErrorState
+          message={error instanceof Error ? error.message : undefined}
+          onRetry={onRetry}
+        />
+      )}
+      {!isError && odemeler.length === 0 && (
         <p className="text-center text-sm text-muted-foreground py-6">Ödeme yok.</p>
       )}
       {odemeler.map((o) => (
@@ -439,9 +530,15 @@ function OdemelerTab({
 function CekSenetTab({
   cariId,
   cekSenetler,
+  isError,
+  error,
+  onRetry,
 }: {
   cariId: string;
   cekSenetler: CekSenetRow[];
+  isError?: boolean;
+  error?: unknown;
+  onRetry?: () => void;
 }): JSX.Element {
   return (
     <div className="space-y-2">
@@ -452,7 +549,13 @@ function CekSenetTab({
         <Plus className="h-4 w-4" />
         Çek/Senet Listesi
       </Link>
-      {cekSenetler.length === 0 && (
+      {isError && (
+        <QueryErrorState
+          message={error instanceof Error ? error.message : undefined}
+          onRetry={onRetry}
+        />
+      )}
+      {!isError && cekSenetler.length === 0 && (
         <p className="text-center text-sm text-muted-foreground py-6">Çek/senet yok.</p>
       )}
       {cekSenetler.map((cs) => (
@@ -660,6 +763,12 @@ function BilgilerTab({ cari }: { cari: CariFull }): JSX.Element {
       void queryClient.invalidateQueries({ queryKey: ['cari-detail', cari.id] });
       void queryClient.invalidateQueries({ queryKey: ['cariler'] });
       setEditing(false);
+      toast.success('Bilgiler kaydedildi.');
+    },
+    onError: (err: unknown) => {
+      toast.error(
+        `Kaydedilemedi: ${err instanceof Error ? err.message : 'bilinmeyen hata'}`,
+      );
     },
   });
 

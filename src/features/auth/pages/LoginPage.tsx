@@ -126,6 +126,15 @@ export default function LoginPage() {
           {submitting ? 'Giriş yapılıyor…' : 'Giriş Yap'}
         </button>
 
+        <p className="text-center text-sm">
+          <Link
+            to="/forgot-password"
+            className="text-primary underline-offset-2 hover:underline"
+          >
+            Şifremi unuttum
+          </Link>
+        </p>
+
         {showFirstSetup && (
           <div className="rounded-lg border border-dashed border-primary/40 bg-primary/5 px-3 py-3 text-center text-sm text-foreground">
             <p className="mb-1 text-xs text-muted-foreground">Sistemde henüz kullanıcı yok.</p>

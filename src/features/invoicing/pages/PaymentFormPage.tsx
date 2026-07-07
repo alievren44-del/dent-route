@@ -18,8 +18,13 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Search, AlertTriangle, Check } from 'lucide-react';
 
+import { toast } from 'sonner';
+
 import { getTypedClient } from '@lib/supabase';
+import { useAuthStore } from '@core/auth/authStore';
+import { enqueueOp, generateUUID, isNetworkWriteError } from '@core/offline/syncQueue';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
+import QueryErrorState from '@components/common/QueryErrorState';
 
 interface CariOption {
   id: string;
@@ -60,6 +65,8 @@ function PaymentFormPage(): JSX.Element {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  // Offline yolunda created_by için oturum kullanıcı id'si (online yol getUser() kullanır).
+  const sessionUserId = useAuthStore((s) => s.session?.userId);
   const initialCariId = searchParams.get('cari_id');
 
   const [cariId, setCariId] = useState<string | null>(initialCariId);
@@ -125,8 +132,15 @@ function PaymentFormPage(): JSX.Element {
     },
   });
 
-  // Bakiyeli faturalar
-  const { data: bakiyeliFaturalar } = useQuery({
+  // Bakiyeli faturalar — KRİTİK: bu sorgu hata verirse aşağıdaki UI "Bakiyeli
+  // fatura yok (serbest tahsilat)" yazardı; oysa gerçekte açık fatura(lar) var
+  // olabilir ve ödeme yanlışlıkla faturasız/serbest kaydedilebilirdi.
+  const {
+    data: bakiyeliFaturalar,
+    isError: bakiyeliIsError,
+    error: bakiyeliError,
+    refetch: refetchBakiyeli,
+  } = useQuery({
     queryKey: ['payment-bakiyeli', cariId],
     enabled: !!cariId,
     queryFn: async (): Promise<BakiyeliFatura[]> => {
@@ -233,10 +247,90 @@ function PaymentFormPage(): JSX.Element {
         }
       }
 
-      let cekSenetId: string | null = null;
-      if (yontem === 'cek' || yontem === 'senet') {
+      const cekNeeded = yontem === 'cek' || yontem === 'senet';
+      if (cekNeeded) {
         if (!csKesideci.trim()) throw new Error('Keşideci zorunlu.');
         if (!csVade) throw new Error('Vade tarihi zorunlu.');
+      }
+
+      // Çek/senet satırı (client-üretilmiş id → offline replay pk 23505'te idempotent).
+      const buildCekSenetRow = (id: string): Record<string, unknown> => ({
+        id,
+        tip: yontem,
+        cek_no: csNo.trim() || null,
+        banka: csBanka.trim() || null,
+        kesideci: csKesideci.trim(),
+        cari_id: cariId,
+        vade_tarihi: csVade,
+        tutar,
+        durum: 'portfoyde',
+      });
+
+      // saha_odemeler satır(lar)ı. 0–1 fatura → tek serbest/faturalı satır; 2+ →
+      // FIFO/manuel dağıtımla fatura başına bir satır. Her satır client-üretilmiş id taşır.
+      const selectedIds = selectedFaturalarOrdered.map((f) => f.id);
+      const buildOdemeRows = (uid: string, cekSenetId: string | null): Record<string, unknown>[] => {
+        if (selectedIds.length <= 1) {
+          return [
+            {
+              id: generateUUID(),
+              cari_id: cariId,
+              fatura_id: selectedIds[0] ?? null,
+              tarih,
+              tutar,
+              yontem,
+              dekont_no: dekontNo.trim() || null,
+              cek_senet_id: cekSenetId,
+              aciklama: aciklama.trim() || null,
+              created_by: uid,
+            },
+          ];
+        }
+        const sum =
+          Math.round(
+            selectedIds.reduce((s, fid) => s + (Number(effectiveAlloc[fid]) || 0), 0) * 100,
+          ) / 100;
+        if (Math.abs(sum - tutar) > 0.01) {
+          throw new Error(
+            `Dağıtılan tutar (${formatTRY(sum)}) toplam tutara (${formatTRY(tutar)}) eşit olmalı.`,
+          );
+        }
+        return selectedIds
+          .map((fid) => ({
+            id: generateUUID(),
+            cari_id: cariId,
+            fatura_id: fid,
+            tarih,
+            tutar: Math.round((Number(effectiveAlloc[fid]) || 0) * 100) / 100,
+            yontem,
+            dekont_no: dekontNo.trim() || null,
+            cek_senet_id: cekSenetId,
+            aciklama: aciklama.trim() || null,
+            created_by: uid,
+          }))
+          .filter((r) => (r.tutar as number) > 0);
+      };
+
+      // Çevrim dışıysa doğrudan kuyruğa al (OrderFormPage offline deseni). Online yol
+      // getUser() ile uid çözer; offline'da oturum kullanıcı id'sini kullan (= auth.uid,
+      // replay'de RLS WITH CHECK karşılanır).
+      if (!navigator.onLine) {
+        const uid = sessionUserId;
+        if (!uid) throw new Error('Oturum bulunamadı. Tekrar giriş yapın.');
+        const cekSenetId = cekNeeded ? generateUUID() : null;
+        const cekSenet = cekNeeded ? buildCekSenetRow(cekSenetId!) : null;
+        const odemeler = buildOdemeRows(uid, cekSenetId);
+        if (odemeler.length === 0) throw new Error('Dağıtılacak tutar yok.');
+        await enqueueOp(
+          'payment.create',
+          { cekSenet, odemeler },
+          odemeler[0]?.id as string,
+        );
+        return { id: 'offline', offline: true as const };
+      }
+
+      let cekSenetId: string | null = null;
+      if (cekNeeded) {
         const { data: cs, error: csErr } = await supabase
           .from('saha_cek_senetler')
           .insert({
@@ -319,10 +413,28 @@ function PaymentFormPage(): JSX.Element {
         if (cekSenetId) {
           await supabase.from('saha_cek_senetler').delete().eq('id', cekSenetId);
         }
+        // Ağ/bağlantı hatası → kuyruğa al (veri kaybetme). Online eklenen çek/senet
+        // yukarıda geri alındı; kuyruğa YENİ client-id'li çek/senet + ödeme satırları girer.
+        if (isNetworkWriteError(e)) {
+          const uid = sessionUserId;
+          if (uid) {
+            const qCekSenetId = cekNeeded ? generateUUID() : null;
+            const qCekSenet = cekNeeded && qCekSenetId ? buildCekSenetRow(qCekSenetId) : null;
+            const qOdemeler = buildOdemeRows(uid, qCekSenetId);
+            if (qOdemeler.length > 0) {
+              await enqueueOp(
+                'payment.create',
+                { cekSenet: qCekSenet, odemeler: qOdemeler },
+                qOdemeler[0]?.id as string,
+              );
+              return { id: 'offline', offline: true as const };
+            }
+          }
+        }
         throw e;
       }
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       if (cariId) {
         void queryClient.invalidateQueries({ queryKey: ['cari-odemeler', cariId] });
         void queryClient.invalidateQueries({ queryKey: ['cari-faturalar', cariId] });
@@ -331,6 +443,9 @@ function PaymentFormPage(): JSX.Element {
       void queryClient.invalidateQueries({ queryKey: ['cariler-fatura-sums'] });
       // Previously orphaned: aging report never refreshed after payment.
       void queryClient.invalidateQueries({ queryKey: ['invoicing', 'aging'] });
+      if ((res as { offline?: boolean }).offline) {
+        toast.success('Çevrimdışı kaydedildi — bağlantı gelince gönderilecek');
+      }
       if (cariId) navigate(`/invoicing/cari/${cariId}`);
     },
     onError: (err: unknown) => {
@@ -417,7 +532,16 @@ function PaymentFormPage(): JSX.Element {
             <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
               Hangi fatura(lar) için?
             </label>
-            {bakiyeliFaturalar && bakiyeliFaturalar.length === 0 ? (
+            {bakiyeliIsError ? (
+              <QueryErrorState
+                message={
+                  bakiyeliError instanceof Error
+                    ? `Faturalar yüklenemedi — serbest tahsilat ile YANLIŞLIKLA kaydetmeyin. ${bakiyeliError.message}`
+                    : 'Faturalar yüklenemedi — serbest tahsilat ile YANLIŞLIKLA kaydetmeyin.'
+                }
+                onRetry={() => void refetchBakiyeli()}
+              />
+            ) : bakiyeliFaturalar && bakiyeliFaturalar.length === 0 ? (
               <p className="text-sm text-muted-foreground p-3 rounded-lg border border-dashed border-border bg-card">
                 Bakiyeli fatura yok (serbest tahsilat olarak kaydedilir).
               </p>

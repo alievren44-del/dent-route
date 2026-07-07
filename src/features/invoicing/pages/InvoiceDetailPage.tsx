@@ -19,6 +19,7 @@ import { loadSahaConfig } from '@config/loadConfig';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
 import { printInvoice, type PdfKalem } from '@features/invoicing/pdf/invoicePdf';
 import { createEInvoiceProvider } from '@features/invoicing/efatura/factory';
+import QueryErrorState from '@components/common/QueryErrorState';
 
 interface InvoiceFull {
   id: string;
@@ -93,7 +94,13 @@ function InvoiceDetailPage(): JSX.Element {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data: invoice, isLoading } = useQuery({
+  const {
+    data: invoice,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ['invoice', id],
     enabled: !!id,
     queryFn: async (): Promise<InvoiceFull | null> => {
@@ -299,6 +306,17 @@ function InvoiceDetailPage(): JSX.Element {
 
   if (!id) return <div className="p-6 text-center text-muted-foreground">Fatura ID yok.</div>;
   if (isLoading) return <div className="p-6 text-center text-muted-foreground">Yükleniyor…</div>;
+  // Sessiz hata "Fatura bulunamadı" ile karışıyordu — gerçek hata görünür olmalı.
+  if (isError) {
+    return (
+      <div className="p-4">
+        <QueryErrorState
+          message={error instanceof Error ? error.message : undefined}
+          onRetry={() => void refetch()}
+        />
+      </div>
+    );
+  }
   if (!invoice)
     return <div className="p-6 text-center text-muted-foreground">Fatura bulunamadı.</div>;
 
