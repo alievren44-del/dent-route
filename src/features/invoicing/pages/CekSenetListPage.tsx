@@ -11,9 +11,11 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Banknote, CheckCircle, XCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { getTypedClient } from '@lib/supabase';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
+import QueryErrorState from '@components/common/QueryErrorState';
 
 type Durum = 'portfoyde' | 'tahsile_verildi' | 'tahsil_edildi' | 'karsiliksiz';
 
@@ -51,7 +53,13 @@ function fmtDate(iso: string | null): string {
 function CekSenetListPage(): JSX.Element {
   const [tab, setTab] = useState<Durum>('portfoyde');
 
-  const { data: items, isLoading } = useQuery({
+  const {
+    data: items,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ['cek-senetler', tab],
     queryFn: async (): Promise<CekSenetRow[]> => {
       const supabase = getTypedClient();
@@ -107,7 +115,13 @@ function CekSenetListPage(): JSX.Element {
         )}
 
         {isLoading && <p className="text-center text-sm text-muted-foreground py-6">Yükleniyor…</p>}
-        {!isLoading && (items ?? []).length === 0 && (
+        {isError && (
+          <QueryErrorState
+            message={error instanceof Error ? error.message : undefined}
+            onRetry={() => void refetch()}
+          />
+        )}
+        {!isLoading && !isError && (items ?? []).length === 0 && (
           <p className="text-center text-sm text-muted-foreground py-10">Kayıt yok.</p>
         )}
 
@@ -143,6 +157,12 @@ function CekSenetCard({ item }: { item: CekSenetRow }): JSX.Element {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['cek-senetler'] });
       setActionOpen(null);
+      toast.success('Durum güncellendi.');
+    },
+    onError: (err: unknown) => {
+      toast.error(
+        `Durum güncellenemedi: ${err instanceof Error ? err.message : 'bilinmeyen hata'}`,
+      );
     },
   });
 

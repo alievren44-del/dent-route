@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 
 import { getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
+import QueryErrorState from '@components/common/QueryErrorState';
 import {
   type RepCollection,
   type CollectionMethod,
@@ -373,6 +374,13 @@ export default function CollectionListPage() {
         <div className="flex items-center gap-2 text-sm text-slate-600">
           <Loader2 size={14} className="animate-spin" /> Yükleniyor…
         </div>
+      ) : query.isError ? (
+        // KRİTİK: sessizce hataysa liste boşmuş gibi "Henüz tahsilat yok"
+        // gösteriyordu — tahsilat kayıtları kullanıcıdan gizlenmiş olurdu.
+        <QueryErrorState
+          message={query.error instanceof Error ? query.error.message : undefined}
+          onRetry={() => void query.refetch()}
+        />
       ) : (query.data ?? []).length === 0 ? (
         <p className="text-center text-sm text-slate-400">Henüz tahsilat yok.</p>
       ) : (

@@ -29,6 +29,7 @@ import CariBalanceCard from '@features/invoicing/components/CariBalanceCard';
 import CustomerVisitTimeline from '@features/visits/components/CustomerVisitTimeline';
 import RecentOrdersCard from '@features/orders/components/RecentOrdersCard';
 import CustomerActivityTimeline from '@features/customers/components/CustomerActivityTimeline';
+import QueryErrorState from '@components/common/QueryErrorState';
 
 type TabKey = 'overview' | 'activity' | 'visits' | 'samples' | 'notes';
 
@@ -107,7 +108,13 @@ function CustomerDetailPage(): JSX.Element {
   const canInvoice = usePermissionCached('saha:invoicing:access') === true;
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
 
-  const { data: customerData, isLoading: custLoading } = useQuery({
+  const {
+    data: customerData,
+    isLoading: custLoading,
+    isError: custIsError,
+    error: custError,
+    refetch: refetchCustomer,
+  } = useQuery({
     queryKey: ['customer-detail', id],
     enabled: !!id,
     queryFn: async (): Promise<ProfileRow | null> => {
@@ -268,6 +275,19 @@ function CustomerDetailPage(): JSX.Element {
 
   if (!id) {
     return <div className="p-6 text-center text-muted-foreground">Müşteri ID bulunamadı.</div>;
+  }
+
+  // Ana sorgu sessizce hata verirse başlık "Müşteri" generic fallback'ine
+  // düşüyor ve sayfa boş görünüyordu — hata açıkça gösterilmeli.
+  if (custIsError) {
+    return (
+      <div className="p-4">
+        <QueryErrorState
+          message={custError instanceof Error ? custError.message : undefined}
+          onRetry={() => void refetchCustomer()}
+        />
+      </div>
+    );
   }
 
   return (

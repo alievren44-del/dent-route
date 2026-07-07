@@ -29,6 +29,7 @@ import type { NewOrderItem, Product } from '@core/adapters/types';
 import { needsApproval, nextApproverRole, thresholdFor } from '@features/orders/lib/approvalRules';
 import { enqueueOp } from '@core/offline/syncQueue';
 import { getTypedClient } from '@lib/supabase';
+import QueryErrorState from '@components/common/QueryErrorState';
 
 const adapter = new SupabaseCRMAdapter();
 
@@ -89,7 +90,14 @@ export function InlineOrderSheet(props: {
       })),
     [cart],
   );
-  const { data: quote } = useQuery({
+  // KRİTİK: OrderFormPage ile aynı risk — sessizce hata verirse toplamlar 0'a
+  // düşer ve onay-eşiği kontrolü (needsApproval) yanlışlıkla atlanabilir.
+  const {
+    data: quote,
+    isError: quoteIsError,
+    error: quoteError,
+    refetch: refetchQuote,
+  } = useQuery({
     queryKey: ['inline-order-quote', quoteItems, customerId],
     enabled: cart.length > 0 && !!customerId,
     queryFn: () => adapter.quoteOrder(quoteItems, customerId),
@@ -423,7 +431,17 @@ export function InlineOrderSheet(props: {
           </section>
 
           {/* Toplamlar */}
-          {cart.length > 0 && (
+          {cart.length > 0 && quoteIsError && (
+            <QueryErrorState
+              message={
+                quoteError instanceof Error
+                  ? `Fiyat hesaplanamadı — toplamlar YANLIŞ (₺0) olabilir. ${quoteError.message}`
+                  : 'Fiyat hesaplanamadı — toplamlar YANLIŞ (₺0) olabilir.'
+              }
+              onRetry={() => void refetchQuote()}
+            />
+          )}
+          {cart.length > 0 && !quoteIsError && (
             <section className="space-y-1.5 rounded-xl border border-border bg-card p-4">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Ara Toplam</span>
@@ -495,7 +513,7 @@ export function InlineOrderSheet(props: {
           <button
             type="button"
             onClick={() => void handleSubmit()}
-            disabled={submitting || cart.length === 0}
+            disabled={submitting || cart.length === 0 || quoteIsError}
             className="min-h-tap-min flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-semibold text-primary-foreground shadow-lg disabled:opacity-50"
           >
             {submitting ? (

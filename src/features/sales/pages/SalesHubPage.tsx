@@ -32,6 +32,7 @@ import { getTypedClient } from '@lib/supabase';
 import { useAuthStore } from '@core/auth/authStore';
 import { mapParlaToSahaRole } from '@core/auth/types';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
+import QueryErrorState from '@components/common/QueryErrorState';
 
 interface OrderLite {
   id: string;
@@ -154,64 +155,65 @@ function SalesHubPage(): JSX.Element {
       // Ay başı
       const monthStart = monthStartISO(); // 'YYYY-MM-DD'
 
-      try {
-        const [visitsTodayRes, visitsMonthRes, odTodayRes, odMonthRes, ordTodayRes] =
-          await Promise.all([
-            // Bugünkü ziyaret adedi
-            supabase
-              .from('saha_visits')
-              .select('id', { count: 'exact', head: true })
-              .eq('rep_id', userId!)
-              .gte('check_in_at', todayISO),
-            // Aylık ziyaret adedi
-            supabase
-              .from('saha_visits')
-              .select('id', { count: 'exact', head: true })
-              .eq('rep_id', userId!)
-              .gte('check_in_at', monthStart),
-            // Bugünkü tahsilat ₺ (tarih = DATE sütun)
-            supabase
-              .from('saha_odemeler')
-              .select('tutar')
-              .eq('created_by', userId!)
-              .gte('tarih', todayYMD),
-            // Aylık tahsilat ₺
-            supabase
-              .from('saha_odemeler')
-              .select('tutar')
-              .eq('created_by', userId!)
-              .gte('tarih', monthStart),
-            // Bugünkü sipariş adedi (soft-deleted hariç)
-            supabase
-              .from('orders')
-              .select('id', { count: 'exact', head: true })
-              .is('deleted_at', null)
-              .eq('sales_rep_id', userId!)
-              .gte('created_at', todayISO),
-          ]);
+      const [visitsTodayRes, visitsMonthRes, odTodayRes, odMonthRes, ordTodayRes] =
+        await Promise.all([
+          // Bugünkü ziyaret adedi
+          supabase
+            .from('saha_visits')
+            .select('id', { count: 'exact', head: true })
+            .eq('rep_id', userId!)
+            .gte('check_in_at', todayISO),
+          // Aylık ziyaret adedi
+          supabase
+            .from('saha_visits')
+            .select('id', { count: 'exact', head: true })
+            .eq('rep_id', userId!)
+            .gte('check_in_at', monthStart),
+          // Bugünkü tahsilat ₺ (tarih = DATE sütun)
+          supabase
+            .from('saha_odemeler')
+            .select('tutar')
+            .eq('created_by', userId!)
+            .gte('tarih', todayYMD),
+          // Aylık tahsilat ₺
+          supabase
+            .from('saha_odemeler')
+            .select('tutar')
+            .eq('created_by', userId!)
+            .gte('tarih', monthStart),
+          // Bugünkü sipariş adedi (soft-deleted hariç)
+          supabase
+            .from('orders')
+            .select('id', { count: 'exact', head: true })
+            .is('deleted_at', null)
+            .eq('sales_rep_id', userId!)
+            .gte('created_at', todayISO),
+        ]);
 
-        const visitsToday = visitsTodayRes.count ?? 0;
-        const visitsMonth = visitsMonthRes.count ?? 0;
-        const collectionsTodayTl = (odTodayRes.data ?? []).reduce(
-          (acc, r) => acc + Number(r.tutar ?? 0),
-          0,
-        );
-        const collectionsMonthTl = (odMonthRes.data ?? []).reduce(
-          (acc, r) => acc + Number(r.tutar ?? 0),
-          0,
-        );
-        const ordersToday = ordTodayRes.count ?? 0;
+      // KRİTİK: önceden bu hatalar sessizce yutulup (₺0/0) döndürülüyordu —
+      // rep gerçek tahsilat/ziyaret verisi varken "Bugün ₺0" görürdü. Artık
+      // herhangi bir alt sorgu hata verirse react-query isError'a düşer.
+      const firstError =
+        visitsTodayRes.error ??
+        visitsMonthRes.error ??
+        odTodayRes.error ??
+        odMonthRes.error ??
+        ordTodayRes.error;
+      if (firstError) throw firstError;
 
-        return { visitsToday, collectionsTodayTl, ordersToday, visitsMonth, collectionsMonthTl };
-      } catch {
-        return {
-          visitsToday: 0,
-          collectionsTodayTl: 0,
-          ordersToday: 0,
-          visitsMonth: 0,
-          collectionsMonthTl: 0,
-        };
-      }
+      const visitsToday = visitsTodayRes.count ?? 0;
+      const visitsMonth = visitsMonthRes.count ?? 0;
+      const collectionsTodayTl = (odTodayRes.data ?? []).reduce(
+        (acc, r) => acc + Number(r.tutar ?? 0),
+        0,
+      );
+      const collectionsMonthTl = (odMonthRes.data ?? []).reduce(
+        (acc, r) => acc + Number(r.tutar ?? 0),
+        0,
+      );
+      const ordersToday = ordTodayRes.count ?? 0;
+
+      return { visitsToday, collectionsTodayTl, ordersToday, visitsMonth, collectionsMonthTl };
     },
   });
 
@@ -308,7 +310,17 @@ function SalesHubPage(): JSX.Element {
 
       <div className="flex-1 px-4 py-3 space-y-4">
         {/* Bugün özet kartı (sadece plasiyer) */}
-        {!isAdmin && (
+        {!isAdmin && todayQuery.isError && (
+          <QueryErrorState
+            message={
+              todayQuery.error instanceof Error
+                ? `Bugünkü ziyaret/tahsilat verisi yüklenemedi — ₺0 GERÇEK DEĞİL. ${todayQuery.error.message}`
+                : 'Bugünkü ziyaret/tahsilat verisi yüklenemedi — ₺0 GERÇEK DEĞİL.'
+            }
+            onRetry={() => void todayQuery.refetch()}
+          />
+        )}
+        {!isAdmin && !todayQuery.isError && (
           <div className="rounded-xl border border-border bg-card p-3">
             <p className="text-xs font-semibold text-muted-foreground mb-2">Bugün</p>
             <div className="grid grid-cols-3 gap-2">

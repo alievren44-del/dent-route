@@ -20,6 +20,7 @@ import { ArrowLeft, Search, AlertTriangle, Check } from 'lucide-react';
 
 import { getTypedClient } from '@lib/supabase';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
+import QueryErrorState from '@components/common/QueryErrorState';
 
 interface CariOption {
   id: string;
@@ -125,8 +126,15 @@ function PaymentFormPage(): JSX.Element {
     },
   });
 
-  // Bakiyeli faturalar
-  const { data: bakiyeliFaturalar } = useQuery({
+  // Bakiyeli faturalar — KRİTİK: bu sorgu hata verirse aşağıdaki UI "Bakiyeli
+  // fatura yok (serbest tahsilat)" yazardı; oysa gerçekte açık fatura(lar) var
+  // olabilir ve ödeme yanlışlıkla faturasız/serbest kaydedilebilirdi.
+  const {
+    data: bakiyeliFaturalar,
+    isError: bakiyeliIsError,
+    error: bakiyeliError,
+    refetch: refetchBakiyeli,
+  } = useQuery({
     queryKey: ['payment-bakiyeli', cariId],
     enabled: !!cariId,
     queryFn: async (): Promise<BakiyeliFatura[]> => {
@@ -417,7 +425,16 @@ function PaymentFormPage(): JSX.Element {
             <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
               Hangi fatura(lar) için?
             </label>
-            {bakiyeliFaturalar && bakiyeliFaturalar.length === 0 ? (
+            {bakiyeliIsError ? (
+              <QueryErrorState
+                message={
+                  bakiyeliError instanceof Error
+                    ? `Faturalar yüklenemedi — serbest tahsilat ile YANLIŞLIKLA kaydetmeyin. ${bakiyeliError.message}`
+                    : 'Faturalar yüklenemedi — serbest tahsilat ile YANLIŞLIKLA kaydetmeyin.'
+                }
+                onRetry={() => void refetchBakiyeli()}
+              />
+            ) : bakiyeliFaturalar && bakiyeliFaturalar.length === 0 ? (
               <p className="text-sm text-muted-foreground p-3 rounded-lg border border-dashed border-border bg-card">
                 Bakiyeli fatura yok (serbest tahsilat olarak kaydedilir).
               </p>

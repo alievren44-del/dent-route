@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 import { getTypedClient } from '@lib/supabase';
 import { formatTRY } from '@features/invoicing/lib/invoiceCalc';
 import { enqueueOp } from '@core/offline/syncQueue';
+import QueryErrorState from '@components/common/QueryErrorState';
 
 interface CariListRow {
   id: string;
@@ -158,7 +159,13 @@ function CariListPage(): JSX.Element {
 
   const [createOpen, setCreateOpen] = useState(!!initialCreateFor);
 
-  const { data: cariler, isLoading } = useQuery({
+  const {
+    data: cariler,
+    isLoading,
+    isError: carilerIsError,
+    error: carilerError,
+    refetch: refetchCariler,
+  } = useQuery({
     queryKey: ['cariler', debouncedSearch, filterDurum, filterIl],
     queryFn: () => fetchCariler({ search: debouncedSearch, durum: filterDurum, il: filterIl }),
     // Egress: cari listesi (500-5000 satır) ağır. Global staleTime:0+refetchOnMount:'always'
@@ -171,7 +178,15 @@ function CariListPage(): JSX.Element {
 
   const cariIds = useMemo(() => (cariler ?? []).map((c) => c.id), [cariler]);
 
-  const { data: faturaSums } = useQuery({
+  // KRİTİK: bu sorgu her cari'nin bakiyesini besler. Sessizce hata verirse
+  // liste tüm bakiyeleri "0/açılış bakiyesi" gibi YANLIŞ gösterir — bu yüzden
+  // isError açıkça banner'da gösterilir (bkz. QueryErrorState).
+  const {
+    data: faturaSums,
+    isError: faturaSumsIsError,
+    error: faturaSumsError,
+    refetch: refetchFaturaSums,
+  } = useQuery({
     queryKey: ['cariler-fatura-sums', cariIds],
     enabled: cariIds.length > 0,
     queryFn: () => fetchFaturaSums(cariIds),
@@ -318,8 +333,26 @@ function CariListPage(): JSX.Element {
 
       {/* Liste */}
       <div className="px-4 py-3 space-y-2">
+        {carilerIsError && (
+          <QueryErrorState
+            message={carilerError instanceof Error ? carilerError.message : undefined}
+            onRetry={() => void refetchCariler()}
+          />
+        )}
+        {/* KRİTİK: bakiye sorgusu hata verirse tüm listedeki bakiyeler yanlış
+            görünür (yalnız açılış bakiyesi) — sessiz geçme, açıkça uyar. */}
+        {faturaSumsIsError && (
+          <QueryErrorState
+            message={
+              faturaSumsError instanceof Error
+                ? `Bakiyeler yüklenemedi, gösterilen tutarlar eksik olabilir — ${faturaSumsError.message}`
+                : 'Bakiyeler yüklenemedi, gösterilen tutarlar eksik olabilir.'
+            }
+            onRetry={() => void refetchFaturaSums()}
+          />
+        )}
         {isLoading && <p className="text-center text-muted-foreground py-6 text-sm">Yükleniyor…</p>}
-        {!isLoading && filtered.length === 0 && (
+        {!isLoading && !carilerIsError && filtered.length === 0 && (
           <p className="text-center text-muted-foreground py-10 text-sm">Cari bulunamadı.</p>
         )}
         {filtered.map((c) => {

@@ -13,6 +13,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { StickyNote, MapPin, Gift, CalendarCheck } from 'lucide-react';
 import { getSupabaseClient, getTypedClient } from '@lib/supabase';
+import QueryErrorState from '@components/common/QueryErrorState';
 
 // Randevu/hatırlatma sonuç etiketleri (CalendarPage OUTCOME_LABEL ile aynı).
 const OUTCOME_LABEL: Record<string, string> = {
@@ -142,7 +143,13 @@ interface Props {
 }
 
 function CustomerActivityTimeline({ accountId, active }: Props): JSX.Element {
-  const { data: events, isLoading } = useQuery({
+  const {
+    data: events,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ['customer-activity', accountId],
     enabled: !!accountId && active,
     // Persisted react-query (asyncStorage) + staleTime → bayat snapshot gösterir
@@ -245,6 +252,16 @@ function CustomerActivityTimeline({ accountId, active }: Props): JSX.Element {
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground py-6 text-center">Yükleniyor…</p>;
+  }
+
+  // Sessiz hata → "aktivite yok" mesajına düşüyordu; hata açıkça gösterilmeli.
+  if (isError) {
+    return (
+      <QueryErrorState
+        message={error instanceof Error ? error.message : undefined}
+        onRetry={() => void refetch()}
+      />
+    );
   }
 
   if (!events || events.length === 0) {
