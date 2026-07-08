@@ -609,8 +609,8 @@ function CalendarPage(): JSX.Element {
     };
   }, [focusReminderId, dataQuery.isLoading, allItems]);
 
-  // UX — Açılışta "Bugün" grubuna odaklan (recent mod, ajanda, bir kez). Yukarı=geçmiş,
-  // aşağı=gelecek. Deep-link (?reminder) varsa ona öncelik ver, today-scroll atla.
+  // UX — Açılışta "Bugün" grubunu ORTAYA getir (recent mod, ajanda, bir kez).
+  // Üstte katlı Yaklaşan başlığı, altta Geçmiş görünür. Deep-link (?reminder) öncelikli.
   useEffect(() => {
     if (didTodayScroll.current) return;
     if (focusReminderId) return;
@@ -618,7 +618,7 @@ function CalendarPage(): JSX.Element {
     if (loading) return;
     if (!todayRef.current) return;
     const t = setTimeout(() => {
-      todayRef.current?.scrollIntoView({ block: 'start' });
+      todayRef.current?.scrollIntoView({ block: 'center' });
       didTodayScroll.current = true;
     }, 100);
     return () => clearTimeout(t);
@@ -663,21 +663,23 @@ function CalendarPage(): JSX.Element {
 
   // Ajanda görünümü: güne göre grupla
   const grouped = useMemo(() => {
-    // H2 sıralama: 'recent' modunda geçmiş günler (tamamlananlar) en üstte-yeni önce,
-    // ardından bugün+gelecek yakın önce. 'upcoming' ve 'all' yakın önce. Geçmiş ters.
+    // 'recent' düzeni: YAKLAŞAN (gelecek) en üstte (katlanır) → BUGÜN ortada →
+    // GEÇMİŞ en altta. Gelecek: yakın önce; bugün: saat sırası; geçmiş: en yeni önce.
     const items = [...filteredItems].sort((a, b) => {
       if (filter === 'recent') {
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
         const todayTs = todayStart.getTime();
+        const tomorrowTs = todayTs + 86400000;
         const aTime = new Date(a.at).getTime();
         const bTime = new Date(b.at).getTime();
-        const aIsPast = aTime < todayTs;
-        const bIsPast = bTime < todayTs;
-        if (aIsPast && !bIsPast) return -1; // geçmiş günler önce
-        if (!aIsPast && bIsPast) return 1;
-        if (aIsPast && bIsPast) return bTime - aTime; // geçmiş: en yeni önce
-        return aTime - bTime; // gelecek: en yakın önce
+        // bölge sırası: gelecek=0 (üst), bugün=1 (orta), geçmiş=2 (alt)
+        const rank = (t: number) => (t >= tomorrowTs ? 0 : t >= todayTs ? 1 : 2);
+        const ra = rank(aTime);
+        const rb = rank(bTime);
+        if (ra !== rb) return ra - rb;
+        if (ra === 2) return bTime - aTime; // geçmiş: en yeni önce
+        return aTime - bTime; // gelecek + bugün: erken önce
       }
       return filter === 'upcoming'
         ? new Date(a.at).getTime() - new Date(b.at).getTime()
