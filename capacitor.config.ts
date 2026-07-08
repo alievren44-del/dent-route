@@ -6,9 +6,13 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   server: {
     androidScheme: 'https',
-    // LOCAL TEST: bundled dist (https://localhost secure context → geolocation çalışır).
+    // LOCAL TEST: bundled dist (https origin secure context → geolocation çalışır).
     // Canlı/remote'a dönmek için aşağıdaki url satırının yorumunu kaldır + cap sync.
     // url: 'https://saha.parladisdeposu.com',
+    // WebView origin FQDN olmalı: Cloudflare Turnstile hostname listesi 'localhost'
+    // kabul etmiyor (FQDN şartı) → Supabase Auth CAPTCHA native'de token alamıyordu.
+    // Bu ada HTTP isteği atılmıyor (grep-doğrulandı) — yalnız yerel origin kimliği.
+    hostname: 'saha.parladisdeposu.com',
     cleartext: false,
     // Deep-link/OAuth callback için izinli host'lar (CapacitorHttp bypass):
     allowNavigation: [
