@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 
 import { getTypedClient } from '@lib/supabase';
+import { getCaptchaToken } from '@core/auth/captcha';
 import { loadSahaConfig } from '@config/loadConfig';
 
 const FormSchema = z
@@ -84,6 +85,7 @@ export default function FirstAdminPage() {
         email: parsed.data.email,
         password: parsed.data.password,
         options: {
+          captchaToken: await getCaptchaToken(),
           data: { full_name: fullName, ad_soyad: fullName },
         },
       });

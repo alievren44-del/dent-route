@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import { UserPlus, Search, Key, Power, MapPin, X, User as UserIcon, Copy } from 'lucide-react';
 
 import { getSupabaseClient, getTypedClient } from '@/lib/supabase';
+import { getCaptchaToken } from '@core/auth/captcha';
 import { Receipt, CalendarDays } from 'lucide-react';
 
 const INVOICING_PERM = 'saha:invoicing:access';
@@ -188,6 +189,7 @@ export default function UsersPage(): JSX.Element {
       const supabase = getTypedClient();
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/login`,
+        captchaToken: await getCaptchaToken(),
       });
       if (error) throw error;
       try {

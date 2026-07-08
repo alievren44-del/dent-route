@@ -50,7 +50,7 @@ function makeBuilder(table: string) {
       calls[table]!.push([name, ...args]);
       return builder;
     };
-  for (const m of ['select', 'eq', 'in', 'ilike', 'order', 'limit', 'gte', 'lt', 'not', 'upsert']) {
+  for (const m of ['select', 'eq', 'in', 'ilike', 'or', 'order', 'limit', 'gte', 'lt', 'not', 'upsert']) {
     builder[m] = vi.fn(rec(m));
   }
   (builder as { then: unknown }).then = (onFulfilled: (r: Resp) => unknown) =>

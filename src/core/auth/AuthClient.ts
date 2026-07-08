@@ -21,6 +21,7 @@ import {
   mapParlaToSahaRole,
 } from './types';
 import { capturedSsoHash } from './ssoCapture';
+import { getCaptchaToken } from './captcha';
 
 /**
  * Parla profiles tablosu Türkçe canonical kolonlar kullanır:
@@ -78,7 +79,11 @@ export class AuthClient {
   }
 
   async signInWithEmail(email: string, password: string): Promise<AuthSession> {
-    const { data, error } = await this.supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await this.supabase.auth.signInWithPassword({
+      email,
+      password,
+      options: { captchaToken: await getCaptchaToken() },
+    });
     if (error) {
       if (error.message.toLowerCase().includes('invalid')) {
         throw new AuthError('INVALID_CREDENTIALS', 'E-posta veya parola hatalı.');
