@@ -16,7 +16,7 @@
  * Rol: sales_rep yalnız kendi (RLS); admin rep-seçici ile herhangi plasiyer.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -25,6 +25,7 @@ import {
   Banknote,
   CalendarClock,
   CalendarDays,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -307,6 +308,14 @@ function CalendarPage(): JSX.Element {
   // "Sipariş Alındı" tamamlandığında ürün+fiyat girişi için inline sipariş sheet'i.
   // Klinik ön-seçili; cari createOrder içinde otomatik (idempotent) açılır.
   const [orderForClinic, setOrderForClinic] = useState<{ id: string; name: string } | null>(null);
+
+  // UX — Yaklaşan modda gelecek gün-grupları varsayılan KATLI (accordion). Bugün+geçmiş açık.
+  const [futureCollapsed, setFutureCollapsed] = useState(true);
+  // UX — Geçmiş modda tarihe atlama: seçilen günden eski/o gün öğelere daralt.
+  const [pastBefore, setPastBefore] = useState('');
+  // UX — Açılışta "Bugün" grubuna otomatik odak (recent modda bir kez).
+  const todayRef = useRef<HTMLDivElement | null>(null);
+  const didTodayScroll = useRef(false);
 
   // ?reminder=<id> → scroll + highlight (state sadece; effect allItems'tan sonra)
   const [searchParams] = useSearchParams();
@@ -600,6 +609,21 @@ function CalendarPage(): JSX.Element {
     };
   }, [focusReminderId, dataQuery.isLoading, allItems]);
 
+  // UX — Açılışta "Bugün" grubuna odaklan (recent mod, ajanda, bir kez). Yukarı=geçmiş,
+  // aşağı=gelecek. Deep-link (?reminder) varsa ona öncelik ver, today-scroll atla.
+  useEffect(() => {
+    if (didTodayScroll.current) return;
+    if (focusReminderId) return;
+    if (view !== 'agenda' || filter !== 'recent') return;
+    if (loading) return;
+    if (!todayRef.current) return;
+    const t = setTimeout(() => {
+      todayRef.current?.scrollIntoView({ block: 'start' });
+      didTodayScroll.current = true;
+    }, 100);
+    return () => clearTimeout(t);
+  });
+
   // Offline kuyruğu (reminder.create / visit.create) bağlantı gelince flush edilince
   // takvimi sunucu gerçeğiyle tazele → optimistik offline satırlar gerçek kayıtla
   // reconcile olur (aynı id ile upsert → çift yok), reconnect-refetch flicker'ı önlenir.
@@ -630,8 +654,12 @@ function CalendarPage(): JSX.Element {
     if (typeFilter.size > 0) {
       items = items.filter((it) => typeFilter.has(groupOf(it.type)));
     }
+    // 'past' modunda tarih-seçici: yalnız seçilen günden eski/o gün öğeler.
+    if (filter === 'past' && pastBefore) {
+      items = items.filter((it) => dayKey(it.at) <= pastBefore);
+    }
     return items;
-  }, [allItems, searchTerm, nameMap, typeFilter, focusId]);
+  }, [allItems, searchTerm, nameMap, typeFilter, focusId, filter, pastBefore]);
 
   // Ajanda görünümü: güne göre grupla
   const grouped = useMemo(() => {
@@ -877,6 +905,16 @@ function CalendarPage(): JSX.Element {
   const loading = dataQuery.isLoading || !selfId;
   const todayKey = dayKeyOf(new Date());
 
+  // UX — 'recent' modda gelecek (bugünden sonraki) günleri accordion ile katla.
+  // grouped sıralaması recent'te: geçmiş → bugün → gelecek; gelecek gruplar sonda bitişik.
+  const canCollapseFuture = view === 'agenda' && filter === 'recent';
+  const futureItemCount = canCollapseFuture
+    ? filteredItems.filter((it) => dayKey(it.at) > todayKey).length
+    : 0;
+  const firstFutureKey = canCollapseFuture
+    ? grouped.find(([k]) => k > todayKey)?.[0]
+    : undefined;
+
   const selectedDayItems = useMemo(() => {
     if (!selectedDay) return [];
     if (!searchTerm.trim()) return byDay.get(selectedDay) ?? [];
@@ -1011,6 +1049,33 @@ function CalendarPage(): JSX.Element {
             ))}
           </div>
 
+          {/* Geçmiş modda tarihe atlama: seçilen günden eskiye daralt (arama girişi zaten üstte) */}
+          {filter === 'past' && (
+            <div className="flex items-center gap-2">
+              <label htmlFor="past-date" className="shrink-0 text-xs text-muted-foreground">
+                Tarihe git
+              </label>
+              <input
+                id="past-date"
+                type="date"
+                value={pastBefore}
+                max={todayKey}
+                onChange={(e) => setPastBefore(e.target.value)}
+                className="h-9 flex-1 rounded-lg border border-border bg-background px-3 text-sm"
+              />
+              {pastBefore && (
+                <button
+                  type="button"
+                  onClick={() => setPastBefore('')}
+                  className="text-muted-foreground hover:text-foreground"
+                  aria-label="Tarih filtresini temizle"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Tip filtre çipleri — Günlük Plan · tek satır yatay kaydırma */}
           <div className="-mx-4 flex flex-nowrap gap-1.5 overflow-x-auto px-4 no-scrollbar">
             <button
@@ -1092,41 +1157,71 @@ function CalendarPage(): JSX.Element {
                 label: string;
               }[];
 
-              return (
-                <div key={k} className="space-y-2">
-                  <div className="sticky top-0 bg-background/95 py-1 space-y-1">
-                    <h2 className="text-sm font-semibold text-foreground">
-                      {dayLabel(items[0]?.at ?? `${k}T00:00:00`)}
-                    </h2>
-                    {daySummary.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-2">
-                        {daySummary.map(({ gKey, count, meta }) => (
-                          <span
-                            key={gKey}
-                            className={`inline-flex items-center gap-1 text-[11px] font-medium ${meta.color}`}
-                          >
-                            <meta.Icon className="h-3 w-3" aria-hidden="true" />
-                            {count}
-                          </span>
-                        ))}
-                      </div>
+              const isTodayGroup = k === todayKey;
+              const isFutureGroup = canCollapseFuture && k > todayKey;
+              // Gelecek grupların ilkinin ÜSTÜNE tek accordion başlığı koy.
+              const accordionHeader =
+                canCollapseFuture && futureItemCount > 0 && k === firstFutureKey ? (
+                  <button
+                    type="button"
+                    onClick={() => setFutureCollapsed((v) => !v)}
+                    className="flex h-9 w-full items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 text-sm font-medium text-muted-foreground hover:bg-muted"
+                    aria-expanded={!futureCollapsed}
+                  >
+                    {futureCollapsed ? (
+                      <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
                     )}
-                  </div>
-                  <ul className="space-y-2">
-                    {items.map((it) => (
-                      <AgendaCard
-                        key={`${it.kind}-${it.id}`}
-                        it={it}
-                        clinic={it.accountId ? (nameMap[it.accountId] ?? null) : null}
-                        assignerName={it.assignedBy ? (assignerMap[it.assignedBy] ?? null) : null}
-                        highlighted={it.id === focusId}
-                        onAddPhone={addClinicPhone}
-                        attachments={attachmentsMap[it.id]}
-                        onOpen={setSelectedItem}
-                      />
-                    ))}
-                  </ul>
-                </div>
+                    <span>Yaklaşan randevular ({futureItemCount})</span>
+                  </button>
+                ) : null;
+
+              return (
+                <Fragment key={k}>
+                  {accordionHeader}
+                  {isFutureGroup && futureCollapsed ? null : (
+                    <div
+                      ref={isTodayGroup ? todayRef : undefined}
+                      className="space-y-2"
+                    >
+                      <div className="sticky top-0 bg-background/95 py-1 space-y-1">
+                        <h2 className="text-sm font-semibold text-foreground">
+                          {dayLabel(items[0]?.at ?? `${k}T00:00:00`)}
+                        </h2>
+                        {daySummary.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-2">
+                            {daySummary.map(({ gKey, count, meta }) => (
+                              <span
+                                key={gKey}
+                                className={`inline-flex items-center gap-1 text-[11px] font-medium ${meta.color}`}
+                              >
+                                <meta.Icon className="h-3 w-3" aria-hidden="true" />
+                                {count}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <ul className="space-y-2">
+                        {items.map((it) => (
+                          <AgendaCard
+                            key={`${it.kind}-${it.id}`}
+                            it={it}
+                            clinic={it.accountId ? (nameMap[it.accountId] ?? null) : null}
+                            assignerName={
+                              it.assignedBy ? (assignerMap[it.assignedBy] ?? null) : null
+                            }
+                            highlighted={it.id === focusId}
+                            onAddPhone={addClinicPhone}
+                            attachments={attachmentsMap[it.id]}
+                            onOpen={setSelectedItem}
+                          />
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </Fragment>
               );
             })}
           </div>
