@@ -66,6 +66,10 @@ export async function syncReminderNotifications(): Promise<void> {
         .select('id, account_id, type, title, note, due_at')
         .eq('rep_id', userId)
         .eq('status', 'open')
+        // Bug #33: yalnız randevu/görüşme bildirimi kur. Otomatik 'revisit'
+        // (1-ay-sonra tekrar-ziyaret) kayıtları onlarca birikip her sync'te
+        // bildirim gürültüsü üretiyordu; tahsilat/tanitim de bildirimsiz.
+        .eq('type', 'appointment')
         .gt('due_at', nowIso)
         .order('due_at', { ascending: true })
         .limit(50);

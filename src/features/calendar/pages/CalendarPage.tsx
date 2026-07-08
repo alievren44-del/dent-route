@@ -31,6 +31,7 @@ import {
   MapPin,
   Megaphone,
   MessageCircle,
+  Navigation,
   Paperclip,
   Phone,
   Plus,
@@ -57,6 +58,7 @@ import {
   type ReminderAttachment,
 } from '@lib/reminderAttachments';
 import { localDayKey, localDayLabel, buildDueAt, isPastDay } from '@lib/datetime';
+import { googleMapsDirectionsUrl } from '@lib/maps';
 
 type FilterMode = 'upcoming' | 'past' | 'all' | 'overdue' | 'recent';
 type ViewMode = 'agenda' | 'month';
@@ -1537,7 +1539,7 @@ function AgendaCard({
   onOpen,
 }: {
   it: AgendaItem;
-  clinic: { name: string; phone: string | null } | null;
+  clinic: { name: string; phone: string | null; lat?: number | null; lng?: number | null } | null;
   assignerName?: string | null;
   highlighted?: boolean;
   onAddPhone?: (accountId: string, phone: string) => Promise<void>;
@@ -1558,6 +1560,12 @@ function AgendaCard({
       : 'border-l-4 border-l-blue-400';
   const phone = clinic?.phone ? clinic.phone.replace(/[^\d+]/g, '') : null;
   const waPhone = phone ? phone.replace(/^0/, '90').replace(/^\+/, '') : null;
+  // Bug #22: kliniğin konumu varsa Ara/WhatsApp yanına yol-tarifi butonu
+  // (ReminderDetailSheet'teki ile aynı URL üretimi).
+  const directionsHref =
+    typeof clinic?.lat === 'number' && typeof clinic?.lng === 'number'
+      ? googleMapsDirectionsUrl(clinic.lat, clinic.lng, clinic.name)
+      : null;
 
   // B1 — numara ekleme inline state
   const [addingPhone, setAddingPhone] = useState(false);
@@ -1653,6 +1661,18 @@ function AgendaCard({
                 >
                   <MessageCircle className="h-3.5 w-3.5 text-green-600" aria-hidden="true" />
                   WhatsApp
+                </a>
+              )}
+              {directionsHref && (
+                <a
+                  href={directionsHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-background px-2 text-[11px] font-medium hover:bg-muted"
+                >
+                  <Navigation className="h-3.5 w-3.5 text-indigo-600" aria-hidden="true" />
+                  Yol tarifi
                 </a>
               )}
               {/* B1 — numara ekle (klinik varsa ama telefon yoksa) */}

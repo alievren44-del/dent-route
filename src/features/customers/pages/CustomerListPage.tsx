@@ -245,9 +245,13 @@ async function fetchAccounts(
     } else if (rpcErr) {
       console.warn('saha_search_nearby_clinics başarısız, fallback:', rpcErr.message);
     }
-  } else if (search.trim().length < 2) {
-    // No-GPS tam-liste: PostgREST 1000-satır cap'ini aşmak için 0..dataPage sayfalarını
+  }
+  if (search.trim().length < 2) {
+    // Tam-liste: PostgREST 1000-satır cap'ini aşmak için 0..dataPage sayfalarını
     // range-tabanlı kümülatif çek (her sayfa DATA_PAGE_SIZE). 5641 aktif kliniğin tamamına ulaşılır.
+    // Bug #38: bu dal eskiden yalnız no-GPS'te çalışıyordu → GPS'liyken 50km dışındaki
+    // klinikler listeye hiç gelmiyor ve load-more görünmüyordu. Artık GPS'te de çalışır;
+    // yakınlar RPC'den (distance'lı) önce merge edildiği için sıralama bozulmaz.
     // Aktif arama varken (>=2 hane) bu ağır liste atlanır; sonuçlar #3 sunucu-ad-araması'ndan gelir.
     for (let p = 0; p <= dataPage; p++) {
       const { items: customers } = await adapter.listCustomers({
@@ -775,11 +779,13 @@ function CustomerListPage(): JSX.Element {
 
   // Aktif arama: sonuçlar sunucu-ad-araması'ndan gelir, range load-more uygulanmaz.
   const isSearching = debouncedSearch.trim().length >= 2;
-  // No-GPS tam-listede sunucudan daha fazla veri çekilebilir mi?
-  //  - GPS yok (range yolu) + arama yok
+  // Tam-listede sunucudan daha fazla veri çekilebilir mi?
+  //  - arama yok (arama sonuçları sunucu-ad-aramasından gelir)
   //  - son dataPage tam doldu (loadedCount, çekilen tavana ulaştı) → sunucuda daha var olabilir
+  // Bug #38: GPS modunda da tam-liste artık çekildiğinden `!position` şartı kaldırıldı.
+  // NOT: GPS modunda loadedCount RPC-yakınları da içerir; eşik (dataPage+1)*PAGE tavanının
+  // üstünde kalacağından buton görünür, gerçek son sayfada totalCount kıyası kapatır.
   const serverHasMore =
-    !position &&
     !isSearching &&
     loadedCount >= (dataPage + 1) * DATA_PAGE_SIZE &&
     (totalCountQuery.data == null || loadedCount < totalCountQuery.data);

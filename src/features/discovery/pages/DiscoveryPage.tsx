@@ -266,7 +266,9 @@ function DiscoveryPage(): JSX.Element {
       const { data: rows, error } = await supabase.rpc('saha_search_clinics', {
         _q: safeTerm,
         _vertical_key: vertical.id,
-        _limit: 40,
+        // Bug #23: 40-cap bazı aramalarda sonuçları kesiyordu; RPC artık kısmi
+        // eşleşmeleri de döndürdüğünden tavan 80'e çıkarıldı.
+        _limit: 80,
       });
       if (error) throw error;
       // RPC does not return google_place_id or types — fill with nulls so the
